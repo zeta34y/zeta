@@ -129,30 +129,88 @@ export default function CategoriesPage() {
         </div>
       </section>
 
+      {/* القائمة السفلية العائمة */}
       <nav className="fixed bottom-3 left-3 right-3 z-[100] mx-auto max-w-md rounded-[28px] border border-violet-300/20 bg-gradient-to-l from-violet-700/95 via-fuchsia-600/95 to-violet-700/95 p-2 shadow-[0_18px_50px_rgba(76,29,149,0.48)] backdrop-blur-xl">
         <div className="grid grid-cols-5 gap-1">
-          <Link href="/" className="nav-item">
-            <span className="text-[21px]">⌂</span>
+          <button
+            aria-label="الرئيسية"
+            className="group flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] bg-white/15 text-white shadow-lg shadow-black/10 transition duration-200 hover:-translate-y-2 hover:bg-white/20 hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              className="h-[24px] w-[24px] fill-none stroke-current stroke-[1.9] transition duration-200 group-hover:scale-110"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 10.7 12 3.8l8.5 6.9" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5.5 9.7v9.2h13V9.7M9.2 18.9v-5.4h5.6v5.4" />
+            </svg>
             <span className="text-[9px] font-black">الرئيسية</span>
-          </Link>
+          </button>
 
-          <Link href="/categories" className="nav-item nav-active">
-            <span className="text-[21px]">▦</span>
+          <Link
+            href="/categories"
+            aria-label="التصنيفات"
+            className="group flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] text-white/85 transition duration-200 hover:-translate-y-2 hover:bg-white/15 hover:text-white hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9] transition duration-200 group-hover:scale-110"
+            >
+              <rect x="3.5" y="3.5" width="6.5" height="6.5" rx="2" />
+              <rect x="14" y="3.5" width="6.5" height="6.5" rx="2" />
+              <rect x="3.5" y="14" width="6.5" height="6.5" rx="2" />
+              <rect x="14" y="14" width="6.5" height="6.5" rx="2" />
+            </svg>
             <span className="text-[9px] font-black">التصنيفات</span>
           </Link>
 
-          <button className="nav-item">
-            <span className="text-[21px]">🛒</span>
+          <button
+            aria-label="السلة"
+            className="group relative flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] text-white/85 transition duration-200 hover:-translate-y-2 hover:bg-white/15 hover:text-white hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9] transition duration-200 group-hover:scale-110"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 4.5h2l1.8 10.1a2 2 0 0 0 2 1.7h7.9a2 2 0 0 0 1.9-1.4l1.4-5.3H7" />
+              <circle cx="9.5" cy="19.2" r="1.2" />
+              <circle cx="17.2" cy="19.2" r="1.2" />
+            </svg>
+            <span className="absolute right-[24%] top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[8px] font-black text-white">
+              0
+            </span>
             <span className="text-[9px] font-black">السلة</span>
           </button>
 
-          <button className="nav-item">
-            <span className="text-[21px]">♙</span>
+          <button
+            aria-label="تسجيل الدخول"
+            className="group flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] text-white/85 transition duration-200 hover:-translate-y-2 hover:bg-white/15 hover:text-white hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9] transition duration-200 group-hover:scale-110"
+            >
+              <circle cx="12" cy="7.2" r="3.2" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5.8 20c.5-4 2.8-6.2 6.2-6.2s5.7 2.2 6.2 6.2" />
+            </svg>
             <span className="text-[9px] font-black">الدخول</span>
           </button>
 
-          <button className="nav-item">
-            <span className="text-[21px]">⌕</span>
+          <button
+            aria-label="البحث"
+            className="group flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] text-white/85 transition duration-200 hover:-translate-y-2 hover:bg-white/15 hover:text-white hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9] transition duration-200 group-hover:scale-110"
+            >
+              <circle cx="10.8" cy="10.8" r="5.8" />
+              <path strokeLinecap="round" d="m15.2 15.2 4.3 4.3" />
+            </svg>
             <span className="text-[9px] font-black">بحث</span>
           </button>
         </div>
@@ -178,29 +236,6 @@ export default function CategoriesPage() {
           -webkit-tap-highlight-color: transparent;
         }
 
-        .nav-item {
-          display: flex;
-          min-height: 58px;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 4px;
-          border-radius: 20px;
-          color: rgba(255, 255, 255, 0.84);
-          transition: 0.2s ease;
-        }
-
-        .nav-item:hover {
-          transform: translateY(-8px);
-          background: rgba(255, 255, 255, 0.14);
-          color: white;
-          box-shadow: 0 14px 28px rgba(139, 92, 246, 0.55);
-        }
-
-        .nav-active {
-          background: rgba(255, 255, 255, 0.16);
-          color: white;
-        }
       `}</style>
     </main>
   );
