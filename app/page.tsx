@@ -42,6 +42,7 @@ const categories = [
   { name: "الكل", icon: "🎮" },
   { name: "محاكي", icon: "🕹️" },
   { name: "رياضة", icon: "⚽" },
+  { name: "أكشن", icon: "🔥" },
   { name: "2D", icon: "👾" },
   { name: "مغامرات", icon: "🗺️" },
   { name: "رعب", icon: "👻" },
@@ -369,6 +370,8 @@ export default function HomePage() {
                   ? "simulation"
                   : category.name === "رياضة"
                   ? "sports"
+                  : category.name === "أكشن"
+                  ? "action"
                   : category.name === "2D"
                   ? "2d"
                   : category.name === "مغامرات"
@@ -382,7 +385,7 @@ export default function HomePage() {
               <button
                 key={category.name}
                 onClick={() => setActiveCategory(category.name)}
-                className={`flex min-w-fit items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-bold transition duration-200 hover:-translate-y-0.5 hover:border-violet-400 hover:bg-violet-500/15 hover:text-white hover:shadow-lg hover:shadow-violet-900/20 active:scale-95 ${
+                className={`flex min-w-[108px] items-center justify-center gap-2.5 rounded-full border px-5 py-3.5 text-sm font-bold transition duration-200 hover:-translate-y-0.5 hover:border-violet-400 hover:bg-violet-500/15 hover:text-white hover:shadow-lg hover:shadow-violet-900/20 active:scale-95 sm:min-w-fit sm:px-4 sm:py-3 ${
                   activeCategory === category.name
                     ? "border-violet-500 bg-violet-600 text-white shadow-lg shadow-violet-900/30"
                     : "border-white/10 bg-white/[0.04] text-gray-300"
@@ -395,8 +398,8 @@ export default function HomePage() {
               }
 
               return (
-                <Link key={category.name} href={`/categories?category=${slug}`} className={`flex min-w-fit items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-bold transition duration-200 hover:-translate-y-0.5 hover:border-violet-400 hover:bg-violet-500/15 hover:text-white hover:shadow-lg hover:shadow-violet-900/20 active:scale-95 ${activeCategory === category.name ? "border-violet-500 bg-violet-600 text-white shadow-lg shadow-violet-900/30" : "border-white/10 bg-white/[0.04] text-gray-300"}`}>
-                  <span>{category.icon}</span>
+                <Link key={category.name} href={`/categories?category=${slug}`} className={`flex min-w-[108px] items-center justify-center gap-2.5 rounded-full border px-5 py-3.5 text-sm font-bold transition duration-200 hover:-translate-y-0.5 hover:border-violet-400 hover:bg-violet-500/15 hover:text-white hover:shadow-lg hover:shadow-violet-900/20 active:scale-95 sm:min-w-fit sm:px-4 sm:py-3 ${activeCategory === category.name ? "border-violet-500 bg-violet-600 text-white shadow-lg shadow-violet-900/30" : "border-white/10 bg-white/[0.04] text-gray-300"}`}>
+                  <span className="text-[19px] leading-none sm:text-base">{category.icon}</span>
                   <span>{category.name}</span>
                 </Link>
               );
@@ -766,7 +769,14 @@ export default function HomePage() {
             aria-label="الرئيسية"
             className="group flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] bg-white/15 text-white shadow-lg shadow-black/10 transition duration-200 hover:-translate-y-2 hover:bg-white/20 hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95"
           >
-            <span className="text-[20px] transition duration-200 group-hover:scale-110">⌂</span>
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              className="h-[24px] w-[24px] fill-none stroke-current stroke-[1.9] transition duration-200 group-hover:scale-110"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 10.7 12 3.8l8.5 6.9" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5.5 9.7v9.2h13V9.7M9.2 18.9v-5.4h5.6v5.4" />
+            </svg>
             <span className="text-[9px] font-black">الرئيسية</span>
           </button>
 
@@ -775,7 +785,16 @@ export default function HomePage() {
             aria-label="التصنيفات"
             className="group flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] text-white/85 transition duration-200 hover:-translate-y-2 hover:bg-white/15 hover:text-white hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95"
           >
-            <span className="text-[20px] transition duration-200 group-hover:scale-110">▦</span>
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9] transition duration-200 group-hover:scale-110"
+            >
+              <rect x="3.5" y="3.5" width="6.5" height="6.5" rx="2" />
+              <rect x="14" y="3.5" width="6.5" height="6.5" rx="2" />
+              <rect x="3.5" y="14" width="6.5" height="6.5" rx="2" />
+              <rect x="14" y="14" width="6.5" height="6.5" rx="2" />
+            </svg>
             <span className="text-[9px] font-black">التصنيفات</span>
           </Link>
 
@@ -783,7 +802,15 @@ export default function HomePage() {
             aria-label="السلة"
             className="group relative flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] text-white/85 transition duration-200 hover:-translate-y-2 hover:bg-white/15 hover:text-white hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95"
           >
-            <span className="text-[20px] transition duration-200 group-hover:scale-110">🛒</span>
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9] transition duration-200 group-hover:scale-110"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 4.5h2l1.8 10.1a2 2 0 0 0 2 1.7h7.9a2 2 0 0 0 1.9-1.4l1.4-5.3H7" />
+              <circle cx="9.5" cy="19.2" r="1.2" />
+              <circle cx="17.2" cy="19.2" r="1.2" />
+            </svg>
             <span className="absolute right-[24%] top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[8px] font-black text-white">
               0
             </span>
@@ -794,7 +821,14 @@ export default function HomePage() {
             aria-label="تسجيل الدخول"
             className="group flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] text-white/85 transition duration-200 hover:-translate-y-2 hover:bg-white/15 hover:text-white hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95"
           >
-            <span className="text-[20px] transition duration-200 group-hover:scale-110">♙</span>
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9] transition duration-200 group-hover:scale-110"
+            >
+              <circle cx="12" cy="7.2" r="3.2" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5.8 20c.5-4 2.8-6.2 6.2-6.2s5.7 2.2 6.2 6.2" />
+            </svg>
             <span className="text-[9px] font-black">الدخول</span>
           </button>
 
@@ -802,7 +836,14 @@ export default function HomePage() {
             aria-label="البحث"
             className="group flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] text-white/85 transition duration-200 hover:-translate-y-2 hover:bg-white/15 hover:text-white hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95"
           >
-            <span className="text-[20px] transition duration-200 group-hover:scale-110">⌕</span>
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9] transition duration-200 group-hover:scale-110"
+            >
+              <circle cx="10.8" cy="10.8" r="5.8" />
+              <path strokeLinecap="round" d="m15.2 15.2 4.3 4.3" />
+            </svg>
             <span className="text-[9px] font-black">بحث</span>
           </button>
         </div>

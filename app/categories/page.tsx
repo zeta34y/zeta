@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 type CategorySlug =
   | "simulation"
   | "sports"
+  | "action"
   | "2d"
   | "adventure"
   | "horror";
@@ -37,6 +38,12 @@ const categories: Category[] = [
     slug: "sports",
     icon: "⚽",
     description: "كرة قدم ورياضات متنوعة",
+  },
+  {
+    name: "ألعاب الأكشن",
+    slug: "action",
+    icon: "🔥",
+    description: "قتال، إطلاق نار وحماس",
   },
   {
     name: "ألعاب 2D",
@@ -82,6 +89,18 @@ const games: Game[] = [
     name: "لعبة كرة قدم قادمة",
     type: "حساب خاص",
     category: "sports",
+  },
+  {
+    id: 9,
+    name: "لعبة أكشن قادمة",
+    type: "PC",
+    category: "action",
+  },
+  {
+    id: 10,
+    name: "لعبة إطلاق نار قادمة",
+    type: "Steam PC",
+    category: "action",
   },
   {
     id: 5,
@@ -160,7 +179,7 @@ function CategoriesContent() {
 
       <div className="mx-auto flex max-w-7xl gap-4 px-3 py-5 sm:px-4">
         {/* القائمة الجانبية */}
-        <aside className="sticky top-[78px] h-fit w-[122px] shrink-0 rounded-[24px] border border-white/[0.07] bg-[#0d0a14] p-2 shadow-xl sm:w-[230px] sm:p-3">
+        <aside className="sticky top-[78px] h-fit w-[132px] shrink-0 rounded-[26px] border border-white/[0.07] bg-[#0d0a14] p-2.5 shadow-xl sm:w-[230px] sm:p-3">
           <div className="px-2 pb-3 pt-2">
             <h2 className="text-[12px] font-black sm:text-lg">كل التصنيفات</h2>
             <p className="mt-1 hidden text-[10px] text-gray-500 sm:block">
@@ -176,14 +195,14 @@ function CategoriesContent() {
                 <button
                   key={category.slug}
                   onClick={() => setSelectedCategory(category.slug)}
-                  className={`group flex w-full items-center gap-2 rounded-[18px] border p-2 text-right transition duration-200 sm:gap-3 sm:p-3 ${
+                  className={`group flex w-full items-center gap-2.5 rounded-[22px] border px-2.5 py-3 text-right transition duration-200 sm:gap-3 sm:p-3 ${
                     isActive
                       ? "border-violet-400/50 bg-gradient-to-l from-violet-600/25 to-fuchsia-600/15 shadow-lg shadow-violet-950/30"
                       : "border-white/[0.05] bg-white/[0.025] hover:-translate-x-1 hover:border-violet-400/30 hover:bg-violet-500/10"
                   }`}
                 >
                   <span
-                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] text-base sm:h-11 sm:w-11 sm:text-xl ${
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] text-lg sm:h-11 sm:w-11 sm:text-xl ${
                       isActive
                         ? "bg-gradient-to-br from-violet-600 to-fuchsia-600"
                         : "bg-gradient-to-br from-violet-600/25 to-fuchsia-600/15"
@@ -193,7 +212,7 @@ function CategoriesContent() {
                   </span>
 
                   <div className="min-w-0">
-                    <h3 className="line-clamp-2 text-[10px] font-black leading-4 sm:text-sm">
+                    <h3 className="line-clamp-2 text-[11px] font-black leading-[17px] sm:text-sm">
                       {category.name}
                     </h3>
 
@@ -299,27 +318,65 @@ function CategoriesContent() {
       <nav className="fixed bottom-3 left-3 right-3 z-[100] mx-auto max-w-md rounded-[28px] border border-violet-300/20 bg-gradient-to-l from-violet-700/95 via-fuchsia-600/95 to-violet-700/95 p-2 shadow-[0_18px_50px_rgba(76,29,149,0.48)] backdrop-blur-xl">
         <div className="grid grid-cols-5 gap-1">
           <Link href="/" className="nav-item">
-            <span className="text-[20px]">⌂</span>
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              className="h-[24px] w-[24px] fill-none stroke-current stroke-[1.9]"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 10.7 12 3.8l8.5 6.9" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5.5 9.7v9.2h13V9.7M9.2 18.9v-5.4h5.6v5.4" />
+            </svg>
             <span className="text-[9px] font-black">الرئيسية</span>
           </Link>
 
           <button className="nav-item nav-active">
-            <span className="text-[20px]">▦</span>
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9]"
+            >
+              <rect x="3.5" y="3.5" width="6.5" height="6.5" rx="2" />
+              <rect x="14" y="3.5" width="6.5" height="6.5" rx="2" />
+              <rect x="3.5" y="14" width="6.5" height="6.5" rx="2" />
+              <rect x="14" y="14" width="6.5" height="6.5" rx="2" />
+            </svg>
             <span className="text-[9px] font-black">التصنيفات</span>
           </button>
 
           <button className="nav-item">
-            <span className="text-[20px]">🛒</span>
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9]"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 4.5h2l1.8 10.1a2 2 0 0 0 2 1.7h7.9a2 2 0 0 0 1.9-1.4l1.4-5.3H7" />
+              <circle cx="9.5" cy="19.2" r="1.2" />
+              <circle cx="17.2" cy="19.2" r="1.2" />
+            </svg>
             <span className="text-[9px] font-black">السلة</span>
           </button>
 
           <button className="nav-item">
-            <span className="text-[20px]">♙</span>
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9]"
+            >
+              <circle cx="12" cy="7.2" r="3.2" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5.8 20c.5-4 2.8-6.2 6.2-6.2s5.7 2.2 6.2 6.2" />
+            </svg>
             <span className="text-[9px] font-black">الدخول</span>
           </button>
 
           <button className="nav-item">
-            <span className="text-[20px]">⌕</span>
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9]"
+            >
+              <circle cx="10.8" cy="10.8" r="5.8" />
+              <path strokeLinecap="round" d="m15.2 15.2 4.3 4.3" />
+            </svg>
             <span className="text-[9px] font-black">بحث</span>
           </button>
         </div>
