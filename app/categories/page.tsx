@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 type CategorySlug =
@@ -109,7 +109,7 @@ const games: Game[] = [
   },
 ];
 
-export default function CategoriesPage() {
+function CategoriesContent() {
   const searchParams = useSearchParams();
 
   const [selectedCategory, setSelectedCategory] =
@@ -376,5 +376,13 @@ export default function CategoriesPage() {
         }
       `}</style>
     </main>
+  );
+}
+
+export default function CategoriesPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#08070d]" />}>
+      <CategoriesContent />
+    </Suspense>
   );
 }
