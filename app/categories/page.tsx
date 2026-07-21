@@ -132,9 +132,10 @@ export default function CategoriesPage() {
       {/* القائمة السفلية العائمة */}
       <nav className="fixed bottom-3 left-3 right-3 z-[100] mx-auto max-w-md rounded-[28px] border border-violet-300/20 bg-gradient-to-l from-violet-700/95 via-fuchsia-600/95 to-violet-700/95 p-2 shadow-[0_18px_50px_rgba(76,29,149,0.48)] backdrop-blur-xl">
         <div className="grid grid-cols-5 gap-1">
-          <button
+          <Link
+            href="/"
             aria-label="الرئيسية"
-            className="group flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] bg-white/15 text-white shadow-lg shadow-black/10 transition duration-200 hover:-translate-y-2 hover:bg-white/20 hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95"
+            className="group flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] text-white/85 transition duration-200 hover:-translate-y-2 hover:bg-white/15 hover:text-white hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95"
           >
             <svg
               viewBox="0 0 24 24"
@@ -145,12 +146,12 @@ export default function CategoriesPage() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M5.5 9.7v9.2h13V9.7M9.2 18.9v-5.4h5.6v5.4" />
             </svg>
             <span className="text-[9px] font-black">الرئيسية</span>
-          </button>
+          </Link>
 
           <Link
             href="/categories"
             aria-label="التصنيفات"
-            className="group flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] text-white/85 transition duration-200 hover:-translate-y-2 hover:bg-white/15 hover:text-white hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95"
+            className="group flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] bg-white/15 text-white shadow-lg shadow-black/10 transition duration-200 hover:-translate-y-2 hover:bg-white/20 hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95"
           >
             <svg
               viewBox="0 0 24 24"
