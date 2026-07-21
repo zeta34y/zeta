@@ -1,29 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
-
-type CategorySlug =
-  | "simulation"
-  | "sports"
-  | "action"
-  | "2d"
-  | "adventure"
-  | "horror";
 
 type Category = {
   name: string;
-  slug: CategorySlug;
+  slug: string;
   icon: string;
   description: string;
-};
-
-type Game = {
-  id: number;
-  name: string;
-  type: string;
-  category: CategorySlug;
 };
 
 const categories: Category[] = [
@@ -65,91 +48,7 @@ const categories: Category[] = [
   },
 ];
 
-const games: Game[] = [
-  {
-    id: 1,
-    name: "لعبة محاكاة قادمة",
-    type: "PC",
-    category: "simulation",
-  },
-  {
-    id: 2,
-    name: "لعبة قيادة قادمة",
-    type: "Steam PC",
-    category: "simulation",
-  },
-  {
-    id: 3,
-    name: "لعبة رياضية قادمة",
-    type: "PC",
-    category: "sports",
-  },
-  {
-    id: 4,
-    name: "لعبة كرة قدم قادمة",
-    type: "حساب خاص",
-    category: "sports",
-  },
-  {
-    id: 9,
-    name: "لعبة أكشن قادمة",
-    type: "PC",
-    category: "action",
-  },
-  {
-    id: 10,
-    name: "لعبة إطلاق نار قادمة",
-    type: "Steam PC",
-    category: "action",
-  },
-  {
-    id: 5,
-    name: "لعبة 2D قادمة",
-    type: "PC",
-    category: "2d",
-  },
-  {
-    id: 6,
-    name: "لعبة مغامرات قادمة",
-    type: "Steam PC",
-    category: "adventure",
-  },
-  {
-    id: 7,
-    name: "لعبة رعب قادمة",
-    type: "PC",
-    category: "horror",
-  },
-  {
-    id: 8,
-    name: "لعبة بقاء قادمة",
-    type: "حساب مشترك",
-    category: "horror",
-  },
-];
-
-function CategoriesContent() {
-  const searchParams = useSearchParams();
-
-  const [selectedCategory, setSelectedCategory] =
-    useState<CategorySlug | null>(
-      (searchParams.get("category") as CategorySlug | null) ?? null
-    );
-
-  const selectedInfo = useMemo(
-    () =>
-      categories.find((category) => category.slug === selectedCategory) ?? null,
-    [selectedCategory]
-  );
-
-  const filteredGames = useMemo(
-    () =>
-      selectedCategory
-        ? games.filter((game) => game.category === selectedCategory)
-        : [],
-    [selectedCategory]
-  );
-
+export default function CategoriesPage() {
   return (
     <main
       dir="rtl"
@@ -158,7 +57,7 @@ function CategoriesContent() {
       <header className="sticky top-0 z-40 border-b border-white/5 bg-[#08070d]/95 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
           <Link href="/" className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-700 text-lg font-black">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-700 text-xl font-black shadow-lg shadow-violet-900/30">
               Z
             </div>
 
@@ -170,213 +69,90 @@ function CategoriesContent() {
 
           <Link
             href="/"
-            className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-bold text-gray-300 transition hover:border-violet-400/40 hover:text-white active:scale-95"
+            className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 text-[11px] font-bold text-gray-300 transition hover:border-violet-400/40 hover:text-white active:scale-95"
           >
             العودة للرئيسية
           </Link>
         </div>
       </header>
 
-      <div className="mx-auto flex max-w-7xl gap-2 px-2.5 py-5 sm:gap-4 sm:px-4">
-        {/* القائمة الجانبية */}
-        <aside className="sticky top-[78px] h-fit w-[104px] shrink-0 rounded-[22px] border border-white/[0.07] bg-[#0d0a14] p-1.5 shadow-xl sm:w-[230px] sm:rounded-[26px] sm:p-3">
-          <div className="px-2 pb-3 pt-2">
-            <h2 className="text-[11px] font-black sm:text-lg">كل التصنيفات</h2>
-            <p className="mt-1 hidden text-[10px] text-gray-500 sm:block">
+      <section className="mx-auto max-w-7xl px-4 pb-8 pt-7">
+        <div className="relative overflow-hidden rounded-[30px] border border-white/[0.06] bg-gradient-to-br from-violet-700/20 via-[#100d18] to-fuchsia-700/10 px-5 py-7 text-center">
+          <div className="absolute -left-14 -top-14 h-44 w-44 rounded-full bg-violet-600/20 blur-[70px]" />
+          <div className="absolute -bottom-16 -right-12 h-44 w-44 rounded-full bg-fuchsia-600/15 blur-[70px]" />
+
+          <div className="relative">
+            <span className="inline-flex rounded-full border border-violet-400/20 bg-violet-500/10 px-4 py-2 text-[11px] font-bold text-violet-300">
+              اختر لعبتك
+            </span>
+
+            <h1 className="mt-4 text-3xl font-black sm:text-4xl">
+              كل التصنيفات
+            </h1>
+
+            <p className="mt-2 text-sm text-gray-400">
               اختر قسمًا لعرض ألعابه
             </p>
           </div>
+        </div>
 
-          <div className="flex flex-col gap-2">
-            {categories.map((category) => {
-              const isActive = selectedCategory === category.slug;
-
-              return (
-                <button
-                  key={category.slug}
-                  onClick={() => setSelectedCategory(category.slug)}
-                  className={`group flex w-full flex-col items-center justify-center gap-1.5 rounded-[18px] border px-1.5 py-2.5 text-center transition duration-200 sm:flex-row sm:justify-start sm:gap-3 sm:rounded-[22px] sm:p-3 sm:text-right ${
-                    isActive
-                      ? "border-violet-400/50 bg-gradient-to-l from-violet-600/25 to-fuchsia-600/15 shadow-lg shadow-violet-950/30"
-                      : "border-white/[0.05] bg-white/[0.025] hover:-translate-x-1 hover:border-violet-400/30 hover:bg-violet-500/10"
-                  }`}
-                >
-                  <span
-                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] text-lg sm:h-11 sm:w-11 sm:rounded-[16px] sm:text-xl ${
-                      isActive
-                        ? "bg-gradient-to-br from-violet-600 to-fuchsia-600"
-                        : "bg-gradient-to-br from-violet-600/25 to-fuchsia-600/15"
-                    }`}
-                  >
-                    {category.icon}
-                  </span>
-
-                  <div className="min-w-0">
-                    <h3 className="line-clamp-2 text-[9px] font-black leading-4 sm:text-sm">
-                      {category.name}
-                    </h3>
-
-                    <p className="mt-1 hidden line-clamp-1 text-[9px] text-gray-500 sm:block">
-                      {category.description}
-                    </p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </aside>
-
-        {/* مكان عرض الألعاب */}
-        <section className="min-w-0 flex-1">
-          {!selectedInfo ? (
-            <div className="flex min-h-[520px] flex-col items-center justify-center rounded-[28px] border border-white/[0.06] bg-gradient-to-br from-violet-700/10 via-transparent to-fuchsia-700/10 p-6 text-center">
-              <div className="flex h-20 w-20 items-center justify-center rounded-[26px] bg-gradient-to-br from-violet-600/30 to-fuchsia-600/20 text-4xl">
-                🎮
-              </div>
-
-              <h1 className="mt-5 text-xl font-black sm:text-2xl">
-                اختر تصنيفًا
-              </h1>
-
-            </div>
-          ) : (
-            <div
-              key={selectedInfo.slug}
-              className="animate-category rounded-[24px] border border-white/[0.06] bg-[#0d0a14]/70 p-2.5 sm:rounded-[28px] sm:p-5"
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {categories.map((category) => (
+            <Link
+              key={category.slug}
+              href={`/categories/${category.slug}`}
+              className="group relative overflow-hidden rounded-[28px] border border-white/[0.07] bg-[#100d18] p-5 shadow-xl transition duration-300 hover:-translate-y-1.5 hover:border-violet-400/40 hover:shadow-2xl hover:shadow-violet-950/30 active:scale-[0.98]"
             >
-              <div className="relative overflow-hidden rounded-[20px] bg-gradient-to-br from-violet-700/25 via-fuchsia-700/10 to-transparent p-3 sm:rounded-[24px] sm:p-5">
-                <div className="absolute -left-8 -top-8 h-28 w-28 rounded-full bg-violet-500/20 blur-3xl" />
+              <div className="absolute -left-10 -top-12 h-36 w-36 rounded-full bg-violet-600/10 blur-3xl transition duration-300 group-hover:bg-violet-600/20" />
 
-                <div className="relative flex items-center gap-3 sm:gap-4">
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[20px] bg-gradient-to-br from-violet-600/40 to-fuchsia-600/20 text-3xl sm:h-16 sm:w-16">
-                    {selectedInfo.icon}
-                  </div>
-
-                  <div>
-                    <p className="text-[9px] font-bold text-violet-300 sm:text-[10px]">
-                      التصنيف المختار
-                    </p>
-
-                    <h1 className="mt-1 text-lg font-black sm:text-2xl">
-                      {selectedInfo.name}
-                    </h1>
-
-                    <p className="mt-1 text-[10px] leading-5 text-gray-400 sm:text-[11px]">
-                      {selectedInfo.description}
-                    </p>
-                  </div>
+              <div className="relative flex items-center gap-4">
+                <div className="flex h-[76px] w-[76px] shrink-0 items-center justify-center rounded-[24px] border border-white/10 bg-gradient-to-br from-violet-600/30 to-fuchsia-600/20 text-4xl shadow-lg transition duration-300 group-hover:scale-105 group-hover:from-violet-600/50 group-hover:to-fuchsia-600/35">
+                  {category.icon}
                 </div>
-              </div>
 
-              <div className="mt-5 flex items-center justify-between">
-                <div>
-                  <p className="text-[9px] font-bold text-violet-400">
-                    الألعاب المتوفرة
-                  </p>
-
-                  <h2 className="mt-1 text-base font-black sm:text-lg">
-                    {selectedInfo.name}
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-xl font-black leading-tight">
+                    {category.name}
                   </h2>
+
+                  <p className="mt-2 text-sm leading-6 text-gray-400">
+                    {category.description}
+                  </p>
                 </div>
 
-                <span className="rounded-full bg-white/5 px-3 py-1.5 text-[9px] text-gray-400">
-                  {filteredGames.length} ألعاب
-                </span>
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-lg text-violet-300 transition duration-300 group-hover:-translate-x-1 group-hover:border-violet-400/30 group-hover:bg-violet-500/10">
+                  ←
+                </div>
               </div>
-
-              <div className="mt-4 grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3">
-                {filteredGames.map((game) => (
-                  <article
-                    key={game.id}
-                    className="group overflow-hidden rounded-[20px] border border-white/[0.07] bg-[#121019] transition duration-300 hover:-translate-y-1 hover:border-violet-400/40 hover:shadow-2xl hover:shadow-violet-950/30"
-                  >
-                    <div className="flex aspect-[4/5] items-center justify-center bg-gradient-to-br from-violet-700/20 to-fuchsia-700/20 text-4xl sm:text-5xl">
-                      🎮
-                    </div>
-
-                    <div className="p-2.5 sm:p-3">
-                      <p className="text-[8px] font-bold text-violet-400 sm:text-[9px]">
-                        {game.type}
-                      </p>
-
-                      <h3 className="mt-1 line-clamp-2 text-[11px] font-black sm:text-sm">
-                        {game.name}
-                      </h3>
-
-                      <p className="mt-3 text-[9px] font-bold text-violet-300 sm:text-[10px]">
-                        السعر قريبًا
-                      </p>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </div>
-          )}
-        </section>
-      </div>
+            </Link>
+          ))}
+        </div>
+      </section>
 
       <nav className="fixed bottom-3 left-3 right-3 z-[100] mx-auto max-w-md rounded-[28px] border border-violet-300/20 bg-gradient-to-l from-violet-700/95 via-fuchsia-600/95 to-violet-700/95 p-2 shadow-[0_18px_50px_rgba(76,29,149,0.48)] backdrop-blur-xl">
         <div className="grid grid-cols-5 gap-1">
           <Link href="/" className="nav-item">
-            <svg
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              className="h-[24px] w-[24px] fill-none stroke-current stroke-[1.9]"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 10.7 12 3.8l8.5 6.9" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5.5 9.7v9.2h13V9.7M9.2 18.9v-5.4h5.6v5.4" />
-            </svg>
+            <span className="text-[21px]">⌂</span>
             <span className="text-[9px] font-black">الرئيسية</span>
           </Link>
 
-          <button className="nav-item nav-active">
-            <svg
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9]"
-            >
-              <rect x="3.5" y="3.5" width="6.5" height="6.5" rx="2" />
-              <rect x="14" y="3.5" width="6.5" height="6.5" rx="2" />
-              <rect x="3.5" y="14" width="6.5" height="6.5" rx="2" />
-              <rect x="14" y="14" width="6.5" height="6.5" rx="2" />
-            </svg>
+          <Link href="/categories" className="nav-item nav-active">
+            <span className="text-[21px]">▦</span>
             <span className="text-[9px] font-black">التصنيفات</span>
-          </button>
+          </Link>
 
           <button className="nav-item">
-            <svg
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9]"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 4.5h2l1.8 10.1a2 2 0 0 0 2 1.7h7.9a2 2 0 0 0 1.9-1.4l1.4-5.3H7" />
-              <circle cx="9.5" cy="19.2" r="1.2" />
-              <circle cx="17.2" cy="19.2" r="1.2" />
-            </svg>
+            <span className="text-[21px]">🛒</span>
             <span className="text-[9px] font-black">السلة</span>
           </button>
 
           <button className="nav-item">
-            <svg
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9]"
-            >
-              <circle cx="12" cy="7.2" r="3.2" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5.8 20c.5-4 2.8-6.2 6.2-6.2s5.7 2.2 6.2 6.2" />
-            </svg>
+            <span className="text-[21px]">♙</span>
             <span className="text-[9px] font-black">الدخول</span>
           </button>
 
           <button className="nav-item">
-            <svg
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9]"
-            >
-              <circle cx="10.8" cy="10.8" r="5.8" />
-              <path strokeLinecap="round" d="m15.2 15.2 4.3 4.3" />
-            </svg>
+            <span className="text-[21px]">⌕</span>
             <span className="text-[9px] font-black">بحث</span>
           </button>
         </div>
@@ -387,9 +163,19 @@ function CategoriesContent() {
           box-sizing: border-box;
         }
 
+        html {
+          background: #08070d;
+        }
+
         body {
           margin: 0;
+          overflow-x: hidden;
           background: #08070d;
+        }
+
+        button,
+        a {
+          -webkit-tap-highlight-color: transparent;
         }
 
         .nav-item {
@@ -415,31 +201,7 @@ function CategoriesContent() {
           background: rgba(255, 255, 255, 0.16);
           color: white;
         }
-
-        .animate-category {
-          animation: categoryIn 320ms ease both;
-        }
-
-        @keyframes categoryIn {
-          from {
-            opacity: 0;
-            transform: translateY(10px);
-          }
-
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
       `}</style>
     </main>
-  );
-}
-
-export default function CategoriesPage() {
-  return (
-    <Suspense fallback={<div className="min-h-screen bg-[#08070d]" />}>
-      <CategoriesContent />
-    </Suspense>
   );
 }

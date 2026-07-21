@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const games = [
   {
@@ -127,6 +127,8 @@ export default function HomePage() {
   const [showSplash, setShowSplash] = useState(true);
   const [splashClosing, setSplashClosing] = useState(false);
   const [activeCategory, setActiveCategory] = useState("الكل");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuTouchStartX = useRef<number | null>(null);
 
   useEffect(() => {
     const closeTimer = window.setTimeout(() => {
@@ -142,6 +144,45 @@ export default function HomePage() {
       window.clearTimeout(hideTimer);
     };
   }, []);
+
+  useEffect(() => {
+    document.body.style.overflow = menuOpen ? "hidden" : "";
+
+    function closeWithEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMenuOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", closeWithEscape);
+
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", closeWithEscape);
+    };
+  }, [menuOpen]);
+
+  function closeMenu() {
+    setMenuOpen(false);
+  }
+
+  function handleMenuTouchStart(event: React.TouchEvent<HTMLElement>) {
+    menuTouchStartX.current = event.touches[0]?.clientX ?? null;
+  }
+
+  function handleMenuTouchEnd(event: React.TouchEvent<HTMLElement>) {
+    if (menuTouchStartX.current === null) return;
+
+    const endX = event.changedTouches[0]?.clientX ?? menuTouchStartX.current;
+    const swipeDistance = endX - menuTouchStartX.current;
+
+    // القائمة في اليسار، والسحب لليسار يغلقها.
+    if (swipeDistance < -55) {
+      closeMenu();
+    }
+
+    menuTouchStartX.current = null;
+  }
 
   if (showSplash) {
     return (
@@ -283,8 +324,30 @@ export default function HomePage() {
               </span>
             </button>
 
-            <button className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
+            <button
+              aria-label="الحساب"
+              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 transition active:scale-95"
+            >
               <span className="text-xl">👤</span>
+            </button>
+
+            <button
+              type="button"
+              aria-label="فتح القائمة"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen(true)}
+              className="group flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 transition duration-200 hover:border-violet-400/40 hover:bg-violet-500/10 active:scale-95"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                className="h-6 w-6 fill-none stroke-current stroke-2"
+              >
+                <path
+                  strokeLinecap="round"
+                  d="M5 7h14M5 12h14M5 17h14"
+                />
+              </svg>
             </button>
           </div>
         </div>
@@ -323,7 +386,7 @@ export default function HomePage() {
               <h2 className="max-w-[290px] text-3xl font-black leading-tight sm:text-5xl">
                 ألعابك المفضلة
                 <span className="block bg-gradient-to-l from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">
-                  بأسعار أقوى
+                  بأسعار رمزية
                 </span>
               </h2>
 
@@ -408,11 +471,11 @@ export default function HomePage() {
           </div>
         </section>
 
-        <section className="px-4 pt-8">
+        <section id="new-games" className="scroll-mt-28 px-4 pt-8">
           <div className="flex items-end justify-between">
             <div>
               <p className="text-xs font-bold text-violet-400">
-                الأكثر طلبًا
+                جديدنا
               </p>
               <h2 className="mt-1 text-xl font-black">ألعاب مميزة</h2>
             </div>
@@ -422,7 +485,7 @@ export default function HomePage() {
             </button>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          <div id="best-sellers" className="scroll-mt-28 mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {games.map((game) => {
               const discount = Math.round(
                 ((game.oldPrice - game.price) / game.oldPrice) * 100
@@ -473,7 +536,7 @@ export default function HomePage() {
 
 
       {/* الألعاب المشتركة */}
-      <section className="mx-auto max-w-7xl px-4 pt-12">
+      <section id="shared-games" className="scroll-mt-28 mx-auto max-w-7xl px-4 pt-12">
         <div className="mb-5 flex items-end justify-between">
           <div>
             <span className="rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1 text-[11px] font-bold text-violet-300">
@@ -540,7 +603,7 @@ export default function HomePage() {
       </section>
 
       {/* الألعاب الخاصة */}
-      <section className="mx-auto max-w-7xl px-4 pt-12">
+      <section id="private-games" className="scroll-mt-28 mx-auto max-w-7xl px-4 pt-12">
         <div className="mb-5 flex items-end justify-between">
           <div>
             <span className="rounded-full border border-fuchsia-500/20 bg-fuchsia-500/10 px-3 py-1 text-[11px] font-bold text-fuchsia-300">
@@ -663,7 +726,7 @@ export default function HomePage() {
       </section>
 
       {/* الفوتر */}
-      <footer className="relative mt-14 overflow-hidden border-t border-white/[0.06] bg-[#0b0911] pb-32 pt-10">
+      <footer id="contact" className="scroll-mt-28 relative mt-14 overflow-hidden border-t border-white/[0.06] bg-[#0b0911] pb-32 pt-10">
         <div className="absolute left-1/2 top-0 h-64 w-64 -translate-x-1/2 rounded-full bg-violet-700/10 blur-[100px]" />
 
         <div className="relative mx-auto max-w-7xl px-5">
@@ -761,6 +824,125 @@ export default function HomePage() {
 
 
 
+
+      {/* قائمة الجوال الجانبية */}
+      <div
+        aria-hidden={!menuOpen}
+        className={`fixed inset-0 z-[220] transition duration-300 ${
+          menuOpen ? "pointer-events-auto visible" : "pointer-events-none invisible"
+        }`}
+      >
+        <button
+          type="button"
+          aria-label="إغلاق القائمة"
+          onClick={closeMenu}
+          className={`absolute inset-0 h-full w-full bg-black/65 backdrop-blur-sm transition-opacity duration-300 ${
+            menuOpen ? "opacity-100" : "opacity-0"
+          }`}
+        />
+
+        <aside
+          dir="rtl"
+          role="dialog"
+          aria-modal="true"
+          aria-label="قائمة التنقل"
+          onTouchStart={handleMenuTouchStart}
+          onTouchEnd={handleMenuTouchEnd}
+          className={`absolute bottom-0 left-0 top-0 flex w-[86%] max-w-[350px] flex-col overflow-hidden border-r border-white/10 bg-[#0c0913]/98 shadow-[20px_0_70px_rgba(0,0,0,0.65)] backdrop-blur-2xl transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+            menuOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          <div className="relative overflow-hidden border-b border-white/[0.07] px-5 pb-5 pt-6">
+            <div className="absolute -left-10 -top-14 h-44 w-44 rounded-full bg-violet-600/20 blur-[65px]" />
+
+            <div className="relative flex items-center justify-between">
+              <button
+                type="button"
+                aria-label="إغلاق القائمة"
+                onClick={closeMenu}
+                className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-xl transition hover:bg-white/10 active:scale-90"
+              >
+                ×
+              </button>
+
+              <div className="flex items-center gap-3">
+                <div>
+                  <h2 className="text-lg font-black tracking-wider">ZETA</h2>
+                  <p className="mt-0.5 text-[10px] text-gray-500">قائمة المتجر</p>
+                </div>
+
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-700 text-xl font-black shadow-lg shadow-violet-900/30">
+                  Z
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <nav className="flex-1 overflow-y-auto px-4 py-5">
+            <div className="flex flex-col gap-2">
+              <Link
+                href="/favorites"
+                onClick={closeMenu}
+                className="drawer-item group flex items-center gap-3 rounded-[20px] border border-transparent px-4 py-3.5 text-sm font-black text-gray-200 transition hover:border-violet-400/20 hover:bg-violet-500/10 hover:text-white active:scale-[0.98]"
+              >
+                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-rose-500/10 text-xl transition group-hover:scale-110">♡</span>
+                <span>المفضلة</span>
+              </Link>
+
+              <a
+                href="#shared-games"
+                onClick={closeMenu}
+                className="drawer-item group flex items-center gap-3 rounded-[20px] border border-transparent px-4 py-3.5 text-sm font-black text-gray-200 transition hover:border-violet-400/20 hover:bg-violet-500/10 hover:text-white active:scale-[0.98]"
+              >
+                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-500/10 text-xl transition group-hover:scale-110">🎮</span>
+                <span>ألعاب ستيم مشتركة</span>
+              </a>
+
+              <a
+                href="#private-games"
+                onClick={closeMenu}
+                className="drawer-item group flex items-center gap-3 rounded-[20px] border border-transparent px-4 py-3.5 text-sm font-black text-gray-200 transition hover:border-fuchsia-400/20 hover:bg-fuchsia-500/10 hover:text-white active:scale-[0.98]"
+              >
+                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-fuchsia-500/10 text-xl transition group-hover:scale-110">🔐</span>
+                <span>ألعاب ستيم غير مشتركة</span>
+              </a>
+
+              <a
+                href="#best-sellers"
+                onClick={closeMenu}
+                className="drawer-item group flex items-center gap-3 rounded-[20px] border border-transparent px-4 py-3.5 text-sm font-black text-gray-200 transition hover:border-orange-400/20 hover:bg-orange-500/10 hover:text-white active:scale-[0.98]"
+              >
+                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-500/10 text-xl transition group-hover:scale-110">🔥</span>
+                <span>الأكثر مبيعًا</span>
+              </a>
+
+              <a
+                href="#new-games"
+                onClick={closeMenu}
+                className="drawer-item group flex items-center gap-3 rounded-[20px] border border-transparent px-4 py-3.5 text-sm font-black text-gray-200 transition hover:border-sky-400/20 hover:bg-sky-500/10 hover:text-white active:scale-[0.98]"
+              >
+                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-500/10 text-xl transition group-hover:scale-110">✦</span>
+                <span>جديدنا</span>
+              </a>
+
+              <a
+                href="#contact"
+                onClick={closeMenu}
+                className="drawer-item group flex items-center gap-3 rounded-[20px] border border-transparent px-4 py-3.5 text-sm font-black text-gray-200 transition hover:border-emerald-400/20 hover:bg-emerald-500/10 hover:text-white active:scale-[0.98]"
+              >
+                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/10 text-xl transition group-hover:scale-110">💬</span>
+                <span>للتواصل</span>
+              </a>
+            </div>
+          </nav>
+
+          <div className="border-t border-white/[0.07] px-5 py-5">
+            <p className="text-center text-[10px] text-gray-600">
+              جميع الحقوق محفوظة © 2026 ZETA
+            </p>
+          </div>
+        </aside>
+      </div>
 
       {/* القائمة السفلية العائمة */}
       <nav className="fixed bottom-3 left-3 right-3 z-[100] mx-auto max-w-md rounded-[28px] border border-violet-300/20 bg-gradient-to-l from-violet-700/95 via-fuchsia-600/95 to-violet-700/95 p-2 shadow-[0_18px_50px_rgba(76,29,149,0.48)] backdrop-blur-xl">
@@ -979,6 +1161,46 @@ export default function HomePage() {
           outline: 0 !important;
         }
 
+        .drawer-item {
+          animation: drawerItemIn 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+        }
+
+        .drawer-item:nth-child(1) {
+          animation-delay: 70ms;
+        }
+
+        .drawer-item:nth-child(2) {
+          animation-delay: 105ms;
+        }
+
+        .drawer-item:nth-child(3) {
+          animation-delay: 140ms;
+        }
+
+        .drawer-item:nth-child(4) {
+          animation-delay: 175ms;
+        }
+
+        .drawer-item:nth-child(5) {
+          animation-delay: 210ms;
+        }
+
+        .drawer-item:nth-child(6) {
+          animation-delay: 245ms;
+        }
+
+        @keyframes drawerItemIn {
+          from {
+            opacity: 0;
+            transform: translateX(-18px);
+          }
+
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+
         @keyframes discountScroll {
           from {
             transform: translateX(0);
@@ -1042,7 +1264,8 @@ export default function HomePage() {
         @media (prefers-reduced-motion: reduce) {
           .discount-track,
           .zeta-logo,
-          .splash-loading {
+          .splash-loading,
+          .drawer-item {
             animation: none;
           }
 
