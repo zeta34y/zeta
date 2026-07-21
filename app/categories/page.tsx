@@ -177,11 +177,11 @@ function CategoriesContent() {
         </div>
       </header>
 
-      <div className="mx-auto flex max-w-7xl gap-4 px-3 py-5 sm:px-4">
+      <div className="mx-auto flex max-w-7xl gap-2 px-2.5 py-5 sm:gap-4 sm:px-4">
         {/* القائمة الجانبية */}
-        <aside className="sticky top-[78px] h-fit w-[132px] shrink-0 rounded-[26px] border border-white/[0.07] bg-[#0d0a14] p-2.5 shadow-xl sm:w-[230px] sm:p-3">
+        <aside className="sticky top-[78px] h-fit w-[104px] shrink-0 rounded-[22px] border border-white/[0.07] bg-[#0d0a14] p-1.5 shadow-xl sm:w-[230px] sm:rounded-[26px] sm:p-3">
           <div className="px-2 pb-3 pt-2">
-            <h2 className="text-[12px] font-black sm:text-lg">كل التصنيفات</h2>
+            <h2 className="text-[11px] font-black sm:text-lg">كل التصنيفات</h2>
             <p className="mt-1 hidden text-[10px] text-gray-500 sm:block">
               اختر قسمًا لعرض ألعابه
             </p>
@@ -195,14 +195,14 @@ function CategoriesContent() {
                 <button
                   key={category.slug}
                   onClick={() => setSelectedCategory(category.slug)}
-                  className={`group flex w-full items-center gap-2.5 rounded-[22px] border px-2.5 py-3 text-right transition duration-200 sm:gap-3 sm:p-3 ${
+                  className={`group flex w-full flex-col items-center justify-center gap-1.5 rounded-[18px] border px-1.5 py-2.5 text-center transition duration-200 sm:flex-row sm:justify-start sm:gap-3 sm:rounded-[22px] sm:p-3 sm:text-right ${
                     isActive
                       ? "border-violet-400/50 bg-gradient-to-l from-violet-600/25 to-fuchsia-600/15 shadow-lg shadow-violet-950/30"
                       : "border-white/[0.05] bg-white/[0.025] hover:-translate-x-1 hover:border-violet-400/30 hover:bg-violet-500/10"
                   }`}
                 >
                   <span
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px] text-lg sm:h-11 sm:w-11 sm:text-xl ${
+                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] text-lg sm:h-11 sm:w-11 sm:rounded-[16px] sm:text-xl ${
                       isActive
                         ? "bg-gradient-to-br from-violet-600 to-fuchsia-600"
                         : "bg-gradient-to-br from-violet-600/25 to-fuchsia-600/15"
@@ -212,7 +212,7 @@ function CategoriesContent() {
                   </span>
 
                   <div className="min-w-0">
-                    <h3 className="line-clamp-2 text-[11px] font-black leading-[17px] sm:text-sm">
+                    <h3 className="line-clamp-2 text-[9px] font-black leading-4 sm:text-sm">
                       {category.name}
                     </h3>
 
@@ -242,9 +242,9 @@ function CategoriesContent() {
           ) : (
             <div
               key={selectedInfo.slug}
-              className="animate-category rounded-[28px] border border-white/[0.06] bg-[#0d0a14]/70 p-3 sm:p-5"
+              className="animate-category rounded-[24px] border border-white/[0.06] bg-[#0d0a14]/70 p-2.5 sm:rounded-[28px] sm:p-5"
             >
-              <div className="relative overflow-hidden rounded-[24px] bg-gradient-to-br from-violet-700/25 via-fuchsia-700/10 to-transparent p-4 sm:p-5">
+              <div className="relative overflow-hidden rounded-[20px] bg-gradient-to-br from-violet-700/25 via-fuchsia-700/10 to-transparent p-3 sm:rounded-[24px] sm:p-5">
                 <div className="absolute -left-8 -top-8 h-28 w-28 rounded-full bg-violet-500/20 blur-3xl" />
 
                 <div className="relative flex items-center gap-3 sm:gap-4">
@@ -284,7 +284,7 @@ function CategoriesContent() {
                 </span>
               </div>
 
-              <div className="mt-4 grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-3">
+              <div className="mt-4 grid grid-cols-2 gap-2.5 sm:gap-3 lg:grid-cols-3">
                 {filteredGames.map((game) => (
                   <article
                     key={game.id}
