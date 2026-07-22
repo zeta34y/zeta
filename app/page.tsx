@@ -438,11 +438,6 @@ export default function HomePage() {
   }, []);
 
   function openAccountOrLogin() {
-    if (user) {
-      router.push("/account");
-      return;
-    }
-
     window.dispatchEvent(
       new CustomEvent("zeta-open-login")
     );

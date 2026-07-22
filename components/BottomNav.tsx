@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import LoginSheet from "@/components/LoginSheet";
+import AccountSheet from "@/components/AccountSheet";
 import { supabase } from "@/lib/supabase";
 
 type CartItem = {
@@ -19,6 +20,7 @@ export default function BottomNav() {
 
   const [cartCount, setCartCount] = useState(0);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [authLoaded, setAuthLoaded] = useState(false);
   const userRef = useRef<User | null>(null);
@@ -84,7 +86,7 @@ export default function BottomNav() {
       return;
     }
 
-    router.push("/account");
+    setAccountOpen(true);
   }
 
   function openSearch() {
@@ -156,6 +158,8 @@ export default function BottomNav() {
 
         if (currentUser) {
           setLoginOpen(false);
+        } else {
+          setAccountOpen(false);
         }
       }
     );
@@ -166,7 +170,7 @@ export default function BottomNav() {
 
     function handleOpenLogin() {
       if (userRef.current) {
-        router.push("/account");
+        setAccountOpen(true);
         return;
       }
 
@@ -349,7 +353,7 @@ export default function BottomNav() {
             onClick={openAccount}
             aria-label={user ? `حساب ${userName}` : "تسجيل الدخول"}
             className={`${baseClass} ${
-              (user && accountActive) || loginOpen
+              (user && (accountActive || accountOpen)) || loginOpen
                 ? activeClass
                 : ""
             }`}
@@ -411,6 +415,14 @@ export default function BottomNav() {
         <LoginSheet
           open={loginOpen}
           onClose={closeLoginSheet}
+        />
+      )}
+
+      {user && (
+        <AccountSheet
+          open={accountOpen}
+          user={user}
+          onClose={() => setAccountOpen(false)}
         />
       )}
 
