@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import LoginSheet from "@/components/LoginSheet";
 
 type CartItem = {
@@ -13,17 +13,22 @@ const CART_KEY = "zeta_cart";
 
 export default function BottomNav() {
   const pathname = usePathname();
+  const router = useRouter();
+
   const [cartCount, setCartCount] = useState(0);
   const [loginOpen, setLoginOpen] = useState(false);
 
   function readCartCount() {
     try {
       const savedCart = localStorage.getItem(CART_KEY);
-      const parsedCart: CartItem[] = savedCart ? JSON.parse(savedCart) : [];
+      const parsedCart: CartItem[] = savedCart
+        ? JSON.parse(savedCart)
+        : [];
 
       const count = Array.isArray(parsedCart)
         ? parsedCart.reduce(
-            (total, item) => total + Number(item.quantity || 1),
+            (total, item) =>
+              total + Number(item.quantity || 1),
             0
           )
         : 0;
@@ -34,6 +39,40 @@ export default function BottomNav() {
     }
   }
 
+  function openLoginSheet() {
+    setLoginOpen(true);
+  }
+
+  function closeLoginSheet() {
+    setLoginOpen(false);
+  }
+
+  function openSearch() {
+    if (pathname === "/") {
+      window.history.replaceState(null, "", "/#search");
+
+      window.dispatchEvent(
+        new CustomEvent("zeta-open-search")
+      );
+
+      window.setTimeout(() => {
+        window.dispatchEvent(
+          new CustomEvent("zeta-open-search")
+        );
+      }, 120);
+
+      return;
+    }
+
+    router.push("/#search");
+
+    window.setTimeout(() => {
+      window.dispatchEvent(
+        new CustomEvent("zeta-open-search")
+      );
+    }, 450);
+  }
+
   useEffect(() => {
     readCartCount();
 
@@ -41,18 +80,33 @@ export default function BottomNav() {
       readCartCount();
     }
 
-    function openLoginSheet() {
-      setLoginOpen(true);
+    function handleOpenLogin() {
+      openLoginSheet();
     }
 
     window.addEventListener("storage", handleCartUpdate);
-    window.addEventListener("zeta-cart-updated", handleCartUpdate);
-    window.addEventListener("zeta-open-login", openLoginSheet);
+    window.addEventListener(
+      "zeta-cart-updated",
+      handleCartUpdate
+    );
+    window.addEventListener(
+      "zeta-open-login",
+      handleOpenLogin
+    );
 
     return () => {
-      window.removeEventListener("storage", handleCartUpdate);
-      window.removeEventListener("zeta-cart-updated", handleCartUpdate);
-      window.removeEventListener("zeta-open-login", openLoginSheet);
+      window.removeEventListener(
+        "storage",
+        handleCartUpdate
+      );
+      window.removeEventListener(
+        "zeta-cart-updated",
+        handleCartUpdate
+      );
+      window.removeEventListener(
+        "zeta-open-login",
+        handleOpenLogin
+      );
     };
   }, []);
 
@@ -66,13 +120,16 @@ export default function BottomNav() {
     <>
       <nav
         dir="rtl"
+        aria-label="التنقل السفلي"
         className="fixed bottom-[max(12px,env(safe-area-inset-bottom))] left-3 right-3 z-[100] mx-auto max-w-md rounded-[28px] border border-violet-300/20 bg-gradient-to-l from-violet-700/95 via-fuchsia-600/95 to-violet-700/95 p-2 shadow-[0_18px_50px_rgba(76,29,149,0.48)] backdrop-blur-xl"
       >
         <div className="grid grid-cols-5 gap-1">
           <Link
             href="/"
             aria-label="الرئيسية"
-            className={`${baseClass} ${pathname === "/" ? activeClass : ""}`}
+            className={`${baseClass} ${
+              pathname === "/" ? activeClass : ""
+            }`}
           >
             <svg
               viewBox="0 0 24 24"
@@ -90,14 +147,18 @@ export default function BottomNav() {
                 d="M5.5 9.7v9.2h13V9.7M9.2 18.9v-5.4h5.6v5.4"
               />
             </svg>
-            <span className="text-[9px] font-black">الرئيسية</span>
+            <span className="text-[9px] font-black">
+              الرئيسية
+            </span>
           </Link>
 
           <Link
             href="/categories"
             aria-label="التصنيفات"
             className={`${baseClass} ${
-              pathname.startsWith("/categories") ? activeClass : ""
+              pathname.startsWith("/categories")
+                ? activeClass
+                : ""
             }`}
           >
             <svg
@@ -110,7 +171,9 @@ export default function BottomNav() {
               <rect x="3.5" y="14" width="6.5" height="6.5" rx="2" />
               <rect x="14" y="14" width="6.5" height="6.5" rx="2" />
             </svg>
-            <span className="text-[9px] font-black">التصنيفات</span>
+            <span className="text-[9px] font-black">
+              التصنيفات
+            </span>
           </Link>
 
           <Link
@@ -141,12 +204,14 @@ export default function BottomNav() {
               {cartCount}
             </span>
 
-            <span className="text-[9px] font-black">السلة</span>
+            <span className="text-[9px] font-black">
+              السلة
+            </span>
           </Link>
 
           <button
             type="button"
-            onClick={() => setLoginOpen(true)}
+            onClick={openLoginSheet}
             aria-label="تسجيل الدخول"
             className={`${baseClass} ${
               loginOpen ? activeClass : ""
@@ -164,11 +229,14 @@ export default function BottomNav() {
                 d="M5.8 20c.5-4 2.8-6.2 6.2-6.2s5.7 2.2 6.2 6.2"
               />
             </svg>
-            <span className="text-[9px] font-black">الدخول</span>
+            <span className="text-[9px] font-black">
+              الدخول
+            </span>
           </button>
 
-          <Link
-            href="/#search"
+          <button
+            type="button"
+            onClick={openSearch}
             aria-label="البحث"
             className={baseClass}
           >
@@ -178,16 +246,21 @@ export default function BottomNav() {
               className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9] transition duration-200 group-hover:scale-110"
             >
               <circle cx="10.8" cy="10.8" r="5.8" />
-              <path strokeLinecap="round" d="m15.2 15.2 4.3 4.3" />
+              <path
+                strokeLinecap="round"
+                d="m15.2 15.2 4.3 4.3"
+              />
             </svg>
-            <span className="text-[9px] font-black">بحث</span>
-          </Link>
+            <span className="text-[9px] font-black">
+              بحث
+            </span>
+          </button>
         </div>
       </nav>
 
       <LoginSheet
         open={loginOpen}
-        onClose={() => setLoginOpen(false)}
+        onClose={closeLoginSheet}
       />
 
       <style jsx global>{`

@@ -13,6 +13,7 @@ type OfferGame = {
   price: number;
   oldPrice: number;
   bestSeller: boolean;
+  isPackage?: boolean;
 };
 
 const offerGames: OfferGame[] = [
@@ -76,6 +77,39 @@ const offerGames: OfferGame[] = [
     oldPrice: 169,
     bestSeller: false,
   },
+  {
+    id: "package-1",
+    name: "بكج الأكشن",
+    label: "بكج ألعاب",
+    platform: "3 ألعاب PC",
+    category: "بكجات",
+    price: 99,
+    oldPrice: 159,
+    bestSeller: false,
+    isPackage: true,
+  },
+  {
+    id: "package-2",
+    name: "بكج العالم المفتوح",
+    label: "بكج ألعاب",
+    platform: "3 ألعاب PC",
+    category: "بكجات",
+    price: 119,
+    oldPrice: 189,
+    bestSeller: false,
+    isPackage: true,
+  },
+  {
+    id: "package-3",
+    name: "بكج الرياضة والسباقات",
+    label: "بكج ألعاب",
+    platform: "4 ألعاب PC",
+    category: "بكجات",
+    price: 129,
+    oldPrice: 209,
+    bestSeller: false,
+    isPackage: true,
+  },
 ];
 
 export default function OffersPage() {
@@ -100,6 +134,10 @@ export default function OffersPage() {
 
     if (filter === "الأكثر مبيعًا") {
       return offerGames.filter((game) => game.bestSeller);
+    }
+
+    if (filter === "البكجات") {
+      return offerGames.filter((game) => game.isPackage);
     }
 
     return offerGames.filter((game) => game.label.includes(filter));
@@ -212,7 +250,7 @@ export default function OffersPage() {
         </div>
 
         <div className="mt-6 flex gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {["الكل", "مشترك", "خاص", "الأكثر مبيعًا"].map((item) => (
+          {["الكل", "مشترك", "خاص", "الأكثر مبيعًا", "البكجات"].map((item) => (
             <button
               key={item}
               type="button"
@@ -246,8 +284,12 @@ export default function OffersPage() {
                     aria-label={`عرض تفاصيل ${game.name}`}
                   />
 
-                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-700/20 to-fuchsia-700/20 text-5xl transition group-hover:scale-105">
-                    🎮
+                  <div className={`flex h-full w-full items-center justify-center text-5xl transition group-hover:scale-105 ${
+                    game.isPackage
+                      ? "bg-gradient-to-br from-amber-700/20 via-violet-700/15 to-fuchsia-700/20"
+                      : "bg-gradient-to-br from-violet-700/20 to-fuchsia-700/20"
+                  }`}>
+                    {game.isPackage ? "🎁" : "🎮"}
                   </div>
 
                   <span className="pointer-events-none absolute right-2 top-2 z-20 rounded-lg bg-red-500 px-2 py-1 text-[9px] font-black">
