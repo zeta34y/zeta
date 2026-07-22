@@ -1,50 +1,44 @@
 "use client";
 
 import Link from "next/link";
+import BottomNav from "@/components/BottomNav";
 
-type Category = {
-  name: string;
-  slug: string;
-  icon: string;
-  description: string;
-};
-
-const categories: Category[] = [
+const categories = [
   {
-    name: "ألعاب المحاكاة",
-    slug: "simulation",
+    title: "ألعاب المحاكاة",
+    description: "تجارب تحاكي حياة وواقع",
     icon: "🕹️",
-    description: "قيادة، حياة، بناء وإدارة",
+    slug: "simulation",
   },
   {
-    name: "ألعاب الرياضة",
-    slug: "sports",
-    icon: "⚽",
+    title: "ألعاب الرياضة",
     description: "كرة قدم ورياضات متنوعة",
+    icon: "⚽",
+    slug: "sports",
   },
   {
-    name: "ألعاب الأكشن",
-    slug: "action",
-    icon: "🔥",
+    title: "ألعاب الأكشن",
     description: "قتال، إطلاق نار وحماس",
+    icon: "🔥",
+    slug: "action",
   },
   {
-    name: "ألعاب 2D",
-    slug: "2d",
+    title: "ألعاب 2D",
+    description: "لعب خفيف وأجواء كلاسيكية",
     icon: "👾",
-    description: "ألعاب ثنائية الأبعاد",
+    slug: "2d",
   },
   {
-    name: "ألعاب المغامرات",
-    slug: "adventure",
-    icon: "🗺️",
+    title: "ألعاب المغامرات",
     description: "استكشاف وقصص وعوالم",
+    icon: "🗺️",
+    slug: "adventure",
   },
   {
-    name: "ألعاب الرعب",
-    slug: "horror",
-    icon: "👻",
+    title: "ألعاب الرعب",
     description: "رعب وتشويق وبقاء",
+    icon: "👻",
+    slug: "horror",
   },
 ];
 
@@ -52,192 +46,110 @@ export default function CategoriesPage() {
   return (
     <main
       dir="rtl"
-      className="min-h-screen overflow-x-hidden bg-[#08070d] pb-28 text-white"
+      className="relative min-h-screen overflow-x-hidden bg-[#08070d] pb-32 text-white"
     >
-      <header className="sticky top-0 z-40 border-b border-white/5 bg-[#08070d]/95 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3">
-          <Link href="/" className="flex items-center gap-3">
+      <div className="pointer-events-none fixed inset-0 overflow-hidden">
+        <div className="absolute -right-28 top-10 h-96 w-96 rounded-full bg-violet-700/15 blur-[120px]" />
+        <div className="absolute -left-28 bottom-10 h-96 w-96 rounded-full bg-fuchsia-700/10 blur-[120px]" />
+      </div>
+
+      <header className="relative z-40">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
+          <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-700 text-xl font-black shadow-lg shadow-violet-900/30">
               Z
             </div>
 
             <div>
-              <h1 className="text-lg font-black tracking-wider">ZETA</h1>
-              <p className="text-[9px] text-gray-500">متجر الألعاب الرقمية</p>
+              <h1 className="text-xl font-black tracking-wider">ZETA</h1>
+              <p className="text-[10px] text-gray-500">
+                متجر الألعاب الرقمية
+              </p>
             </div>
-          </Link>
+          </div>
 
           <Link
             href="/"
-            className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5 text-[11px] font-bold text-gray-300 transition hover:border-violet-400/40 hover:text-white active:scale-95"
+            className="flex h-10 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3.5 text-[11px] font-black text-gray-200 transition hover:border-violet-400/30 hover:bg-violet-500/10 active:scale-95"
           >
-            العودة للرئيسية
+            <span>العودة للرئيسية</span>
+
+            <svg
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+              className="h-4 w-4 fill-none stroke-current stroke-2"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="m15 6-6 6 6 6"
+              />
+            </svg>
           </Link>
         </div>
       </header>
 
-      <section className="mx-auto max-w-7xl px-4 pb-8 pt-7">
-        <div className="relative overflow-hidden rounded-[30px] border border-white/[0.06] bg-gradient-to-br from-violet-700/20 via-[#100d18] to-fuchsia-700/10 px-5 py-7 text-center">
-          <div className="absolute -left-14 -top-14 h-44 w-44 rounded-full bg-violet-600/20 blur-[70px]" />
-          <div className="absolute -bottom-16 -right-12 h-44 w-44 rounded-full bg-fuchsia-600/15 blur-[70px]" />
+      <section className="relative z-10 mx-auto max-w-7xl px-4 pt-5">
+        <div className="relative overflow-hidden rounded-[30px] border border-violet-400/15 bg-[radial-gradient(circle_at_50%_10%,rgba(59,130,246,0.32),transparent_48%),linear-gradient(135deg,#17142b,#0d0b16)] px-5 py-10 text-center shadow-2xl shadow-violet-950/20 sm:py-14">
+          <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-blue-600/15 blur-[90px]" />
+
+          <div className="absolute -bottom-20 -left-20 h-64 w-64 rounded-full bg-violet-600/15 blur-[90px]" />
 
           <div className="relative">
-            <span className="inline-flex rounded-full border border-violet-400/20 bg-violet-500/10 px-4 py-2 text-[11px] font-bold text-violet-300">
+            <span className="inline-flex rounded-full border border-violet-400/20 bg-violet-500/10 px-4 py-2 text-[11px] font-black text-violet-300">
               اختر لعبتك
             </span>
 
-            <h1 className="mt-4 text-3xl font-black sm:text-4xl">
+            <h2 className="mt-5 text-3xl font-black sm:text-4xl">
               كل التصنيفات
-            </h1>
+            </h2>
 
-            <p className="mt-2 text-sm text-gray-400">
-              اختر قسمًا لعرض ألعابه
+            <p className="mt-3 text-sm text-gray-400">
+              اختر قسمًا لعرض الألعاب
             </p>
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {categories.map((category) => (
             <Link
               key={category.slug}
               href={`/categories/${category.slug}`}
-              className="group relative overflow-hidden rounded-[28px] border border-white/[0.07] bg-[#100d18] p-5 shadow-xl transition duration-300 hover:-translate-y-1.5 hover:border-violet-400/40 hover:shadow-2xl hover:shadow-violet-950/30 active:scale-[0.98]"
+              className="group flex min-h-[132px] items-center gap-4 rounded-[26px] border border-white/[0.08] bg-gradient-to-br from-[#181724] to-[#101019] p-4 shadow-lg transition duration-300 hover:-translate-y-1 hover:border-violet-400/35 hover:shadow-2xl hover:shadow-violet-950/30 active:scale-[0.99]"
             >
-              <div className="absolute -left-10 -top-12 h-36 w-36 rounded-full bg-violet-600/10 blur-3xl transition duration-300 group-hover:bg-violet-600/20" />
+              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[24px] bg-gradient-to-br from-violet-600 to-indigo-600 text-4xl shadow-xl shadow-violet-900/30 transition duration-300 group-hover:scale-105">
+                {category.icon}
+              </div>
 
-              <div className="relative flex items-center gap-4">
-                <div className="flex h-[76px] w-[76px] shrink-0 items-center justify-center rounded-[24px] border border-white/10 bg-gradient-to-br from-violet-600/30 to-fuchsia-600/20 text-4xl shadow-lg transition duration-300 group-hover:scale-105 group-hover:from-violet-600/50 group-hover:to-fuchsia-600/35">
-                  {category.icon}
-                </div>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-xl font-black">
+                  {category.title}
+                </h3>
 
-                <div className="min-w-0 flex-1">
-                  <h2 className="text-xl font-black leading-tight">
-                    {category.name}
-                  </h2>
+                <p className="mt-2 text-sm leading-6 text-gray-400">
+                  {category.description}
+                </p>
+              </div>
 
-                  <p className="mt-2 text-sm leading-6 text-gray-400">
-                    {category.description}
-                  </p>
-                </div>
-
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-lg text-violet-300 transition duration-300 group-hover:-translate-x-1 group-hover:border-violet-400/30 group-hover:bg-violet-500/10">
-                  ←
-                </div>
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-violet-300/20 bg-violet-500/10 transition group-hover:bg-violet-500/20">
+                <svg
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  className="h-5 w-5 fill-none stroke-current stroke-2"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="m15 6-6 6 6 6"
+                  />
+                </svg>
               </div>
             </Link>
           ))}
         </div>
       </section>
 
-      {/* القائمة السفلية العائمة */}
-      <nav className="fixed bottom-3 left-3 right-3 z-[100] mx-auto max-w-md rounded-[28px] border border-violet-300/20 bg-gradient-to-l from-violet-700/95 via-fuchsia-600/95 to-violet-700/95 p-2 shadow-[0_18px_50px_rgba(76,29,149,0.48)] backdrop-blur-xl">
-        <div className="grid grid-cols-5 gap-1">
-          <Link
-            href="/"
-            aria-label="الرئيسية"
-            className="group flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] text-white/85 transition duration-200 hover:-translate-y-2 hover:bg-white/15 hover:text-white hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              className="h-[24px] w-[24px] fill-none stroke-current stroke-[1.9] transition duration-200 group-hover:scale-110"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 10.7 12 3.8l8.5 6.9" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5.5 9.7v9.2h13V9.7M9.2 18.9v-5.4h5.6v5.4" />
-            </svg>
-            <span className="text-[9px] font-black">الرئيسية</span>
-          </Link>
-
-          <Link
-            href="/categories"
-            aria-label="التصنيفات"
-            className="group flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] bg-white/15 text-white shadow-lg shadow-black/10 transition duration-200 hover:-translate-y-2 hover:bg-white/20 hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9] transition duration-200 group-hover:scale-110"
-            >
-              <rect x="3.5" y="3.5" width="6.5" height="6.5" rx="2" />
-              <rect x="14" y="3.5" width="6.5" height="6.5" rx="2" />
-              <rect x="3.5" y="14" width="6.5" height="6.5" rx="2" />
-              <rect x="14" y="14" width="6.5" height="6.5" rx="2" />
-            </svg>
-            <span className="text-[9px] font-black">التصنيفات</span>
-          </Link>
-
-          <button
-            aria-label="السلة"
-            className="group relative flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] text-white/85 transition duration-200 hover:-translate-y-2 hover:bg-white/15 hover:text-white hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9] transition duration-200 group-hover:scale-110"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 4.5h2l1.8 10.1a2 2 0 0 0 2 1.7h7.9a2 2 0 0 0 1.9-1.4l1.4-5.3H7" />
-              <circle cx="9.5" cy="19.2" r="1.2" />
-              <circle cx="17.2" cy="19.2" r="1.2" />
-            </svg>
-            <span className="absolute right-[24%] top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[8px] font-black text-white">
-              0
-            </span>
-            <span className="text-[9px] font-black">السلة</span>
-          </button>
-
-          <button
-            aria-label="تسجيل الدخول"
-            className="group flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] text-white/85 transition duration-200 hover:-translate-y-2 hover:bg-white/15 hover:text-white hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9] transition duration-200 group-hover:scale-110"
-            >
-              <circle cx="12" cy="7.2" r="3.2" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5.8 20c.5-4 2.8-6.2 6.2-6.2s5.7 2.2 6.2 6.2" />
-            </svg>
-            <span className="text-[9px] font-black">الدخول</span>
-          </button>
-
-          <button
-            aria-label="البحث"
-            className="group flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] text-white/85 transition duration-200 hover:-translate-y-2 hover:bg-white/15 hover:text-white hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9] transition duration-200 group-hover:scale-110"
-            >
-              <circle cx="10.8" cy="10.8" r="5.8" />
-              <path strokeLinecap="round" d="m15.2 15.2 4.3 4.3" />
-            </svg>
-            <span className="text-[9px] font-black">بحث</span>
-          </button>
-        </div>
-      </nav>
-
-      <style jsx global>{`
-        * {
-          box-sizing: border-box;
-        }
-
-        html {
-          background: #08070d;
-        }
-
-        body {
-          margin: 0;
-          overflow-x: hidden;
-          background: #08070d;
-        }
-
-        button,
-        a {
-          -webkit-tap-highlight-color: transparent;
-        }
-
-      `}</style>
+      <BottomNav />
     </main>
   );
 }

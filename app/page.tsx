@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import BottomNav from "@/components/BottomNav";
 import { useEffect, useRef, useState } from "react";
 
 const games = [
@@ -128,6 +129,9 @@ export default function HomePage() {
   const [splashClosing, setSplashClosing] = useState(false);
   const [activeCategory, setActiveCategory] = useState("الكل");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [cartMessage, setCartMessage] = useState("");
+  const [addingId, setAddingId] = useState<string | null>(null);
+  const [cartCount, setCartCount] = useState(0);
   const menuTouchStartX = useRef<number | null>(null);
 
   useEffect(() => {
@@ -142,6 +146,37 @@ export default function HomePage() {
     return () => {
       window.clearTimeout(closeTimer);
       window.clearTimeout(hideTimer);
+    };
+  }, []);
+
+  useEffect(() => {
+    function updateCartCount() {
+      try {
+        const savedCart = localStorage.getItem("zeta_cart");
+        const parsedCart = savedCart ? JSON.parse(savedCart) : [];
+
+        const count = Array.isArray(parsedCart)
+          ? parsedCart.reduce(
+              (total: number, item: { quantity?: number }) =>
+                total + Number(item.quantity || 1),
+              0
+            )
+          : 0;
+
+        setCartCount(count);
+      } catch {
+        setCartCount(0);
+      }
+    }
+
+    updateCartCount();
+
+    window.addEventListener("storage", updateCartCount);
+    window.addEventListener("zeta-cart-updated", updateCartCount);
+
+    return () => {
+      window.removeEventListener("storage", updateCartCount);
+      window.removeEventListener("zeta-cart-updated", updateCartCount);
     };
   }, []);
 
@@ -164,6 +199,177 @@ export default function HomePage() {
 
   function closeMenu() {
     setMenuOpen(false);
+  }
+
+  function animateGameToCart(sourceElement: HTMLElement) {
+    const cartButton = document.getElementById("top-cart-button");
+
+    if (!cartButton) return;
+
+    const gameCard = sourceElement.closest("article");
+    const gameImage =
+      gameCard?.querySelector<HTMLElement>("[data-game-image]") ??
+      sourceElement;
+
+    const sourceRect = gameImage.getBoundingClientRect();
+    const cartRect = cartButton.getBoundingClientRect();
+
+    const flyingGame = document.createElement("div");
+
+    flyingGame.innerHTML = "🎮";
+    flyingGame.setAttribute("aria-hidden", "true");
+
+    Object.assign(flyingGame.style, {
+      position: "fixed",
+      left: `${sourceRect.left + sourceRect.width / 2 - 24}px`,
+      top: `${sourceRect.top + sourceRect.height / 2 - 24}px`,
+      width: "48px",
+      height: "48px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: "16px",
+      background:
+        "linear-gradient(135deg, rgba(124,58,237,0.96), rgba(192,38,211,0.96))",
+      border: "1px solid rgba(255,255,255,0.24)",
+      boxShadow: "0 16px 45px rgba(88,28,135,0.5)",
+      fontSize: "25px",
+      zIndex: "9999",
+      pointerEvents: "none",
+      willChange: "transform, opacity",
+    });
+
+    document.body.appendChild(flyingGame);
+
+    const targetX =
+      cartRect.left +
+      cartRect.width / 2 -
+      (sourceRect.left + sourceRect.width / 2);
+
+    const targetY =
+      cartRect.top +
+      cartRect.height / 2 -
+      (sourceRect.top + sourceRect.height / 2);
+
+    const animation = flyingGame.animate(
+      [
+        {
+          transform: "translate(0, 0) scale(1) rotate(0deg)",
+          opacity: 1,
+          offset: 0,
+        },
+        {
+          transform: `translate(${targetX * 0.45}px, ${
+            targetY * 0.28 - 75
+          }px) scale(0.9) rotate(10deg)`,
+          opacity: 1,
+          offset: 0.45,
+        },
+        {
+          transform: `translate(${targetX}px, ${targetY}px) scale(0.22) rotate(24deg)`,
+          opacity: 0.15,
+          offset: 1,
+        },
+      ],
+      {
+        duration: 1250,
+        easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+        fill: "forwards",
+      }
+    );
+
+    cartButton.animate(
+      [
+        { transform: "scale(1)" },
+        { transform: "scale(1.18) rotate(-5deg)", offset: 0.55 },
+        { transform: "scale(1)" },
+      ],
+      {
+        duration: 1250,
+        easing: "ease-out",
+      }
+    );
+
+    animation.addEventListener("finish", () => {
+      flyingGame.remove();
+    });
+  }
+
+  function addToCart(
+    game: {
+      id: number;
+      name: string;
+      price: number;
+      oldPrice?: number;
+      platform?: string;
+      image?: string;
+    },
+    kind: "featured" | "shared" | "private",
+    sourceElement?: HTMLElement
+  ) {
+    if (sourceElement) {
+      animateGameToCart(sourceElement);
+    }
+    const cartId = `${kind}-${game.id}`;
+
+    try {
+      const savedCart = localStorage.getItem("zeta_cart");
+      const currentCart = savedCart ? JSON.parse(savedCart) : [];
+      const safeCart = Array.isArray(currentCart) ? currentCart : [];
+
+      const existingIndex = safeCart.findIndex(
+        (item: { id: string }) => item.id === cartId
+      );
+
+      let updatedCart;
+
+      if (existingIndex >= 0) {
+        updatedCart = safeCart.map(
+          (item: { id: string; quantity?: number }) =>
+            item.id === cartId
+              ? { ...item, quantity: Number(item.quantity || 1) + 1 }
+              : item
+        );
+      } else {
+        updatedCart = [
+          ...safeCart,
+          {
+            id: cartId,
+            name: game.name,
+            price: game.price,
+            oldPrice: game.oldPrice,
+            platform: game.platform || "PC",
+            image: game.image || "",
+            quantity: 1,
+          },
+        ];
+      }
+
+      localStorage.setItem("zeta_cart", JSON.stringify(updatedCart));
+
+      const updatedCount = updatedCart.reduce(
+        (total: number, item: { quantity?: number }) =>
+          total + Number(item.quantity || 1),
+        0
+      );
+
+      setCartCount(updatedCount);
+      window.dispatchEvent(
+        new CustomEvent("zeta-cart-updated", {
+          detail: updatedCart,
+        })
+      );
+
+      setAddingId(cartId);
+      setCartMessage(`تمت إضافة ${game.name} إلى السلة`);
+
+      window.setTimeout(() => setAddingId(null), 550);
+      window.setTimeout(() => setCartMessage(""), 2200);
+    } catch (error) {
+      console.error("تعذر إضافة اللعبة للسلة:", error);
+      setCartMessage("تعذر إضافة اللعبة، حاول مرة أخرى");
+      window.setTimeout(() => setCartMessage(""), 2200);
+    }
   }
 
   function handleMenuTouchStart(event: React.TouchEvent<HTMLElement>) {
@@ -317,12 +523,20 @@ export default function HomePage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <button className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5">
+            <Link
+              id="top-cart-button"
+              href="/cart"
+              aria-label="سلة المشتريات"
+              className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 transition hover:border-violet-400/30 hover:bg-violet-500/10 active:scale-95"
+            >
               <span className="text-xl">🛒</span>
-              <span className="absolute -left-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-violet-600 px-1 text-[10px] font-bold">
-                0
+              <span
+                key={cartCount}
+                className="absolute -left-1 -top-1 flex h-5 min-w-5 animate-[cartBadgePop_260ms_ease-out] items-center justify-center rounded-full bg-violet-600 px-1 text-[10px] font-bold"
+              >
+                {cartCount}
               </span>
-            </button>
+            </Link>
 
             <button
               aria-label="الحساب"
@@ -461,7 +675,7 @@ export default function HomePage() {
               }
 
               return (
-                <Link key={category.name} href={`/categories?category=${slug}`} className={`flex min-w-[108px] items-center justify-center gap-2.5 rounded-full border px-5 py-3.5 text-sm font-bold transition duration-200 hover:-translate-y-0.5 hover:border-violet-400 hover:bg-violet-500/15 hover:text-white hover:shadow-lg hover:shadow-violet-900/20 active:scale-95 sm:min-w-fit sm:px-4 sm:py-3 ${activeCategory === category.name ? "border-violet-500 bg-violet-600 text-white shadow-lg shadow-violet-900/30" : "border-white/10 bg-white/[0.04] text-gray-300"}`}>
+                <Link key={category.name} href={`/categories/${slug}`} className={`flex min-w-[108px] items-center justify-center gap-2.5 rounded-full border px-5 py-3.5 text-sm font-bold transition duration-200 hover:-translate-y-0.5 hover:border-violet-400 hover:bg-violet-500/15 hover:text-white hover:shadow-lg hover:shadow-violet-900/20 active:scale-95 sm:min-w-fit sm:px-4 sm:py-3 ${activeCategory === category.name ? "border-violet-500 bg-violet-600 text-white shadow-lg shadow-violet-900/30" : "border-white/10 bg-white/[0.04] text-gray-300"}`}>
                   <span className="text-[19px] leading-none sm:text-base">{category.icon}</span>
                   <span>{category.name}</span>
                 </Link>
@@ -496,16 +710,28 @@ export default function HomePage() {
                   key={game.id}
                   className="group overflow-hidden rounded-[22px] border border-white/[0.08] bg-[#111019] shadow-xl transition duration-300 hover:-translate-y-1 hover:border-violet-400/50 hover:shadow-2xl hover:shadow-violet-950/40"
                 >
-                  <div className="relative aspect-[4/5] overflow-hidden">
-                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-700/20 to-fuchsia-700/20 text-5xl">🎮</div>
+                  <div data-game-image className="relative aspect-[4/5] overflow-hidden">
+                    <Link
+                      href={`/game/featured-${game.id}`}
+                      aria-label={`عرض تفاصيل ${game.name}`}
+                      className="absolute inset-0 z-10"
+                    />
 
-                    <div className="absolute inset-0 bg-gradient-to-t from-[#111019] via-transparent to-transparent" />
+                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-700/20 to-fuchsia-700/20 text-5xl transition duration-300 group-hover:scale-105">
+                      🎮
+                    </div>
 
-                    <span className="absolute right-2 top-2 rounded-lg bg-red-500 px-2 py-1 text-[10px] font-black">
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#111019] via-transparent to-transparent" />
+
+                    <span className="pointer-events-none absolute right-2 top-2 z-20 rounded-lg bg-red-500 px-2 py-1 text-[10px] font-black">
                       -{discount}%
                     </span>
 
-                    <button className="absolute left-2 top-2 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-black/40 text-sm backdrop-blur-md">
+                    <button
+                      type="button"
+                      aria-label={`إضافة ${game.name} للمفضلة`}
+                      className="absolute left-2 top-2 z-20 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-black/40 text-sm backdrop-blur-md"
+                    >
                       ♡
                     </button>
                   </div>
@@ -515,15 +741,36 @@ export default function HomePage() {
                       {game.category}
                     </p>
 
-                    <h3 className="mt-1 line-clamp-1 text-sm font-black">
+                    <Link
+                      href={`/game/featured-${game.id}`}
+                      className="mt-1 block line-clamp-1 text-sm font-black transition hover:text-violet-300"
+                    >
                       {game.name}
-                    </h3>
+                    </Link>
 
                     <div className="mt-3 flex items-center justify-between">
                       <div><span className="text-sm text-violet-300 font-bold">السعر قريبًا</span></div>
 
-                      <button className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-600 text-lg font-bold">
-                        +
+                      <button
+                        type="button"
+                        aria-label={`إضافة ${game.name} للسلة`}
+                        onClick={(event) =>
+                          addToCart(
+                            {
+                              ...game,
+                              platform: "PC",
+                            },
+                            "featured",
+                            event.currentTarget
+                          )
+                        }
+                        className={`relative z-30 flex h-9 w-9 items-center justify-center rounded-xl bg-violet-600 text-lg font-bold transition duration-200 active:scale-90 ${
+                          addingId === `featured-${game.id}`
+                            ? "rotate-12 scale-90 brightness-125"
+                            : "rotate-0 scale-100"
+                        }`}
+                      >
+                        {addingId === `featured-${game.id}` ? "✓" : "+"}
                       </button>
                     </div>
                   </div>
@@ -562,12 +809,20 @@ export default function HomePage() {
               key={game.id}
               className="group min-w-[72%] snap-start overflow-hidden rounded-[26px] md:min-w-0 border border-violet-500/15 bg-[#12101a] transition duration-300 hover:-translate-y-1 hover:border-violet-400/50 hover:shadow-2xl hover:shadow-violet-950/40 sm:min-w-[290px]"
             >
-              <div className="relative h-44 overflow-hidden">
-                <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-700/20 to-fuchsia-700/20 text-5xl">🎮</div>
+              <div data-game-image className="relative h-44 overflow-hidden">
+                <Link
+                  href={`/game/shared-${game.id}`}
+                  aria-label={`عرض تفاصيل ${game.name}`}
+                  className="absolute inset-0 z-10"
+                />
 
-                <div className="absolute inset-0 bg-gradient-to-t from-[#12101a] via-transparent to-black/20" />
+                <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-700/20 to-fuchsia-700/20 text-5xl transition duration-300 group-hover:scale-105">
+                  🎮
+                </div>
 
-                <span className="absolute right-3 top-3 rounded-xl border border-white/10 bg-black/60 px-3 py-1.5 text-[10px] font-bold backdrop-blur-md">
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#12101a] via-transparent to-black/20" />
+
+                <span className="pointer-events-none absolute right-3 top-3 z-20 rounded-xl border border-white/10 bg-black/60 px-3 py-1.5 text-[10px] font-bold backdrop-blur-md">
                   مشترك
                 </span>
               </div>
@@ -577,7 +832,12 @@ export default function HomePage() {
                   {game.platform}
                 </p>
 
-                <h3 className="mt-1 text-lg font-black">{game.name}</h3>
+                <Link
+                  href={`/game/shared-${game.id}`}
+                  className="mt-1 block text-lg font-black transition hover:text-violet-300"
+                >
+                  {game.name}
+                </Link>
 
                 <div className="mt-4 flex items-end justify-between">
                   <div>
@@ -591,8 +851,16 @@ export default function HomePage() {
                     </span>
                   </div>
 
-                  <button className="rounded-2xl bg-violet-600 px-5 py-3 text-xs font-black shadow-lg shadow-violet-900/30 transition active:scale-95">
-                    أضف للسلة
+                  <button
+                    type="button"
+                    onClick={(event) => addToCart(game, "shared", event.currentTarget)}
+                    className={`rounded-2xl bg-violet-600 px-5 py-3 text-xs font-black shadow-lg shadow-violet-900/30 transition duration-200 active:scale-95 ${
+                      addingId === `shared-${game.id}`
+                        ? "scale-90 brightness-125"
+                        : "scale-100"
+                    }`}
+                  >
+                    {addingId === `shared-${game.id}` ? "تمت الإضافة ✓" : "أضف للسلة"}
                   </button>
                 </div>
               </div>
@@ -628,12 +896,20 @@ export default function HomePage() {
               key={game.id}
               className="group overflow-hidden rounded-[22px] border border-white/[0.07] bg-[#121019] transition duration-300 hover:-translate-y-1 hover:border-fuchsia-400/50 hover:shadow-2xl hover:shadow-fuchsia-950/30"
             >
-              <div className="relative aspect-[4/5] overflow-hidden">
-                <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-700/20 to-fuchsia-700/20 text-5xl">🎮</div>
+              <div data-game-image className="relative aspect-[4/5] overflow-hidden">
+                <Link
+                  href={`/game/private-${game.id}`}
+                  aria-label={`عرض تفاصيل ${game.name}`}
+                  className="absolute inset-0 z-10"
+                />
 
-                <div className="absolute inset-0 bg-gradient-to-t from-[#121019] via-transparent to-transparent" />
+                <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-700/20 to-fuchsia-700/20 text-5xl transition duration-300 group-hover:scale-105">
+                  🎮
+                </div>
 
-                <span className="absolute right-2 top-2 rounded-lg bg-gradient-to-l from-fuchsia-600 to-violet-600 px-2 py-1 text-[9px] font-black">
+                <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#121019] via-transparent to-transparent" />
+
+                <span className="pointer-events-none absolute right-2 top-2 z-20 rounded-lg bg-gradient-to-l from-fuchsia-600 to-violet-600 px-2 py-1 text-[9px] font-black">
                   خاص
                 </span>
               </div>
@@ -643,9 +919,12 @@ export default function HomePage() {
                   {game.platform}
                 </p>
 
-                <h3 className="mt-1 line-clamp-1 text-sm font-black">
+                <Link
+                  href={`/game/private-${game.id}`}
+                  className="mt-1 block line-clamp-1 text-sm font-black transition hover:text-fuchsia-300"
+                >
                   {game.name}
-                </h3>
+                </Link>
 
                 <div className="mt-3 flex items-center justify-between">
                   <div>
@@ -661,8 +940,17 @@ export default function HomePage() {
                     </p>
                   </div>
 
-                  <button className="flex h-9 w-9 items-center justify-center rounded-xl bg-fuchsia-600 text-lg font-black transition active:scale-90">
-                    +
+                  <button
+                    type="button"
+                    aria-label={`إضافة ${game.name} للسلة`}
+                    onClick={(event) => addToCart(game, "private", event.currentTarget)}
+                    className={`flex h-9 w-9 items-center justify-center rounded-xl bg-fuchsia-600 text-lg font-black transition duration-200 active:scale-90 ${
+                      addingId === `private-${game.id}`
+                        ? "rotate-12 scale-90 brightness-125"
+                        : "rotate-0 scale-100"
+                    }`}
+                  >
+                    {addingId === `private-${game.id}` ? "✓" : "+"}
                   </button>
                 </div>
               </div>
@@ -756,8 +1044,8 @@ export default function HomePage() {
               <h3 className="text-sm font-black text-white">روابط مهمة</h3>
 
               <div className="mt-4 flex flex-col gap-3 text-xs text-gray-500">
-                <a href="#">من نحن</a>
-                <a href="#">الأسئلة الشائعة</a>
+                <Link href="/about">من نحن</Link>
+                <Link href="/faq">الأسئلة الشائعة</Link>
                 <a href="#">تواصل معنا</a>
                 <a href="#">تتبع الطلب</a>
               </div>
@@ -767,10 +1055,10 @@ export default function HomePage() {
               <h3 className="text-sm font-black text-white">السياسات</h3>
 
               <div className="mt-4 flex flex-col gap-3 text-xs text-gray-500">
-                <a href="#">الشروط والأحكام</a>
-                <a href="#">سياسة الخصوصية</a>
-                <a href="#">سياسة الاسترجاع</a>
-                <a href="#">سياسة الاستخدام</a>
+                <Link href="/terms">الشروط والأحكام</Link>
+                <Link href="/privacy">سياسة الخصوصية</Link>
+                <Link href="/returns">سياسة الإرجاع</Link>
+                <Link href="/usage-policy">سياسة الاستخدام</Link>
               </div>
             </div>
           </div>
@@ -829,7 +1117,7 @@ export default function HomePage() {
       <div
         aria-hidden={!menuOpen}
         className={`fixed inset-0 z-[220] transition duration-300 ${
-          menuOpen ? "pointer-events-auto visible" : "pointer-events-none invisible"
+          menuOpen ? "pointer-events-auto" : "pointer-events-none"
         }`}
       >
         <button
@@ -878,59 +1166,59 @@ export default function HomePage() {
             </div>
           </div>
 
-          <nav className="flex-1 overflow-y-auto px-4 py-5">
-            <div className="flex flex-col gap-2">
+          <nav className="flex-1 overflow-y-auto px-3 py-3 md:px-4 md:py-5">
+            <div className="flex flex-col gap-1 md:gap-2">
               <Link
                 href="/favorites"
                 onClick={closeMenu}
-                className="drawer-item group flex items-center gap-3 rounded-[20px] border border-transparent px-4 py-3.5 text-sm font-black text-gray-200 transition hover:border-violet-400/20 hover:bg-violet-500/10 hover:text-white active:scale-[0.98]"
+                className="drawer-item group flex items-center gap-3 rounded-[20px] border border-transparent px-4 py-2.5 text-sm font-black md:py-3.5 text-gray-200 transition hover:border-violet-400/20 hover:bg-violet-500/10 hover:text-white active:scale-[0.98]"
               >
-                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-rose-500/10 text-xl transition group-hover:scale-110">♡</span>
+                <span className="flex h-9 w-9 items-center justify-center md:h-10 md:w-10 rounded-2xl bg-rose-500/10 text-xl transition group-hover:scale-110">♡</span>
                 <span>المفضلة</span>
               </Link>
 
               <a
                 href="#shared-games"
                 onClick={closeMenu}
-                className="drawer-item group flex items-center gap-3 rounded-[20px] border border-transparent px-4 py-3.5 text-sm font-black text-gray-200 transition hover:border-violet-400/20 hover:bg-violet-500/10 hover:text-white active:scale-[0.98]"
+                className="drawer-item group flex items-center gap-3 rounded-[20px] border border-transparent px-4 py-2.5 text-sm font-black md:py-3.5 text-gray-200 transition hover:border-violet-400/20 hover:bg-violet-500/10 hover:text-white active:scale-[0.98]"
               >
-                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-500/10 text-xl transition group-hover:scale-110">🎮</span>
-                <span>ألعاب ستيم مشتركة</span>
+                <span className="flex h-9 w-9 items-center justify-center md:h-10 md:w-10 rounded-2xl bg-violet-500/10 text-xl transition group-hover:scale-110">🎮</span>
+                <span>ألعاب PC مشتركة</span>
               </a>
 
               <a
                 href="#private-games"
                 onClick={closeMenu}
-                className="drawer-item group flex items-center gap-3 rounded-[20px] border border-transparent px-4 py-3.5 text-sm font-black text-gray-200 transition hover:border-fuchsia-400/20 hover:bg-fuchsia-500/10 hover:text-white active:scale-[0.98]"
+                className="drawer-item group flex items-center gap-3 rounded-[20px] border border-transparent px-4 py-2.5 text-sm font-black md:py-3.5 text-gray-200 transition hover:border-fuchsia-400/20 hover:bg-fuchsia-500/10 hover:text-white active:scale-[0.98]"
               >
-                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-fuchsia-500/10 text-xl transition group-hover:scale-110">🔐</span>
-                <span>ألعاب ستيم غير مشتركة</span>
+                <span className="flex h-9 w-9 items-center justify-center md:h-10 md:w-10 rounded-2xl bg-fuchsia-500/10 text-xl transition group-hover:scale-110">🔐</span>
+                <span>ألعاب PC غير مشتركة</span>
               </a>
 
               <a
                 href="#best-sellers"
                 onClick={closeMenu}
-                className="drawer-item group flex items-center gap-3 rounded-[20px] border border-transparent px-4 py-3.5 text-sm font-black text-gray-200 transition hover:border-orange-400/20 hover:bg-orange-500/10 hover:text-white active:scale-[0.98]"
+                className="drawer-item group flex items-center gap-3 rounded-[20px] border border-transparent px-4 py-2.5 text-sm font-black md:py-3.5 text-gray-200 transition hover:border-orange-400/20 hover:bg-orange-500/10 hover:text-white active:scale-[0.98]"
               >
-                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-500/10 text-xl transition group-hover:scale-110">🔥</span>
+                <span className="flex h-9 w-9 items-center justify-center md:h-10 md:w-10 rounded-2xl bg-orange-500/10 text-xl transition group-hover:scale-110">🔥</span>
                 <span>الأكثر مبيعًا</span>
               </a>
 
               <a
                 href="#new-games"
                 onClick={closeMenu}
-                className="drawer-item group flex items-center gap-3 rounded-[20px] border border-transparent px-4 py-3.5 text-sm font-black text-gray-200 transition hover:border-sky-400/20 hover:bg-sky-500/10 hover:text-white active:scale-[0.98]"
+                className="drawer-item group flex items-center gap-3 rounded-[20px] border border-transparent px-4 py-2.5 text-sm font-black md:py-3.5 text-gray-200 transition hover:border-sky-400/20 hover:bg-sky-500/10 hover:text-white active:scale-[0.98]"
               >
-                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-500/10 text-xl transition group-hover:scale-110">✦</span>
+                <span className="flex h-9 w-9 items-center justify-center md:h-10 md:w-10 rounded-2xl bg-sky-500/10 text-xl transition group-hover:scale-110">✦</span>
                 <span>جديدنا</span>
               </a>
 
               <a
                 href="#contact"
                 onClick={closeMenu}
-                className="drawer-item group flex items-center gap-3 rounded-[20px] border border-transparent px-4 py-3.5 text-sm font-black text-gray-200 transition hover:border-emerald-400/20 hover:bg-emerald-500/10 hover:text-white active:scale-[0.98]"
+                className="drawer-item group flex items-center gap-3 rounded-[20px] border border-transparent px-4 py-2.5 text-sm font-black md:py-3.5 text-gray-200 transition hover:border-emerald-400/20 hover:bg-emerald-500/10 hover:text-white active:scale-[0.98]"
               >
-                <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/10 text-xl transition group-hover:scale-110">💬</span>
+                <span className="flex h-9 w-9 items-center justify-center md:h-10 md:w-10 rounded-2xl bg-emerald-500/10 text-xl transition group-hover:scale-110">💬</span>
                 <span>للتواصل</span>
               </a>
             </div>
@@ -944,92 +1232,36 @@ export default function HomePage() {
         </aside>
       </div>
 
-      {/* القائمة السفلية العائمة */}
-      <nav className="fixed bottom-3 left-3 right-3 z-[100] mx-auto max-w-md rounded-[28px] border border-violet-300/20 bg-gradient-to-l from-violet-700/95 via-fuchsia-600/95 to-violet-700/95 p-2 shadow-[0_18px_50px_rgba(76,29,149,0.48)] backdrop-blur-xl">
-        <div className="grid grid-cols-5 gap-1">
-          <button
-            aria-label="الرئيسية"
-            className="group flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] bg-white/15 text-white shadow-lg shadow-black/10 transition duration-200 hover:-translate-y-2 hover:bg-white/20 hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              className="h-[24px] w-[24px] fill-none stroke-current stroke-[1.9] transition duration-200 group-hover:scale-110"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 10.7 12 3.8l8.5 6.9" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5.5 9.7v9.2h13V9.7M9.2 18.9v-5.4h5.6v5.4" />
-            </svg>
-            <span className="text-[9px] font-black">الرئيسية</span>
-          </button>
+      {cartMessage && (
+        <div className="pointer-events-none fixed bottom-28 left-1/2 z-[180] w-[calc(100%-32px)] max-w-[340px] -translate-x-1/2 animate-[cartToast_520ms_cubic-bezier(0.22,1,0.36,1)_both]">
+          <div className="relative overflow-hidden rounded-[22px] border border-violet-300/20 bg-gradient-to-l from-[#1a1328]/95 via-[#15101f]/95 to-[#1a1328]/95 px-4 py-3.5 shadow-[0_18px_55px_rgba(76,29,149,0.45)] backdrop-blur-2xl">
+            <div className="absolute -right-10 -top-10 h-24 w-24 rounded-full bg-violet-600/20 blur-3xl" />
+            <div className="absolute -bottom-12 -left-8 h-24 w-24 rounded-full bg-fuchsia-600/15 blur-3xl" />
 
-          <Link
-            href="/categories"
-            aria-label="التصنيفات"
-            className="group flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] text-white/85 transition duration-200 hover:-translate-y-2 hover:bg-white/15 hover:text-white hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9] transition duration-200 group-hover:scale-110"
-            >
-              <rect x="3.5" y="3.5" width="6.5" height="6.5" rx="2" />
-              <rect x="14" y="3.5" width="6.5" height="6.5" rx="2" />
-              <rect x="3.5" y="14" width="6.5" height="6.5" rx="2" />
-              <rect x="14" y="14" width="6.5" height="6.5" rx="2" />
-            </svg>
-            <span className="text-[9px] font-black">التصنيفات</span>
-          </Link>
+            <div className="relative flex items-center justify-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-lg font-black text-white shadow-lg shadow-emerald-900/25">
+                ✓
+              </div>
 
-          <button
-            aria-label="السلة"
-            className="group relative flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] text-white/85 transition duration-200 hover:-translate-y-2 hover:bg-white/15 hover:text-white hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9] transition duration-200 group-hover:scale-110"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.5 4.5h2l1.8 10.1a2 2 0 0 0 2 1.7h7.9a2 2 0 0 0 1.9-1.4l1.4-5.3H7" />
-              <circle cx="9.5" cy="19.2" r="1.2" />
-              <circle cx="17.2" cy="19.2" r="1.2" />
-            </svg>
-            <span className="absolute right-[24%] top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[8px] font-black text-white">
-              0
-            </span>
-            <span className="text-[9px] font-black">السلة</span>
-          </button>
+              <div className="min-w-0 text-center">
+                <p className="text-[10px] font-bold text-violet-300">
+                  تمت الإضافة بنجاح
+                </p>
 
-          <button
-            aria-label="تسجيل الدخول"
-            className="group flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] text-white/85 transition duration-200 hover:-translate-y-2 hover:bg-white/15 hover:text-white hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9] transition duration-200 group-hover:scale-110"
-            >
-              <circle cx="12" cy="7.2" r="3.2" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5.8 20c.5-4 2.8-6.2 6.2-6.2s5.7 2.2 6.2 6.2" />
-            </svg>
-            <span className="text-[9px] font-black">الدخول</span>
-          </button>
+                <p className="mt-1 truncate text-sm font-black text-white">
+                  {cartMessage.replace("تمت إضافة ", "").replace(" إلى السلة", "")}
+                </p>
+              </div>
+            </div>
 
-          <button
-            aria-label="البحث"
-            className="group flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] text-white/85 transition duration-200 hover:-translate-y-2 hover:bg-white/15 hover:text-white hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9] transition duration-200 group-hover:scale-110"
-            >
-              <circle cx="10.8" cy="10.8" r="5.8" />
-              <path strokeLinecap="round" d="m15.2 15.2 4.3 4.3" />
-            </svg>
-            <span className="text-[9px] font-black">بحث</span>
-          </button>
+            <div className="absolute bottom-0 left-0 h-[3px] w-full overflow-hidden bg-white/5">
+              <div className="h-full w-full origin-right animate-[toastProgress_2200ms_linear_forwards] bg-gradient-to-l from-violet-500 to-fuchsia-500" />
+            </div>
+          </div>
         </div>
-      </nav>
+      )}
+
+      <BottomNav />
 
       <style jsx global>{`
         * {
@@ -1187,6 +1419,50 @@ export default function HomePage() {
 
         .drawer-item:nth-child(6) {
           animation-delay: 245ms;
+        }
+
+        @keyframes cartBadgePop {
+          0% {
+            transform: scale(0.65);
+          }
+
+          70% {
+            transform: scale(1.2);
+          }
+
+          100% {
+            transform: scale(1);
+          }
+        }
+
+        @keyframes cartToast {
+          0% {
+            opacity: 0;
+            transform: translate(-50%, 24px) scale(0.9);
+            filter: blur(8px);
+          }
+
+          55% {
+            opacity: 1;
+            transform: translate(-50%, -4px) scale(1.03);
+            filter: blur(0);
+          }
+
+          100% {
+            opacity: 1;
+            transform: translate(-50%, 0) scale(1);
+            filter: blur(0);
+          }
+        }
+
+        @keyframes toastProgress {
+          from {
+            transform: scaleX(1);
+          }
+
+          to {
+            transform: scaleX(0);
+          }
         }
 
         @keyframes drawerItemIn {
