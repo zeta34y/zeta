@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import BottomNav from "@/components/BottomNav";
 
 type GameDetails = {
@@ -248,17 +248,6 @@ export default function GameDetailsPage() {
     }
   }, [game]);
 
-  const similarGames = useMemo(() => {
-    if (!game) return [];
-
-    return Object.values(games)
-      .filter(
-        (item) =>
-          item.id !== game.id &&
-          (item.kind === game.kind || item.category === game.category)
-      )
-      .slice(0, 4);
-  }, [game]);
 
   function nextSlide() {
     if (!game) return;
@@ -408,7 +397,7 @@ export default function GameDetailsPage() {
   return (
     <main
       dir="rtl"
-      className="relative min-h-screen overflow-x-hidden bg-[#08070d] pb-36 text-white"
+      className="relative min-h-screen overflow-x-hidden bg-[#08070d] pb-32 text-white"
     >
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -right-32 top-0 h-[420px] w-[420px] rounded-full bg-violet-700/12 blur-[130px]" />
@@ -416,7 +405,7 @@ export default function GameDetailsPage() {
       </div>
 
       <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#08070d]/90 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3.5">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-3 py-3 sm:px-4 sm:py-3.5">
           <div className="flex items-center gap-2.5">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-700 text-lg font-black">
               Z
@@ -442,11 +431,11 @@ export default function GameDetailsPage() {
         </div>
       </header>
 
-      <section className="relative z-10 mx-auto max-w-6xl px-4 py-5 sm:py-8">
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] lg:items-start">
+      <section className="relative z-10 mx-auto max-w-6xl px-3 py-3 sm:px-4 sm:py-8">
+        <div className="grid gap-3 sm:gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(360px,0.95fr)] lg:items-start">
           <div>
-            <div className="relative overflow-hidden rounded-[30px] border border-violet-400/15 bg-[#100d18] shadow-[0_28px_90px_rgba(76,29,149,0.24)]">
-              <div className="relative aspect-[16/12] min-h-[330px] overflow-hidden sm:min-h-[430px]">
+            <div className="relative overflow-hidden rounded-[24px] border border-violet-400/15 bg-[#100d18] shadow-[0_20px_60px_rgba(76,29,149,0.20)] sm:rounded-[30px]">
+              <div className="relative aspect-[4/3] min-h-[250px] overflow-hidden sm:aspect-[16/12] sm:min-h-[430px]">
                 {activeSlide.image ? (
                   <img
                     src={activeSlide.image}
@@ -459,11 +448,11 @@ export default function GameDetailsPage() {
                     <div className="absolute right-10 top-10 h-32 w-32 rounded-full border border-fuchsia-300/10" />
 
                     <div className="text-center">
-                      <div className="mx-auto flex h-28 w-28 items-center justify-center rounded-[34px] border border-white/10 bg-white/[0.06] text-6xl shadow-2xl backdrop-blur-xl">
+                      <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-[26px] border border-white/10 bg-white/[0.06] text-4xl shadow-2xl backdrop-blur-xl sm:h-28 sm:w-28 sm:rounded-[34px] sm:text-6xl">
                         🎮
                       </div>
 
-                      <p className="mt-5 text-sm font-black text-violet-200">
+                      <p className="mt-3 text-xs font-black text-violet-200 sm:mt-5 sm:text-sm">
                         {activeSlide.title}
                       </p>
                     </div>
@@ -523,7 +512,7 @@ export default function GameDetailsPage() {
                   type="button"
                   onClick={() => setCurrentSlide(index)}
                   aria-label={`عرض الصورة ${index + 1}`}
-                  className={`relative h-20 w-28 shrink-0 overflow-hidden rounded-2xl border transition-all duration-300 ${
+                  className={`relative h-14 w-20 shrink-0 overflow-hidden rounded-xl border transition-all duration-300 sm:h-20 sm:w-28 sm:rounded-2xl ${
                     currentSlide === index
                       ? "scale-[1.03] border-violet-400 shadow-lg shadow-violet-950/30"
                       : "border-white/10 opacity-70 hover:opacity-100"
@@ -549,7 +538,7 @@ export default function GameDetailsPage() {
             </div>
           </div>
 
-          <aside className="rounded-[30px] border border-white/[0.08] bg-gradient-to-br from-[#171322] to-[#0e0c14] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.25)] sm:p-7 lg:sticky lg:top-20">
+          <aside className="rounded-[24px] border border-white/[0.08] bg-gradient-to-br from-[#171322] to-[#0e0c14] p-4 shadow-[0_20px_55px_rgba(0,0,0,0.22)] sm:rounded-[30px] sm:p-7 lg:sticky lg:top-20">
             <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold">
               <span className="rounded-full border border-violet-400/20 bg-violet-500/10 px-3 py-1.5 text-violet-300">
                 {game.category}
@@ -560,21 +549,21 @@ export default function GameDetailsPage() {
               </span>
             </div>
 
-            <h1 className="mt-4 text-3xl font-black leading-tight sm:text-4xl">
+            <h1 className="mt-3 text-2xl font-black leading-tight sm:mt-4 sm:text-4xl">
               {game.name}
             </h1>
 
-            <p className="mt-4 text-sm leading-8 text-gray-400">
+            <p className="mt-3 text-xs leading-6 text-gray-400 sm:mt-4 sm:text-sm sm:leading-8">
               {game.description}
             </p>
 
-            <div className="mt-6 flex items-end justify-between gap-4 border-y border-white/[0.07] py-5">
+            <div className="mt-4 flex items-end justify-between gap-3 border-y border-white/[0.07] py-4 sm:mt-6 sm:gap-4 sm:py-5">
               <div>
                 <p className="text-[10px] text-gray-500">
                   السعر
                 </p>
 
-                <p className="mt-1 text-3xl font-black">
+                <p className="mt-1 text-2xl font-black sm:text-3xl">
                   {game.price}
                   <span className="mr-1 text-xs text-gray-400">
                     ر.س
@@ -591,7 +580,7 @@ export default function GameDetailsPage() {
               </span>
             </div>
 
-            <div className="mt-5 space-y-3">
+            <div className="mt-4 space-y-2 sm:mt-5 sm:space-y-3">
               <div className="flex items-start gap-3">
                 <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-500/10">
                   ⚡
@@ -641,7 +630,7 @@ export default function GameDetailsPage() {
             <button
               type="button"
               onClick={addToCart}
-              className={`mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-4 text-sm font-black shadow-xl shadow-violet-950/30 transition active:scale-[0.98] ${
+              className={`mt-4 flex w-full items-center justify-center gap-2 rounded-2xl sm:mt-6 bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-4 text-sm font-black shadow-xl shadow-violet-950/30 transition active:scale-[0.98] ${
                 adding ? "scale-[0.98] brightness-125" : ""
               }`}
             >
@@ -681,100 +670,68 @@ export default function GameDetailsPage() {
           </aside>
         </div>
 
-        <section className="mt-8 rounded-[30px] border border-white/[0.08] bg-[#111019] p-5 sm:p-7">
+        <section className="mt-5 rounded-[24px] border border-white/[0.08] bg-[#111019] p-4 sm:mt-8 sm:rounded-[30px] sm:p-7">
           <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/10 text-xl">
-              🎮
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-500/10 text-lg sm:h-11 sm:w-11 sm:text-xl">
+              ℹ️
             </div>
 
             <div>
-              <p className="text-[10px] font-bold text-violet-400">
-                عن المنتج
+              <p className="text-[9px] font-bold text-violet-400 sm:text-[10px]">
+                معلومات مهمة
               </p>
-              <h2 className="text-xl font-black">
-                معلومات مهمة قبل الشراء
+              <h2 className="text-lg font-black sm:text-xl">
+                قبل إتمام الطلب
               </h2>
             </div>
           </div>
 
-          <div className="mt-5 space-y-4 text-sm leading-8 text-gray-400">
-            <p>
-              هذا المنتج رقمي ولا يوجد شحن مادي. بعد تأكيد الطلب يتم إرسال
-              بيانات الاستلام أو معلومات المنتج حسب النوع الموضح في الصفحة.
-            </p>
-
-            <p>
-              تأكد من قراءة نوع المنتج والمنصة قبل إتمام الطلب، لأن الحساب
-              المشترك يختلف عن الحساب الخاص والنسخة الرقمية.
-            </p>
-
-            <p>
-              عند وجود أي مشكلة في الاستلام، تواصل مع الدعم مع رقم الطلب
-              ليتم التحقق منها.
-            </p>
-          </div>
-        </section>
-
-        <section className="mt-10">
-          <div className="flex items-end justify-between">
-            <div>
-              <p className="text-xs font-bold text-violet-400">
-                اختيارات مشابهة
+          <div className="mt-4 divide-y divide-white/[0.06]">
+            <div className="py-4 first:pt-0">
+              <h3 className="text-sm font-black text-white">
+                ليش السعر منخفض؟
+              </h3>
+              <p className="mt-2 text-xs leading-6 text-gray-400 sm:text-sm sm:leading-7">
+                لأن المنتج رقمي ولا توجد تكاليف شحن أو تغليف، وبعض المنتجات تكون
+                حسابات مشتركة بسعر أقل من الحساب الخاص.
               </p>
-
-              <h2 className="mt-1 text-2xl font-black">
-                منتجات قد تعجبك
-              </h2>
             </div>
 
-            <Link
-              href="/"
-              className="text-xs font-black text-gray-500"
-            >
-              عرض الكل
-            </Link>
-          </div>
+            <div className="py-4">
+              <h3 className="text-sm font-black text-white">
+                كيف أستلم اللعبة؟
+              </h3>
+              <p className="mt-2 text-xs leading-6 text-gray-400 sm:text-sm sm:leading-7">
+                بعد تأكيد الطلب تصلك بيانات المنتج وطريقة الدخول والاستخدام داخل
+                تفاصيل الطلب.
+              </p>
+            </div>
 
-          <div className="mt-5 flex snap-x gap-3 overflow-x-auto pb-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-4 md:overflow-visible">
-            {similarGames.map((item) => (
-              <Link
-                key={item.id}
-                href={`/game/${item.id}`}
-                className="group min-w-[75%] snap-start overflow-hidden rounded-[26px] border border-white/[0.08] bg-gradient-to-br from-[#171322] to-[#0f0d16] transition duration-300 hover:-translate-y-1 hover:border-violet-400/35 sm:min-w-[270px] md:min-w-0"
-              >
-                <div className="flex aspect-[4/3] items-center justify-center bg-gradient-to-br from-violet-700/20 to-fuchsia-700/15 text-5xl transition duration-300 group-hover:scale-105">
-                  🎮
-                </div>
+            <div className="py-4">
+              <h3 className="text-sm font-black text-white">
+                هل أقدر أشارك بيانات الحساب؟
+              </h3>
+              <p className="mt-2 text-xs leading-6 text-gray-400 sm:text-sm sm:leading-7">
+                لا. بيانات الحساب مخصصة للمشتري فقط، ومشاركتها قد تسبب توقف
+                الحساب أو فقدان الضمان.
+              </p>
+            </div>
 
-                <div className="p-4">
-                  <p className="text-[10px] font-black text-violet-400">
-                    {item.label}
-                  </p>
-
-                  <h3 className="mt-1 line-clamp-1 text-sm font-black">
-                    {item.name}
-                  </h3>
-
-                  <div className="mt-4 flex items-center justify-between">
-                    <p className="text-lg font-black">
-                      {item.price}
-                      <span className="mr-1 text-[9px] text-gray-500">
-                        ر.س
-                      </span>
-                    </p>
-
-                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-600 text-lg">
-                      ←
-                    </span>
-                  </div>
-                </div>
-              </Link>
-            ))}
+            <div className="py-4 pb-0">
+              <h3 className="text-sm font-black text-white">
+                ليش أشتري من ZETA؟
+              </h3>
+              <p className="mt-2 text-xs leading-6 text-gray-400 sm:text-sm sm:leading-7">
+                أسعار واضحة، تسليم رقمي، دعم عند وجود مشكلة، وتعليمات استخدام
+                مبسطة مع كل طلب.
+              </p>
+            </div>
           </div>
         </section>
+
       </section>
 
-      <footer className="relative mt-12 overflow-hidden border-t border-white/[0.06] bg-[#0b0911] pb-32 pt-12">
+      <footer className="relative mt-8 overflow-hidden border-t border-white/[0.06] bg-[#0b0911] pb-28 pt-9 sm:mt-12 sm:pb-32 sm:pt-12">
         <div className="absolute left-1/2 top-0 h-64 w-64 -translate-x-1/2 rounded-full bg-violet-700/10 blur-[100px]" />
 
         <div className="relative mx-auto max-w-6xl px-5">
@@ -813,7 +770,7 @@ export default function GameDetailsPage() {
               </a>
 
               <a
-                href="mailto:support@zeta.com"
+                href="mailto:support@zeta-play.com"
                 className="flex h-14 w-14 items-center justify-center rounded-2xl border border-violet-400/20 bg-white/5 text-2xl transition hover:bg-violet-600/20"
               >
                 ✉️
@@ -831,7 +788,7 @@ export default function GameDetailsPage() {
                 <Link href="/about">من نحن</Link>
                 <Link href="/faq">الأسئلة الشائعة</Link>
                 <a href="#">تواصل معنا</a>
-                <a href="#">تتبع الطلب</a>
+                <a href="#">الشكاوى</a>
               </div>
             </div>
 
