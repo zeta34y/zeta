@@ -103,6 +103,30 @@ const privateGames = [
   },
 ];
 
+const searchableGames = [
+  ...games.map((game) => ({
+    id: `featured-${game.id}`,
+    name: game.name,
+    type: "لعبة مميزة",
+    platform: "PC",
+    price: game.price,
+  })),
+  ...sharedGames.map((game) => ({
+    id: `shared-${game.id}`,
+    name: game.name,
+    type: "حساب PC مشترك",
+    platform: game.platform,
+    price: game.price,
+  })),
+  ...privateGames.map((game) => ({
+    id: `private-${game.id}`,
+    name: game.name,
+    type: "حساب PC خاص",
+    platform: game.platform,
+    price: game.price,
+  })),
+];
+
 const reviews = [
   {
     id: 1,
@@ -134,7 +158,10 @@ export default function HomePage() {
   const [addingId, setAddingId] = useState<string | null>(null);
   const [cartCount, setCartCount] = useState(0);
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
   const menuTouchStartX = useRef<number | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const closeTimer = window.setTimeout(() => {
@@ -231,6 +258,61 @@ export default function HomePage() {
       window.removeEventListener("keydown", closeWithEscape);
     };
   }, [menuOpen]);
+
+  const normalizedSearchQuery = searchQuery.trim().toLocaleLowerCase();
+
+  const searchResults = normalizedSearchQuery
+    ? searchableGames
+        .filter((game) =>
+          game.name.toLocaleLowerCase().startsWith(normalizedSearchQuery)
+        )
+        .slice(0, 8)
+    : [];
+
+  function clearSearch() {
+    setSearchQuery("");
+    setSearchFocused(false);
+  }
+
+  function focusHomeSearch() {
+    const searchSection = document.getElementById("home-search-section");
+
+    if (searchSection) {
+      searchSection.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+
+      window.setTimeout(() => {
+        setSearchFocused(true);
+        searchInputRef.current?.focus();
+      }, 500);
+    }
+  }
+
+  useEffect(() => {
+    function handleSearchRequest() {
+      focusHomeSearch();
+    }
+
+    function handleHashChange() {
+      if (window.location.hash === "#search") {
+        window.setTimeout(handleSearchRequest, 250);
+      }
+    }
+
+    window.addEventListener("zeta-open-search", handleSearchRequest);
+    window.addEventListener("hashchange", handleHashChange);
+
+    if (window.location.hash === "#search") {
+      window.setTimeout(handleSearchRequest, 500);
+    }
+
+    return () => {
+      window.removeEventListener("zeta-open-search", handleSearchRequest);
+      window.removeEventListener("hashchange", handleHashChange);
+    };
+  }, []);
 
   function closeMenu() {
     setMenuOpen(false);
@@ -649,19 +731,97 @@ export default function HomePage() {
       </header>
 
       <div className="mx-auto max-w-7xl">
-       <section className="relative z-10 overflow-hidden bg-transparent px-4 py-4">
-          <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3.5 shadow-lg">
-            <span className="text-xl">⌕</span>
+       <section id="home-search-section" className="relative z-40 scroll-mt-28 overflow-visible bg-transparent px-4 py-4">
+          <div className="relative">
+            <div
+              className={`flex items-center gap-3 rounded-2xl border bg-white/[0.06] px-4 py-3.5 shadow-lg transition ${
+                searchFocused
+                  ? "border-violet-400/45 shadow-violet-950/30"
+                  : "border-white/10"
+              }`}
+            >
+              <span className="text-xl">⌕</span>
 
-            <input
-              type="text"
-              placeholder="ابحث عن لعبتك المفضلة..."
-              className="w-full bg-transparent text-sm text-white outline-none placeholder:text-gray-500"
-            />
+              <input
+                ref={searchInputRef}
+                id="home-search"
+                type="text"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                onFocus={() => setSearchFocused(true)}
+                placeholder="ابحث عن لعبتك المفضلة..."
+                autoComplete="off"
+                className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-gray-500"
+              />
 
-            <button className="rounded-xl bg-violet-600 px-4 py-2 text-xs font-bold transition duration-200 hover:bg-violet-500 hover:shadow-lg hover:shadow-violet-900/30 active:scale-95">
-              بحث
-            </button>
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={clearSearch}
+                  aria-label="مسح البحث"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white/5 text-lg text-gray-400 transition hover:bg-white/10 hover:text-white active:scale-90"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+
+            {searchFocused && searchQuery.trim() && (
+              <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-[100] overflow-hidden rounded-[22px] border border-violet-400/15 bg-[#100d18]/98 shadow-[0_24px_70px_rgba(0,0,0,0.55)] backdrop-blur-2xl">
+                {searchResults.length > 0 ? (
+                  <div className="max-h-[360px] overflow-y-auto p-2">
+                    {searchResults.map((game) => (
+                      <Link
+                        key={game.id}
+                        href={`/game/${game.id}`}
+                        onClick={clearSearch}
+                        className="group flex items-center gap-3 rounded-[18px] px-3 py-3 transition hover:bg-violet-500/10 active:scale-[0.99]"
+                      >
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-700/25 to-fuchsia-700/20 text-2xl">
+                          🎮
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <h3 className="truncate text-sm font-black text-white transition group-hover:text-violet-300">
+                            {game.name}
+                          </h3>
+
+                          <div className="mt-1 flex items-center gap-2 text-[10px] text-gray-500">
+                            <span>{game.type}</span>
+                            <span className="text-white/20">•</span>
+                            <span>{game.platform}</span>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0 text-left">
+                          <p className="text-sm font-black text-white">
+                            {game.price}
+                            <span className="mr-1 text-[9px] text-gray-500">
+                              ر.س
+                            </span>
+                          </p>
+                          <span className="text-xs text-violet-400">←</span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="px-5 py-9 text-center">
+                    <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/10 text-3xl">
+                      🔍
+                    </div>
+
+                    <p className="mt-4 text-sm font-black text-white">
+                      لا توجد لعبة بهذا الاسم
+                    </p>
+
+                    <p className="mt-2 text-xs text-gray-500">
+                      جرّب كتابة اسم مختلف
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </section>
 

@@ -227,6 +227,23 @@ const games: Record<string, GameDetails> = {
   },
 };
 
+const purchaseCounts: Record<string, number> = {
+  "featured-1": 0,
+  "featured-2": 0,
+  "featured-3": 0,
+  "featured-4": 0,
+  "shared-1": 0,
+  "shared-2": 0,
+  "shared-3": 0,
+  "private-1": 0,
+  "private-2": 0,
+  "private-3": 0,
+};
+
+// غيّر الرقم لاحقًا إلى عدد الثواني التي تريدها للعرض.
+// حاليًا صفر، لذلك تظهر عبارة: انتهت صلاحية العرض.
+const INITIAL_OFFER_SECONDS = 0;
+
 export default function GameDetailsPage() {
   const params = useParams<{ id: string }>();
   const game = games[params.id];
@@ -235,6 +252,7 @@ export default function GameDetailsPage() {
   const [favorite, setFavorite] = useState(false);
   const [adding, setAdding] = useState(false);
   const [message, setMessage] = useState("");
+  const [offerSeconds, setOfferSeconds] = useState(INITIAL_OFFER_SECONDS);
 
   useEffect(() => {
     if (!game) return;
@@ -247,6 +265,23 @@ export default function GameDetailsPage() {
       setFavorite(false);
     }
   }, [game]);
+
+  useEffect(() => {
+    if (offerSeconds <= 0) return;
+
+    const timer = window.setInterval(() => {
+      setOfferSeconds((current) => {
+        if (current <= 1) {
+          window.clearInterval(timer);
+          return 0;
+        }
+
+        return current - 1;
+      });
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [offerSeconds]);
 
 
   function nextSlide() {
@@ -393,6 +428,17 @@ export default function GameDetailsPage() {
   );
 
   const activeSlide = game.gallery[currentSlide];
+  const purchaseCount = purchaseCounts[game.id] ?? 0;
+
+  const offerDays = Math.floor(offerSeconds / 86400);
+  const offerHours = Math.floor((offerSeconds % 86400) / 3600);
+  const offerMinutes = Math.floor((offerSeconds % 3600) / 60);
+  const offerRemainingSeconds = offerSeconds % 60;
+  const offerExpired = offerSeconds <= 0;
+
+  function formatTime(value: number) {
+    return String(value).padStart(2, "0");
+  }
 
   return (
     <main
@@ -578,6 +624,80 @@ export default function GameDetailsPage() {
               <span className="rounded-full border border-emerald-400/15 bg-emerald-500/10 px-3 py-2 text-[10px] font-black text-emerald-300">
                 وفر {game.oldPrice - game.price} ر.س
               </span>
+            </div>
+
+            <div className="mt-4 rounded-[20px] border border-white/[0.07] bg-white/[0.03] p-3.5 sm:mt-5 sm:rounded-[24px] sm:p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[10px] text-gray-500">
+                    عدد مرات الشراء
+                  </p>
+                  <p className="mt-1 text-xl font-black text-white">
+                    {purchaseCount.toLocaleString("ar-SA")}
+                  </p>
+                </div>
+
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-rose-500/10 text-xl">
+                  🔥
+                </div>
+              </div>
+            </div>
+
+            <div
+              className={`mt-3 rounded-[22px] border p-3.5 sm:mt-4 sm:p-4 ${
+                offerExpired
+                  ? "border-red-400/15 bg-red-500/[0.06]"
+                  : "border-violet-400/15 bg-violet-500/[0.06]"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p
+                    className={`text-xs font-black ${
+                      offerExpired ? "text-red-300" : "text-violet-300"
+                    }`}
+                  >
+                    {offerExpired
+                      ? "انتهت صلاحية العرض"
+                      : "الوقت المتبقي لانتهاء العرض"}
+                  </p>
+
+                  <p className="mt-1 text-[10px] text-gray-500">
+                    يتوقف الخصم تلقائيًا عند انتهاء المؤقت
+                  </p>
+                </div>
+
+                <span
+                  className={`flex h-10 w-10 items-center justify-center rounded-2xl text-lg ${
+                    offerExpired
+                      ? "bg-red-500/10"
+                      : "bg-violet-500/10"
+                  }`}
+                >
+                  ⏱️
+                </span>
+              </div>
+
+              <div className="mt-4 grid grid-cols-4 gap-2">
+                {[
+                  { label: "يوم", value: offerDays },
+                  { label: "ساعة", value: offerHours },
+                  { label: "دقيقة", value: offerMinutes },
+                  { label: "ثانية", value: offerRemainingSeconds },
+                ].map((item) => (
+                  <div
+                    key={item.label}
+                    className="rounded-2xl border border-white/[0.06] bg-black/20 px-1.5 py-3 text-center"
+                  >
+                    <p className="text-lg font-black text-white sm:text-xl">
+                      {formatTime(item.value)}
+                    </p>
+                    <p className="mt-1 text-[9px] text-gray-500 sm:text-[10px]">
+                      {item.label}
+                    </p>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div className="mt-4 space-y-2 sm:mt-5 sm:space-y-3">

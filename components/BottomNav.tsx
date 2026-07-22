@@ -14,21 +14,19 @@ export default function BottomNav() {
   const pathname = usePathname();
   const [cartCount, setCartCount] = useState(0);
 
-  function calculateCartCount(items: CartItem[]) {
-    return items.reduce(
-      (total, item) => total + Number(item.quantity || 1),
-      0
-    );
-  }
-
   function readCartCount() {
     try {
       const savedCart = localStorage.getItem(CART_KEY);
       const parsedCart: CartItem[] = savedCart ? JSON.parse(savedCart) : [];
 
-      setCartCount(
-        Array.isArray(parsedCart) ? calculateCartCount(parsedCart) : 0
-      );
+      const count = Array.isArray(parsedCart)
+        ? parsedCart.reduce(
+            (total, item) => total + Number(item.quantity || 1),
+            0
+          )
+        : 0;
+
+      setCartCount(count);
     } catch {
       setCartCount(0);
     }
@@ -37,36 +35,18 @@ export default function BottomNav() {
   useEffect(() => {
     readCartCount();
 
-    function handleCartUpdate(event: Event) {
-      const customEvent = event as CustomEvent<CartItem[]>;
-      const updatedCart = customEvent.detail;
-
-      if (Array.isArray(updatedCart)) {
-        setCartCount(calculateCartCount(updatedCart));
-        return;
-      }
-
+    function handleCartUpdate() {
       readCartCount();
     }
 
-    function refreshCartCount() {
-      readCartCount();
-    }
-
-    window.addEventListener("storage", refreshCartCount);
+    window.addEventListener("storage", handleCartUpdate);
     window.addEventListener("zeta-cart-updated", handleCartUpdate);
-    window.addEventListener("focus", refreshCartCount);
-    window.addEventListener("pageshow", refreshCartCount);
-    document.addEventListener("visibilitychange", refreshCartCount);
 
     return () => {
-      window.removeEventListener("storage", refreshCartCount);
+      window.removeEventListener("storage", handleCartUpdate);
       window.removeEventListener("zeta-cart-updated", handleCartUpdate);
-      window.removeEventListener("focus", refreshCartCount);
-      window.removeEventListener("pageshow", refreshCartCount);
-      document.removeEventListener("visibilitychange", refreshCartCount);
     };
-  }, [pathname]);
+  }, []);
 
   const baseClass =
     "group flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] text-white/85 transition duration-200 hover:-translate-y-2 hover:bg-white/15 hover:text-white hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95";
