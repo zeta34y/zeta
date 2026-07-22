@@ -7,9 +7,9 @@ import type { User } from "@supabase/supabase-js";
 import BottomNav from "@/components/BottomNav";
 import { supabase } from "@/lib/supabase";
 
-const PASSWORD_CHANGE_DAYS = 7;
-const PASSWORD_CHANGE_MS =
-  PASSWORD_CHANGE_DAYS * 24 * 60 * 60 * 1000;
+const PASSWORD_LOCK_DAYS = 7;
+const PASSWORD_LOCK_MS =
+  PASSWORD_LOCK_DAYS * 24 * 60 * 60 * 1000;
 
 export default function AccountPage() {
   const router = useRouter();
@@ -23,6 +23,8 @@ export default function AccountPage() {
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const [savingProfile, setSavingProfile] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
@@ -45,6 +47,14 @@ export default function AccountPage() {
     user?.app_metadata?.role === "admin" ||
     user?.app_metadata?.user_role === "admin";
 
+  const displayName =
+    name.trim() ||
+    user?.user_metadata?.full_name ||
+    user?.user_metadata?.name ||
+    user?.email?.split("@")[0] ||
+    user?.phone ||
+    "مستخدم ZETA";
+
   const passwordChangedAt = useMemo(() => {
     const value = user?.user_metadata?.password_changed_at;
 
@@ -54,7 +64,7 @@ export default function AccountPage() {
     return Number.isNaN(date.getTime()) ? null : date;
   }, [user]);
 
-  const passwordChangeStatus = useMemo(() => {
+  const passwordStatus = useMemo(() => {
     if (!passwordChangedAt) {
       return {
         allowed: true,
@@ -62,11 +72,10 @@ export default function AccountPage() {
       };
     }
 
-    const availableAt = new Date(
-      passwordChangedAt.getTime() + PASSWORD_CHANGE_MS
-    );
+    const unlockAt =
+      passwordChangedAt.getTime() + PASSWORD_LOCK_MS;
 
-    const remaining = availableAt.getTime() - Date.now();
+    const remaining = unlockAt - Date.now();
 
     if (remaining <= 0) {
       return {
@@ -149,19 +158,28 @@ export default function AccountPage() {
     setErrorMessage("");
   }
 
+  function cleanName(value: string) {
+    setName(value.slice(0, 50));
+  }
+
   function cleanEmail(value: string) {
-    return value
-      .replace(
-        /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/g,
-        ""
-      )
-      .replace(/\s/g, "")
-      .replace(/[^a-zA-Z0-9@._+-]/g, "")
-      .toLowerCase();
+    setEmail(
+      value
+        .replace(
+          /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF]/g,
+          ""
+        )
+        .replace(/\s/g, "")
+        .replace(/[^a-zA-Z0-9@._+-]/g, "")
+        .toLowerCase()
+        .slice(0, 120)
+    );
   }
 
   function cleanPhone(value: string) {
-    return value.replace(/[^\d+]/g, "").slice(0, 16);
+    setPhone(
+      value.replace(/[^\d+]/g, "").slice(0, 16)
+    );
   }
 
   function validateEmail(value: string) {
@@ -218,11 +236,17 @@ export default function AccountPage() {
         },
       };
 
-      if (cleanedEmail && cleanedEmail !== user.email) {
+      if (
+        cleanedEmail &&
+        cleanedEmail !== user.email
+      ) {
         updates.email = cleanedEmail;
       }
 
-      if (cleanedPhone && cleanedPhone !== user.phone) {
+      if (
+        cleanedPhone &&
+        cleanedPhone !== user.phone
+      ) {
         updates.phone = cleanedPhone;
       }
 
@@ -232,10 +256,11 @@ export default function AccountPage() {
       if (error) throw error;
 
       setUser(data.user);
+
       setMessage(
         updates.email || updates.phone
-          ? "تم الحفظ، وقد تحتاج إلى تأكيد البريد أو الجوال الجديد."
-          : "تم حفظ بيانات الحساب."
+          ? "تم حفظ البيانات. قد تحتاج إلى تأكيد البريد أو الجوال الجديد."
+          : "تم تحديث اسمك وبيانات حسابك بنجاح."
       );
 
       window.dispatchEvent(
@@ -259,10 +284,12 @@ export default function AccountPage() {
 
     clearMessages();
 
-    if (!passwordChangeStatus.allowed) {
+    if (!passwordStatus.allowed) {
       setErrorMessage(
-        `يمكنك تغيير كلمة المرور بعد ${passwordChangeStatus.daysLeft} ${
-          passwordChangeStatus.daysLeft === 1 ? "يوم" : "أيام"
+        `يمكنك تغيير كلمة المرور بعد ${passwordStatus.daysLeft} ${
+          passwordStatus.daysLeft === 1
+            ? "يوم"
+            : "أيام"
         }`
       );
       return;
@@ -308,7 +335,7 @@ export default function AccountPage() {
       setConfirmPassword("");
 
       setMessage(
-        "تم تغيير كلمة المرور، ويمكن تغييرها مرة أخرى بعد 7 أيام."
+        "تم تغيير كلمة المرور بنجاح. يمكنك تغييرها مرة أخرى بعد 7 أيام."
       );
 
       window.dispatchEvent(
@@ -362,7 +389,7 @@ export default function AccountPage() {
         className="flex min-h-screen items-center justify-center bg-[#08070d] text-white"
       >
         <div className="text-center">
-          <div className="mx-auto h-11 w-11 animate-spin rounded-full border-4 border-white/10 border-t-violet-500" />
+          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-white/10 border-t-violet-500" />
           <p className="mt-4 text-xs text-gray-400">
             جاري تحميل الحساب...
           </p>
@@ -373,29 +400,23 @@ export default function AccountPage() {
 
   if (!user) return null;
 
-  const displayName =
-    name ||
-    user.email?.split("@")[0] ||
-    user.phone ||
-    "مستخدم ZETA";
-
   return (
     <main
       dir="rtl"
-      className="min-h-screen overflow-x-hidden bg-[#08070d] pb-36 text-white"
+      className="relative min-h-screen overflow-x-hidden bg-[#08070d] pb-36 text-white"
     >
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute -right-28 top-0 h-[340px] w-[340px] rounded-full bg-violet-700/14 blur-[115px]" />
-        <div className="absolute -left-28 top-[430px] h-[320px] w-[320px] rounded-full bg-fuchsia-700/10 blur-[115px]" />
+        <div className="absolute -right-24 top-0 h-[340px] w-[340px] rounded-full bg-violet-700/15 blur-[120px]" />
+        <div className="absolute -left-24 top-[470px] h-[320px] w-[320px] rounded-full bg-fuchsia-700/10 blur-[120px]" />
       </div>
 
-      <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#08070d]/92 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
+      <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#08070d]/90 backdrop-blur-xl">
+        <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3.5">
           <div>
             <p className="text-[9px] font-bold text-violet-400">
-              إعدادات الحساب
+              إعدادات المستخدم
             </p>
-            <h1 className="mt-0.5 text-lg font-black">
+            <h1 className="mt-1 text-lg font-black">
               حسابي
             </h1>
           </div>
@@ -403,7 +424,7 @@ export default function AccountPage() {
           <Link
             href="/"
             aria-label="إغلاق صفحة الحساب"
-            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-lg text-gray-200 transition active:scale-95"
+            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-lg text-gray-200 transition hover:bg-white/10 active:scale-95"
           >
             ×
           </Link>
@@ -411,9 +432,11 @@ export default function AccountPage() {
       </header>
 
       <section className="relative z-10 mx-auto max-w-2xl px-3 py-4 sm:px-4 sm:py-6">
-        <div className="rounded-[26px] border border-violet-400/15 bg-gradient-to-br from-violet-700/20 via-[#14101d] to-fuchsia-700/10 p-4 shadow-2xl sm:p-5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[22px] border border-white/10 bg-gradient-to-br from-violet-600 to-fuchsia-600 text-2xl font-black shadow-xl shadow-violet-950/30 sm:h-20 sm:w-20 sm:rounded-[26px] sm:text-3xl">
+        <div className="relative overflow-hidden rounded-[30px] border border-violet-400/15 bg-[radial-gradient(circle_at_85%_20%,rgba(139,92,246,0.32),transparent_32%),linear-gradient(135deg,#181124,#0e0b15)] p-5 shadow-[0_24px_70px_rgba(0,0,0,0.35)]">
+          <div className="absolute -left-12 -top-12 h-36 w-36 rounded-full bg-fuchsia-600/10 blur-3xl" />
+
+          <div className="relative flex items-center gap-4">
+            <div className="flex h-[76px] w-[76px] shrink-0 items-center justify-center overflow-hidden rounded-[26px] border border-white/10 bg-gradient-to-br from-violet-600 to-fuchsia-600 text-3xl font-black shadow-xl shadow-violet-950/40">
               {avatarUrl ? (
                 <img
                   src={avatarUrl}
@@ -427,7 +450,7 @@ export default function AccountPage() {
 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="truncate text-lg font-black sm:text-xl">
+                <h2 className="truncate text-xl font-black">
                   {displayName}
                 </h2>
 
@@ -440,206 +463,299 @@ export default function AccountPage() {
 
               <p
                 dir="ltr"
-                className="mt-1.5 truncate text-left text-[10px] text-gray-500 sm:text-xs"
+                className="mt-2 truncate text-left text-[11px] text-gray-500"
               >
                 {user.email || user.phone || "حساب ZETA"}
               </p>
+
+              <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-emerald-400/10 bg-emerald-500/[0.07] px-3 py-1.5 text-[9px] font-bold text-emerald-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                الحساب نشط
+              </div>
             </div>
           </div>
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <Link
-            href="/orders"
-            className="rounded-[22px] border border-white/[0.07] bg-white/[0.035] p-4 transition active:scale-[0.98]"
-          >
-            <span className="text-2xl">📦</span>
-            <h3 className="mt-3 text-sm font-black">الطلبات</h3>
-            <p className="mt-1 text-[9px] text-gray-500">
-              متابعة مشترياتك
-            </p>
-          </Link>
-
-          <Link
-            href="/notifications"
-            className="rounded-[22px] border border-white/[0.07] bg-white/[0.035] p-4 transition active:scale-[0.98]"
-          >
-            <span className="text-2xl">🔔</span>
-            <h3 className="mt-3 text-sm font-black">الإشعارات</h3>
-            <p className="mt-1 text-[9px] text-gray-500">
-              آخر التحديثات
-            </p>
-          </Link>
         </div>
 
         {isAdmin && (
           <Link
             href="/admin"
-            className="mt-3 flex items-center justify-between rounded-[22px] border border-amber-400/20 bg-amber-500/10 p-4 transition active:scale-[0.99]"
+            className="mt-3 flex items-center justify-between rounded-[24px] border border-amber-400/20 bg-gradient-to-l from-amber-500/10 to-orange-500/[0.06] p-4 transition hover:bg-amber-500/15 active:scale-[0.99]"
           >
             <div>
               <p className="text-[9px] font-bold text-amber-400">
-                صلاحية إدارية
+                صلاحية خاصة
               </p>
               <h3 className="mt-1 text-sm font-black">
                 إدارة المتجر
               </h3>
             </div>
 
-            <span className="text-2xl">⚙️</span>
+            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-amber-500/15 text-2xl">
+              ⚙️
+            </span>
           </Link>
         )}
 
-        <section className="mt-4 rounded-[26px] border border-white/[0.07] bg-[#121019] p-4 sm:p-5">
-          <div>
+        <section className="mt-4 overflow-hidden rounded-[28px] border border-white/[0.07] bg-[#121019] shadow-xl">
+          <div className="border-b border-white/[0.06] p-4">
             <p className="text-[9px] font-bold text-violet-400">
-              البيانات الشخصية
+              الملف الشخصي
             </p>
             <h2 className="mt-1 text-base font-black">
-              معلومات الحساب
+              بيانات الحساب
             </h2>
+            <p className="mt-1 text-[10px] leading-5 text-gray-500">
+              عدّل اسمك أو بيانات التواصل ثم اضغط حفظ.
+            </p>
           </div>
 
-          <label className="mt-4 block">
-            <span className="text-[11px] font-black text-gray-300">
-              اسم المستخدم
-            </span>
-            <input
-              type="text"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              maxLength={60}
-              autoComplete="name"
-              className="mt-2 w-full rounded-[18px] border border-white/10 bg-white/[0.04] px-4 py-3.5 text-sm text-white outline-none transition focus:border-violet-400/50"
-            />
-          </label>
+          <div className="p-4">
+            <label className="block">
+              <span className="text-[11px] font-black text-gray-300">
+                اسم المستخدم
+              </span>
 
-          <label className="mt-3 block">
-            <span className="text-[11px] font-black text-gray-300">
-              البريد الإلكتروني
-            </span>
-            <input
-              type="email"
-              dir="ltr"
-              value={email}
-              onChange={(event) =>
-                setEmail(cleanEmail(event.target.value))
-              }
-              maxLength={120}
-              autoComplete="email"
-              placeholder="name@example.com"
-              className="mt-2 w-full rounded-[18px] border border-white/10 bg-white/[0.04] px-4 py-3.5 text-left text-sm text-white outline-none placeholder:text-gray-600 focus:border-violet-400/50"
-            />
-          </label>
+              <div className="mt-2 flex items-center gap-3 rounded-[20px] border border-white/10 bg-white/[0.04] px-4 transition focus-within:border-violet-400/50">
+                <span className="text-lg">👤</span>
 
-          <label className="mt-3 block">
-            <span className="text-[11px] font-black text-gray-300">
-              رقم الجوال
-            </span>
-            <input
-              type="tel"
-              dir="ltr"
-              value={phone}
-              onChange={(event) =>
-                setPhone(cleanPhone(event.target.value))
-              }
-              autoComplete="tel"
-              placeholder="+9665XXXXXXXX"
-              className="mt-2 w-full rounded-[18px] border border-white/10 bg-white/[0.04] px-4 py-3.5 text-left text-sm tracking-wide text-white outline-none placeholder:text-gray-600 focus:border-violet-400/50"
-            />
-          </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(event) =>
+                    cleanName(event.target.value)
+                  }
+                  maxLength={50}
+                  autoComplete="name"
+                  placeholder="اكتب اسمك"
+                  className="min-w-0 flex-1 bg-transparent py-4 text-sm text-white outline-none placeholder:text-gray-600"
+                />
+              </div>
+            </label>
 
-          <button
-            type="button"
-            onClick={saveProfile}
-            disabled={savingProfile}
-            className="mt-4 flex w-full items-center justify-center rounded-[18px] bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-3.5 text-sm font-black shadow-xl shadow-violet-950/30 transition active:scale-[0.98] disabled:opacity-60"
-          >
-            {savingProfile ? "جاري الحفظ..." : "حفظ البيانات"}
-          </button>
+            <label className="mt-4 block">
+              <span className="text-[11px] font-black text-gray-300">
+                البريد الإلكتروني
+              </span>
+
+              <div className="mt-2 flex items-center gap-3 rounded-[20px] border border-white/10 bg-white/[0.04] px-4 transition focus-within:border-violet-400/50">
+                <span className="text-lg">✉️</span>
+
+                <input
+                  type="email"
+                  dir="ltr"
+                  value={email}
+                  onChange={(event) =>
+                    cleanEmail(event.target.value)
+                  }
+                  autoComplete="email"
+                  placeholder="name@example.com"
+                  className="min-w-0 flex-1 bg-transparent py-4 text-left text-sm text-white outline-none placeholder:text-gray-600"
+                />
+              </div>
+            </label>
+
+            <label className="mt-4 block">
+              <span className="text-[11px] font-black text-gray-300">
+                رقم الجوال
+              </span>
+
+              <div className="mt-2 flex items-center gap-3 rounded-[20px] border border-white/10 bg-white/[0.04] px-4 transition focus-within:border-violet-400/50">
+                <span className="text-lg">📱</span>
+
+                <input
+                  type="tel"
+                  dir="ltr"
+                  value={phone}
+                  onChange={(event) =>
+                    cleanPhone(event.target.value)
+                  }
+                  autoComplete="tel"
+                  placeholder="+9665XXXXXXXX"
+                  className="min-w-0 flex-1 bg-transparent py-4 text-left text-sm tracking-wide text-white outline-none placeholder:text-gray-600"
+                />
+              </div>
+            </label>
+
+            <button
+              type="button"
+              onClick={saveProfile}
+              disabled={savingProfile}
+              className="mt-5 flex w-full items-center justify-center gap-2 rounded-[20px] bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-4 text-sm font-black shadow-xl shadow-violet-950/30 transition hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <span>
+                {savingProfile
+                  ? "جاري الحفظ..."
+                  : "حفظ التغييرات"}
+              </span>
+              {!savingProfile && <span>✓</span>}
+            </button>
+          </div>
         </section>
 
-        <section className="mt-4 rounded-[26px] border border-white/[0.07] bg-[#121019] p-4 sm:p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-[9px] font-bold text-fuchsia-400">
-                حماية الحساب
-              </p>
-              <h2 className="mt-1 text-base font-black">
-                تغيير كلمة المرور
-              </h2>
-            </div>
+        <section className="mt-4 overflow-hidden rounded-[28px] border border-white/[0.07] bg-[#121019] shadow-xl">
+          <div className="relative overflow-hidden border-b border-white/[0.06] p-4">
+            <div className="absolute -left-8 -top-8 h-24 w-24 rounded-full bg-fuchsia-600/10 blur-3xl" />
 
-            <span className="text-2xl">🔒</span>
+            <div className="relative flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[9px] font-bold text-fuchsia-400">
+                  الأمان
+                </p>
+                <h2 className="mt-1 text-base font-black">
+                  تغيير كلمة المرور
+                </h2>
+                <p className="mt-1 text-[10px] leading-5 text-gray-500">
+                  اختر كلمة قوية لا تستخدمها في مكان آخر.
+                </p>
+              </div>
+
+              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-fuchsia-500/10 text-2xl">
+                🔒
+              </span>
+            </div>
           </div>
 
-          {!passwordChangeStatus.allowed && (
-            <div className="mt-3 rounded-[18px] border border-amber-400/15 bg-amber-500/10 px-3.5 py-3 text-[11px] font-bold leading-5 text-amber-300">
-              يمكنك تغيير كلمة المرور بعد{" "}
-              {passwordChangeStatus.daysLeft}{" "}
-              {passwordChangeStatus.daysLeft === 1
-                ? "يوم"
-                : "أيام"}
+          <div className="p-4">
+            {!passwordStatus.allowed && (
+              <div className="mb-4 rounded-[20px] border border-amber-400/15 bg-amber-500/10 px-4 py-3 text-[11px] font-bold leading-5 text-amber-300">
+                يمكنك تغيير كلمة المرور بعد{" "}
+                {passwordStatus.daysLeft}{" "}
+                {passwordStatus.daysLeft === 1
+                  ? "يوم"
+                  : "أيام"}
+              </div>
+            )}
+
+            <label className="block">
+              <span className="text-[11px] font-black text-gray-300">
+                كلمة المرور الجديدة
+              </span>
+
+              <div className="mt-2 flex items-center gap-2 rounded-[20px] border border-white/10 bg-white/[0.04] px-4 transition focus-within:border-fuchsia-400/50">
+                <input
+                  type={
+                    showNewPassword ? "text" : "password"
+                  }
+                  value={newPassword}
+                  onChange={(event) =>
+                    setNewPassword(event.target.value)
+                  }
+                  autoComplete="new-password"
+                  placeholder="8 أحرف على الأقل"
+                  disabled={!passwordStatus.allowed}
+                  className="min-w-0 flex-1 bg-transparent py-4 text-sm text-white outline-none placeholder:text-gray-600 disabled:opacity-45"
+                />
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowNewPassword((current) => !current)
+                  }
+                  disabled={!passwordStatus.allowed}
+                  className="shrink-0 text-xs text-gray-400 disabled:opacity-30"
+                >
+                  {showNewPassword ? "إخفاء" : "إظهار"}
+                </button>
+              </div>
+            </label>
+
+            <label className="mt-4 block">
+              <span className="text-[11px] font-black text-gray-300">
+                تأكيد كلمة المرور
+              </span>
+
+              <div className="mt-2 flex items-center gap-2 rounded-[20px] border border-white/10 bg-white/[0.04] px-4 transition focus-within:border-fuchsia-400/50">
+                <input
+                  type={
+                    showConfirmPassword
+                      ? "text"
+                      : "password"
+                  }
+                  value={confirmPassword}
+                  onChange={(event) =>
+                    setConfirmPassword(
+                      event.target.value
+                    )
+                  }
+                  autoComplete="new-password"
+                  placeholder="أعد كتابة كلمة المرور"
+                  disabled={!passwordStatus.allowed}
+                  className="min-w-0 flex-1 bg-transparent py-4 text-sm text-white outline-none placeholder:text-gray-600 disabled:opacity-45"
+                />
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowConfirmPassword(
+                      (current) => !current
+                    )
+                  }
+                  disabled={!passwordStatus.allowed}
+                  className="shrink-0 text-xs text-gray-400 disabled:opacity-30"
+                >
+                  {showConfirmPassword
+                    ? "إخفاء"
+                    : "إظهار"}
+                </button>
+              </div>
+            </label>
+
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <div className="rounded-[16px] border border-white/[0.06] bg-white/[0.03] px-3 py-2.5 text-center">
+                <p className="text-[8px] text-gray-500">
+                  الطول
+                </p>
+                <p className="mt-1 text-[10px] font-black">
+                  8+
+                </p>
+              </div>
+
+              <div className="rounded-[16px] border border-white/[0.06] bg-white/[0.03] px-3 py-2.5 text-center">
+                <p className="text-[8px] text-gray-500">
+                  بدون
+                </p>
+                <p className="mt-1 text-[10px] font-black">
+                  مسافات
+                </p>
+              </div>
+
+              <div className="rounded-[16px] border border-white/[0.06] bg-white/[0.03] px-3 py-2.5 text-center">
+                <p className="text-[8px] text-gray-500">
+                  التغيير
+                </p>
+                <p className="mt-1 text-[10px] font-black">
+                  كل 7 أيام
+                </p>
+              </div>
             </div>
-          )}
 
-          <label className="mt-4 block">
-            <span className="text-[11px] font-black text-gray-300">
-              كلمة المرور الجديدة
-            </span>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(event) =>
-                setNewPassword(event.target.value)
+            <button
+              type="button"
+              onClick={changePassword}
+              disabled={
+                changingPassword ||
+                !passwordStatus.allowed
               }
-              autoComplete="new-password"
-              placeholder="8 أحرف على الأقل"
-              disabled={!passwordChangeStatus.allowed}
-              className="mt-2 w-full rounded-[18px] border border-white/10 bg-white/[0.04] px-4 py-3.5 text-sm text-white outline-none placeholder:text-gray-600 focus:border-fuchsia-400/50 disabled:opacity-45"
-            />
-          </label>
-
-          <label className="mt-3 block">
-            <span className="text-[11px] font-black text-gray-300">
-              تأكيد كلمة المرور
-            </span>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(event) =>
-                setConfirmPassword(event.target.value)
-              }
-              autoComplete="new-password"
-              placeholder="أعد كتابة كلمة المرور"
-              disabled={!passwordChangeStatus.allowed}
-              className="mt-2 w-full rounded-[18px] border border-white/10 bg-white/[0.04] px-4 py-3.5 text-sm text-white outline-none placeholder:text-gray-600 focus:border-fuchsia-400/50 disabled:opacity-45"
-            />
-          </label>
-
-          <button
-            type="button"
-            onClick={changePassword}
-            disabled={
-              changingPassword ||
-              !passwordChangeStatus.allowed
-            }
-            className="mt-4 flex w-full items-center justify-center rounded-[18px] border border-fuchsia-400/20 bg-fuchsia-500/10 px-5 py-3.5 text-sm font-black text-fuchsia-200 transition active:scale-[0.98] disabled:opacity-45"
-          >
-            {changingPassword
-              ? "جاري تغيير كلمة المرور..."
-              : "تغيير كلمة المرور"}
-          </button>
+              className="mt-5 flex w-full items-center justify-center gap-2 rounded-[20px] border border-fuchsia-400/20 bg-gradient-to-l from-fuchsia-600/20 to-violet-600/15 px-5 py-4 text-sm font-black text-fuchsia-100 transition hover:border-fuchsia-400/40 hover:bg-fuchsia-500/20 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <span>
+                {changingPassword
+                  ? "جاري تغيير كلمة المرور..."
+                  : "تحديث كلمة المرور"}
+              </span>
+              {!changingPassword && <span>🔐</span>}
+            </button>
+          </div>
         </section>
 
         {message && (
-          <div className="mt-4 rounded-[20px] border border-emerald-400/15 bg-emerald-500/10 px-4 py-3 text-center text-[11px] font-bold leading-5 text-emerald-300">
+          <div className="mt-4 rounded-[22px] border border-emerald-400/15 bg-emerald-500/10 px-4 py-3.5 text-center text-[11px] font-bold leading-5 text-emerald-300">
             {message}
           </div>
         )}
 
         {errorMessage && (
-          <div className="mt-4 rounded-[20px] border border-red-400/15 bg-red-500/10 px-4 py-3 text-center text-[11px] font-bold leading-5 text-red-300">
+          <div className="mt-4 rounded-[22px] border border-red-400/15 bg-red-500/10 px-4 py-3.5 text-center text-[11px] font-bold leading-5 text-red-300">
             {errorMessage}
           </div>
         )}
@@ -648,7 +764,7 @@ export default function AccountPage() {
           type="button"
           onClick={handleLogout}
           disabled={loggingOut}
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-[20px] border border-red-400/15 bg-red-500/10 px-5 py-3.5 text-sm font-black text-red-300 transition active:scale-[0.98] disabled:opacity-60"
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-[22px] border border-red-400/15 bg-red-500/10 px-5 py-4 text-sm font-black text-red-300 transition hover:bg-red-500/15 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
         >
           <span>↪</span>
           <span>
