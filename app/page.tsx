@@ -689,13 +689,19 @@ export default function HomePage() {
               </p>
 
               <div className="mt-6 flex items-center gap-3">
-                <button className="rounded-2xl bg-gradient-to-l from-violet-600 to-fuchsia-600 px-6 py-3.5 text-sm font-black shadow-xl shadow-violet-800/30 transition duration-200 hover:-translate-y-0.5 hover:brightness-110 active:scale-95">
+                <a
+                  href="#shared-games"
+                  className="rounded-2xl bg-gradient-to-l from-violet-600 to-fuchsia-600 px-6 py-3.5 text-sm font-black shadow-xl shadow-violet-800/30 transition duration-200 hover:-translate-y-0.5 hover:brightness-110 active:scale-95"
+                >
                   تسوق الآن
-                </button>
+                </a>
 
-                <button className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3.5 text-sm font-bold transition duration-200 hover:border-violet-400/50 hover:bg-violet-500/10 hover:text-violet-200 active:scale-95">
+                <Link
+                  href="/offers"
+                  className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3.5 text-sm font-bold transition duration-200 hover:border-violet-400/50 hover:bg-violet-500/10 hover:text-violet-200 active:scale-95"
+                >
                   اكتشف العروض
-                </button>
+                </Link>
               </div>
             </div>
 
@@ -846,7 +852,7 @@ export default function HomePage() {
                       {game.name}
                     </Link>
 
-                    <div className="mt-3 flex items-center justify-between">
+                    <div className="mt-4 flex items-end justify-between">
                       <div><span className="text-sm text-violet-300 font-bold">السعر قريبًا</span></div>
 
                       <button
@@ -995,7 +1001,7 @@ export default function HomePage() {
                 key={game.id}
                 className="group min-w-[72%] snap-start overflow-hidden rounded-[26px] border border-fuchsia-500/15 bg-[#121019] transition duration-300 hover:-translate-y-1 hover:border-fuchsia-400/50 hover:shadow-2xl hover:shadow-fuchsia-950/30 sm:min-w-[290px] md:min-w-0"
               >
-              <div data-game-image className="relative aspect-[4/5] overflow-hidden">
+              <div data-game-image className="relative h-44 overflow-hidden">
                 <Link
                   href={`/game/private-${game.id}`}
                   aria-label={`عرض تفاصيل ${game.name}`}
@@ -1013,14 +1019,14 @@ export default function HomePage() {
                 </span>
               </div>
 
-              <div className="p-3">
-                <p className="text-[10px] font-bold text-fuchsia-400">
+              <div className="p-4">
+                <p className="text-[11px] font-bold text-fuchsia-400">
                   {game.platform}
                 </p>
 
                 <Link
                   href={`/game/private-${game.id}`}
-                  className="mt-1 block line-clamp-1 text-sm font-black transition hover:text-fuchsia-300"
+                  className="mt-1 block text-lg font-black transition hover:text-fuchsia-300"
                 >
                   {game.name}
                 </Link>
@@ -1147,7 +1153,7 @@ export default function HomePage() {
                 <Link href="/about">من نحن</Link>
                 <Link href="/faq">الأسئلة الشائعة</Link>
                 <a href="#">تواصل معنا</a>
-                <a href="#">تتبع الطلب</a>
+                <a href="#">الشكاوى</a>
               </div>
             </div>
 
