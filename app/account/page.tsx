@@ -7,9 +7,6 @@ import type { User } from "@supabase/supabase-js";
 import BottomNav from "@/components/BottomNav";
 import { supabase } from "@/lib/supabase";
 
-const PASSWORD_LOCK_DAYS = 7;
-const PASSWORD_LOCK_MS =
-  PASSWORD_LOCK_DAYS * 24 * 60 * 60 * 1000;
 
 export default function AccountPage() {
   const router = useRouter();
@@ -21,13 +18,7 @@ export default function AccountPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
 
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
   const [savingProfile, setSavingProfile] = useState(false);
-  const [changingPassword, setChangingPassword] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
   const [message, setMessage] = useState("");
@@ -54,43 +45,6 @@ export default function AccountPage() {
     user?.email?.split("@")[0] ||
     user?.phone ||
     "مستخدم ZETA";
-
-  const passwordChangedAt = useMemo(() => {
-    const value = user?.user_metadata?.password_changed_at;
-
-    if (!value) return null;
-
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? null : date;
-  }, [user]);
-
-  const passwordStatus = useMemo(() => {
-    if (!passwordChangedAt) {
-      return {
-        allowed: true,
-        daysLeft: 0,
-      };
-    }
-
-    const unlockAt =
-      passwordChangedAt.getTime() + PASSWORD_LOCK_MS;
-
-    const remaining = unlockAt - Date.now();
-
-    if (remaining <= 0) {
-      return {
-        allowed: true,
-        daysLeft: 0,
-      };
-    }
-
-    return {
-      allowed: false,
-      daysLeft: Math.ceil(
-        remaining / (24 * 60 * 60 * 1000)
-      ),
-    };
-  }, [passwordChangedAt]);
 
   useEffect(() => {
     let mounted = true;
@@ -276,81 +230,6 @@ export default function AccountPage() {
       );
     } finally {
       setSavingProfile(false);
-    }
-  }
-
-  async function changePassword() {
-    if (!user || changingPassword) return;
-
-    clearMessages();
-
-    if (!passwordStatus.allowed) {
-      setErrorMessage(
-        `يمكنك تغيير كلمة المرور بعد ${passwordStatus.daysLeft} ${
-          passwordStatus.daysLeft === 1
-            ? "يوم"
-            : "أيام"
-        }`
-      );
-      return;
-    }
-
-    if (newPassword.length < 8) {
-      setErrorMessage(
-        "كلمة المرور يجب أن تكون 8 أحرف على الأقل"
-      );
-      return;
-    }
-
-    if (/\s/.test(newPassword)) {
-      setErrorMessage(
-        "كلمة المرور لا يجب أن تحتوي على مسافات"
-      );
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setErrorMessage("كلمتا المرور غير متطابقتين");
-      return;
-    }
-
-    setChangingPassword(true);
-
-    try {
-      const changedAt = new Date().toISOString();
-
-      const { data, error } =
-        await supabase.auth.updateUser({
-          password: newPassword,
-          data: {
-            ...user.user_metadata,
-            password_changed_at: changedAt,
-          },
-        });
-
-      if (error) throw error;
-
-      setUser(data.user);
-      setNewPassword("");
-      setConfirmPassword("");
-
-      setMessage(
-        "تم تغيير كلمة المرور بنجاح. يمكنك تغييرها مرة أخرى بعد 7 أيام."
-      );
-
-      window.dispatchEvent(
-        new CustomEvent("zeta-auth-updated", {
-          detail: data.user,
-        })
-      );
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "تعذر تغيير كلمة المرور"
-      );
-    } finally {
-      setChangingPassword(false);
     }
   }
 
@@ -588,162 +467,6 @@ export default function AccountPage() {
                   : "حفظ التغييرات"}
               </span>
               {!savingProfile && <span>✓</span>}
-            </button>
-          </div>
-        </section>
-
-        <section className="mt-4 overflow-hidden rounded-[28px] border border-white/[0.07] bg-[#121019] shadow-xl">
-          <div className="relative overflow-hidden border-b border-white/[0.06] p-4">
-            <div className="absolute -left-8 -top-8 h-24 w-24 rounded-full bg-fuchsia-600/10 blur-3xl" />
-
-            <div className="relative flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[9px] font-bold text-fuchsia-400">
-                  الأمان
-                </p>
-                <h2 className="mt-1 text-base font-black">
-                  تغيير كلمة المرور
-                </h2>
-                <p className="mt-1 text-[10px] leading-5 text-gray-500">
-                  اختر كلمة قوية لا تستخدمها في مكان آخر.
-                </p>
-              </div>
-
-              <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-fuchsia-500/10 text-2xl">
-                🔒
-              </span>
-            </div>
-          </div>
-
-          <div className="p-4">
-            {!passwordStatus.allowed && (
-              <div className="mb-4 rounded-[20px] border border-amber-400/15 bg-amber-500/10 px-4 py-3 text-[11px] font-bold leading-5 text-amber-300">
-                يمكنك تغيير كلمة المرور بعد{" "}
-                {passwordStatus.daysLeft}{" "}
-                {passwordStatus.daysLeft === 1
-                  ? "يوم"
-                  : "أيام"}
-              </div>
-            )}
-
-            <label className="block">
-              <span className="text-[11px] font-black text-gray-300">
-                كلمة المرور الجديدة
-              </span>
-
-              <div className="mt-2 flex items-center gap-2 rounded-[20px] border border-white/10 bg-white/[0.04] px-4 transition focus-within:border-fuchsia-400/50">
-                <input
-                  type={
-                    showNewPassword ? "text" : "password"
-                  }
-                  value={newPassword}
-                  onChange={(event) =>
-                    setNewPassword(event.target.value)
-                  }
-                  autoComplete="new-password"
-                  placeholder="8 أحرف على الأقل"
-                  disabled={!passwordStatus.allowed}
-                  className="min-w-0 flex-1 bg-transparent py-4 text-sm text-white outline-none placeholder:text-gray-600 disabled:opacity-45"
-                />
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setShowNewPassword((current) => !current)
-                  }
-                  disabled={!passwordStatus.allowed}
-                  className="shrink-0 text-xs text-gray-400 disabled:opacity-30"
-                >
-                  {showNewPassword ? "إخفاء" : "إظهار"}
-                </button>
-              </div>
-            </label>
-
-            <label className="mt-4 block">
-              <span className="text-[11px] font-black text-gray-300">
-                تأكيد كلمة المرور
-              </span>
-
-              <div className="mt-2 flex items-center gap-2 rounded-[20px] border border-white/10 bg-white/[0.04] px-4 transition focus-within:border-fuchsia-400/50">
-                <input
-                  type={
-                    showConfirmPassword
-                      ? "text"
-                      : "password"
-                  }
-                  value={confirmPassword}
-                  onChange={(event) =>
-                    setConfirmPassword(
-                      event.target.value
-                    )
-                  }
-                  autoComplete="new-password"
-                  placeholder="أعد كتابة كلمة المرور"
-                  disabled={!passwordStatus.allowed}
-                  className="min-w-0 flex-1 bg-transparent py-4 text-sm text-white outline-none placeholder:text-gray-600 disabled:opacity-45"
-                />
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    setShowConfirmPassword(
-                      (current) => !current
-                    )
-                  }
-                  disabled={!passwordStatus.allowed}
-                  className="shrink-0 text-xs text-gray-400 disabled:opacity-30"
-                >
-                  {showConfirmPassword
-                    ? "إخفاء"
-                    : "إظهار"}
-                </button>
-              </div>
-            </label>
-
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              <div className="rounded-[16px] border border-white/[0.06] bg-white/[0.03] px-3 py-2.5 text-center">
-                <p className="text-[8px] text-gray-500">
-                  الطول
-                </p>
-                <p className="mt-1 text-[10px] font-black">
-                  8+
-                </p>
-              </div>
-
-              <div className="rounded-[16px] border border-white/[0.06] bg-white/[0.03] px-3 py-2.5 text-center">
-                <p className="text-[8px] text-gray-500">
-                  بدون
-                </p>
-                <p className="mt-1 text-[10px] font-black">
-                  مسافات
-                </p>
-              </div>
-
-              <div className="rounded-[16px] border border-white/[0.06] bg-white/[0.03] px-3 py-2.5 text-center">
-                <p className="text-[8px] text-gray-500">
-                  التغيير
-                </p>
-                <p className="mt-1 text-[10px] font-black">
-                  كل 7 أيام
-                </p>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={changePassword}
-              disabled={
-                changingPassword ||
-                !passwordStatus.allowed
-              }
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-[20px] border border-fuchsia-400/20 bg-gradient-to-l from-fuchsia-600/20 to-violet-600/15 px-5 py-4 text-sm font-black text-fuchsia-100 transition hover:border-fuchsia-400/40 hover:bg-fuchsia-500/20 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              <span>
-                {changingPassword
-                  ? "جاري تغيير كلمة المرور..."
-                  : "تحديث كلمة المرور"}
-              </span>
-              {!changingPassword && <span>🔐</span>}
             </button>
           </div>
         </section>
