@@ -217,11 +217,11 @@ export default function NotificationsPage() {
           </div>
 
           <Link
-            href="/account"
-            className="flex h-10 items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 text-[11px] font-black text-gray-200 transition hover:border-violet-400/30 hover:bg-violet-500/10 active:scale-95"
+            href="/"
+            aria-label="العودة للرئيسية"
+            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-lg text-gray-200 transition hover:border-violet-400/30 hover:bg-violet-500/10 active:scale-95"
           >
-            <span>حسابي</span>
-            <span>←</span>
+            ×
           </Link>
         </div>
       </header>
