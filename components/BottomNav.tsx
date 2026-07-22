@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import LoginSheet from "@/components/LoginSheet";
@@ -21,6 +21,7 @@ export default function BottomNav() {
   const [loginOpen, setLoginOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [authLoaded, setAuthLoaded] = useState(false);
+  const userRef = useRef<User | null>(null);
 
   const userName = useMemo(() => {
     if (!user) return "";
@@ -42,6 +43,10 @@ export default function BottomNav() {
       user.user_metadata?.picture ||
       ""
     );
+  }, [user]);
+
+  useEffect(() => {
+    userRef.current = user;
   }, [user]);
 
   function readCartCount() {
@@ -109,6 +114,8 @@ export default function BottomNav() {
   }
 
   useEffect(() => {
+    let mounted = true;
+
     readCartCount();
 
     async function loadCurrentUser() {
@@ -117,11 +124,19 @@ export default function BottomNav() {
           data: { user: currentUser },
         } = await supabase.auth.getUser();
 
+        if (!mounted) return;
+
+        userRef.current = currentUser;
         setUser(currentUser);
       } catch {
+        if (!mounted) return;
+
+        userRef.current = null;
         setUser(null);
       } finally {
-        setAuthLoaded(true);
+        if (mounted) {
+          setAuthLoaded(true);
+        }
       }
     }
 
@@ -131,10 +146,15 @@ export default function BottomNav() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        setUser(session?.user ?? null);
+        if (!mounted) return;
+
+        const currentUser = session?.user ?? null;
+
+        userRef.current = currentUser;
+        setUser(currentUser);
         setAuthLoaded(true);
 
-        if (session?.user) {
+        if (currentUser) {
           setLoginOpen(false);
         }
       }
@@ -145,12 +165,16 @@ export default function BottomNav() {
     }
 
     function handleOpenLogin() {
-      if (user) {
+      if (userRef.current) {
         router.push("/account");
         return;
       }
 
-      openLoginSheet();
+      setLoginOpen(true);
+    }
+
+    function handleAuthUpdated() {
+      loadCurrentUser();
     }
 
     window.addEventListener("storage", handleCartUpdate);
@@ -162,8 +186,13 @@ export default function BottomNav() {
       "zeta-open-login",
       handleOpenLogin
     );
+    window.addEventListener(
+      "zeta-auth-updated",
+      handleAuthUpdated
+    );
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
 
       window.removeEventListener(
@@ -178,8 +207,12 @@ export default function BottomNav() {
         "zeta-open-login",
         handleOpenLogin
       );
+      window.removeEventListener(
+        "zeta-auth-updated",
+        handleAuthUpdated
+      );
     };
-  }, [router, user]);
+  }, [router]);
 
   const baseClass =
     "group flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] text-white/85 transition duration-200 hover:-translate-y-2 hover:bg-white/15 hover:text-white hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95";
