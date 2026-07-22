@@ -130,8 +130,10 @@ export default function HomePage() {
   const [activeCategory, setActiveCategory] = useState("الكل");
   const [menuOpen, setMenuOpen] = useState(false);
   const [cartMessage, setCartMessage] = useState("");
+  const [favoriteMessage, setFavoriteMessage] = useState("");
   const [addingId, setAddingId] = useState<string | null>(null);
   const [cartCount, setCartCount] = useState(0);
+  const [favorites, setFavorites] = useState<string[]>([]);
   const menuTouchStartX = useRef<number | null>(null);
 
   useEffect(() => {
@@ -181,6 +183,39 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    function updateFavorites() {
+      try {
+        const savedFavorites = localStorage.getItem("zeta_favorites");
+        const parsedFavorites = savedFavorites
+          ? JSON.parse(savedFavorites)
+          : [];
+
+        setFavorites(
+          Array.isArray(parsedFavorites) ? parsedFavorites : []
+        );
+      } catch {
+        setFavorites([]);
+      }
+    }
+
+    updateFavorites();
+
+    window.addEventListener("storage", updateFavorites);
+    window.addEventListener(
+      "zeta-favorites-updated",
+      updateFavorites
+    );
+
+    return () => {
+      window.removeEventListener("storage", updateFavorites);
+      window.removeEventListener(
+        "zeta-favorites-updated",
+        updateFavorites
+      );
+    };
+  }, []);
+
+  useEffect(() => {
     document.body.style.overflow = menuOpen ? "hidden" : "";
 
     function closeWithEscape(event: KeyboardEvent) {
@@ -199,6 +234,56 @@ export default function HomePage() {
 
   function closeMenu() {
     setMenuOpen(false);
+  }
+
+  function toggleFavorite(
+    game: {
+      id: number;
+      name: string;
+    },
+    kind: "featured" | "shared" | "private"
+  ) {
+    const favoriteId = `${kind}-${game.id}`;
+
+    try {
+      const savedFavorites = localStorage.getItem("zeta_favorites");
+      const parsedFavorites = savedFavorites
+        ? JSON.parse(savedFavorites)
+        : [];
+      const safeFavorites = Array.isArray(parsedFavorites)
+        ? parsedFavorites
+        : [];
+
+      const alreadyFavorite = safeFavorites.includes(favoriteId);
+
+      const updatedFavorites = alreadyFavorite
+        ? safeFavorites.filter((id: string) => id !== favoriteId)
+        : [...safeFavorites, favoriteId];
+
+      setFavorites(updatedFavorites);
+
+      localStorage.setItem(
+        "zeta_favorites",
+        JSON.stringify(updatedFavorites)
+      );
+
+      window.dispatchEvent(
+        new CustomEvent("zeta-favorites-updated", {
+          detail: updatedFavorites,
+        })
+      );
+
+      setFavoriteMessage(
+        alreadyFavorite
+          ? `تمت إزالة ${game.name} من المفضلة`
+          : `تمت إضافة ${game.name} إلى المفضلة`
+      );
+
+      window.setTimeout(() => setFavoriteMessage(""), 2200);
+    } catch {
+      setFavoriteMessage("تعذر تحديث المفضلة");
+      window.setTimeout(() => setFavoriteMessage(""), 2200);
+    }
   }
 
   function animateGameToCart(sourceElement: HTMLElement) {
@@ -724,10 +809,28 @@ export default function HomePage() {
 
                     <button
                       type="button"
-                      aria-label={`إضافة ${game.name} للمفضلة`}
-                      className="absolute left-2 top-2 z-20 flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-black/40 text-sm backdrop-blur-md"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        toggleFavorite(game, "featured");
+                      }}
+                      aria-label={
+                        favorites.includes(`featured-${game.id}`)
+                          ? `إزالة ${game.name} من المفضلة`
+                          : `إضافة ${game.name} للمفضلة`
+                      }
+                      aria-pressed={favorites.includes(
+                        `featured-${game.id}`
+                      )}
+                      className={`absolute left-2 top-2 z-30 flex h-8 w-8 items-center justify-center rounded-full border text-sm backdrop-blur-md transition duration-200 active:scale-90 ${
+                        favorites.includes(`featured-${game.id}`)
+                          ? "border-rose-400/40 bg-rose-500/25 text-rose-300 shadow-lg shadow-rose-950/30"
+                          : "border-white/10 bg-black/40 text-white hover:bg-white/10"
+                      }`}
                     >
-                      ♡
+                      {favorites.includes(`featured-${game.id}`)
+                        ? "♥"
+                        : "♡"}
                     </button>
                   </div>
 
@@ -1170,7 +1273,15 @@ export default function HomePage() {
                 onClick={closeMenu}
                 className="drawer-item group flex items-center gap-3 rounded-[20px] border border-transparent px-4 py-2.5 text-sm font-black md:py-3.5 text-gray-200 transition hover:border-violet-400/20 hover:bg-violet-500/10 hover:text-white active:scale-[0.98]"
               >
-                <span className="flex h-9 w-9 items-center justify-center md:h-10 md:w-10 rounded-2xl bg-rose-500/10 text-xl transition group-hover:scale-110">♡</span>
+                <span className="relative flex h-9 w-9 items-center justify-center rounded-2xl bg-rose-500/10 text-xl transition group-hover:scale-110 md:h-10 md:w-10">
+                  {favorites.length > 0 ? "♥" : "♡"}
+
+                  {favorites.length > 0 && (
+                    <span className="absolute -left-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[8px] font-black text-white">
+                      {favorites.length}
+                    </span>
+                  )}
+                </span>
                 <span>المفضلة</span>
               </Link>
 
@@ -1192,14 +1303,16 @@ export default function HomePage() {
                 <span>ألعاب PC غير مشتركة</span>
               </a>
 
-              <a
-                href="#best-sellers"
+              <Link
+                href="/best-sellers"
                 onClick={closeMenu}
                 className="drawer-item group flex items-center gap-3 rounded-[20px] border border-transparent px-4 py-2.5 text-sm font-black md:py-3.5 text-gray-200 transition hover:border-orange-400/20 hover:bg-orange-500/10 hover:text-white active:scale-[0.98]"
               >
-                <span className="flex h-9 w-9 items-center justify-center md:h-10 md:w-10 rounded-2xl bg-orange-500/10 text-xl transition group-hover:scale-110">🔥</span>
+                <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-orange-500/10 text-xl transition group-hover:scale-110 md:h-10 md:w-10">
+                  🔥
+                </span>
                 <span>الأكثر مبيعًا</span>
-              </a>
+              </Link>
 
               <a
                 href="#new-games"
@@ -1228,6 +1341,24 @@ export default function HomePage() {
           </div>
         </aside>
       </div>
+
+      {favoriteMessage && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-28 z-[181] flex justify-center px-4">
+          <div className="w-full max-w-[340px] animate-[cartToast_620ms_cubic-bezier(0.22,1,0.36,1)_both]">
+            <div className="relative overflow-hidden rounded-[22px] border border-rose-300/20 bg-gradient-to-l from-[#24101b]/95 via-[#17101c]/95 to-[#24101b]/95 px-4 py-3.5 shadow-[0_18px_55px_rgba(136,19,55,0.35)] backdrop-blur-2xl">
+              <div className="relative flex items-center justify-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-500 to-fuchsia-600 text-xl font-black text-white">
+                  ♥
+                </div>
+
+                <p className="min-w-0 truncate text-center text-sm font-black text-white">
+                  {favoriteMessage}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {cartMessage && (
         <div className="pointer-events-none fixed inset-x-0 bottom-28 z-[180] flex justify-center px-4">
