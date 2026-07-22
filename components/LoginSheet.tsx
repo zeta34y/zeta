@@ -82,6 +82,30 @@ export default function LoginSheet({
     }
   }, [open]);
 
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (!session?.user) return;
+
+        window.dispatchEvent(
+          new CustomEvent("zeta-auth-updated", {
+            detail: session.user,
+          })
+        );
+
+        if (open) {
+          onClose();
+        }
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [open, onClose]);
+
   function cleanPhone(value: string) {
     let numbers = value.replace(/\D/g, "");
 
@@ -216,9 +240,13 @@ export default function LoginSheet({
 
       setMessage("تم تسجيل الدخول بنجاح");
 
+      window.dispatchEvent(
+        new CustomEvent("zeta-auth-updated")
+      );
+
       window.setTimeout(() => {
         onClose();
-        window.location.href = "/";
+        window.location.href = "/account";
       }, 700);
     } catch (error) {
       setErrorMessage(
@@ -254,7 +282,7 @@ export default function LoginSheet({
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${window.location.origin}/`,
+          redirectTo: `${window.location.origin}/account`,
           skipBrowserRedirect: true,
         },
       });

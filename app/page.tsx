@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import BottomNav from "@/components/BottomNav";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import type { User } from "@supabase/supabase-js";
+import { supabase } from "@/lib/supabase";
 
 const games = [
   {
@@ -183,6 +186,12 @@ const reviews = [
 ];
 
 export default function HomePage() {
+  const router = useRouter();
+
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoaded, setAuthLoaded] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+
   const [showSplash, setShowSplash] = useState(true);
   const [splashClosing, setSplashClosing] = useState(false);
   const [activeCategory, setActiveCategory] = useState("الكل");
@@ -196,6 +205,86 @@ export default function HomePage() {
   const [searchFocused, setSearchFocused] = useState(false);
   const menuTouchStartX = useRef<number | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  const userName = useMemo(() => {
+    if (!user) return "زائر";
+
+    return (
+      user.user_metadata?.full_name ||
+      user.user_metadata?.name ||
+      user.email?.split("@")[0] ||
+      user.phone ||
+      "مستخدم"
+    );
+  }, [user]);
+
+  const userAvatar = useMemo(() => {
+    if (!user) return "";
+
+    return (
+      user.user_metadata?.avatar_url ||
+      user.user_metadata?.picture ||
+      ""
+    );
+  }, [user]);
+
+  const isAdmin =
+    user?.app_metadata?.role === "admin" ||
+    user?.app_metadata?.user_role === "admin";
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadUser() {
+      try {
+        const {
+          data: { user: currentUser },
+        } = await supabase.auth.getUser();
+
+        if (mounted) {
+          setUser(currentUser);
+        }
+      } catch {
+        if (mounted) {
+          setUser(null);
+        }
+      } finally {
+        if (mounted) {
+          setAuthLoaded(true);
+        }
+      }
+    }
+
+    loadUser();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user ?? null);
+        setAuthLoaded(true);
+      }
+    );
+
+    function handleAuthUpdated() {
+      loadUser();
+    }
+
+    window.addEventListener(
+      "zeta-auth-updated",
+      handleAuthUpdated
+    );
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+
+      window.removeEventListener(
+        "zeta-auth-updated",
+        handleAuthUpdated
+      );
+    };
+  }, []);
 
   useEffect(() => {
     const closeTimer = window.setTimeout(() => {
@@ -347,6 +436,43 @@ export default function HomePage() {
       window.removeEventListener("hashchange", handleHashChange);
     };
   }, []);
+
+  function openAccountOrLogin() {
+    if (user) {
+      router.push("/account");
+      return;
+    }
+
+    window.dispatchEvent(
+      new CustomEvent("zeta-open-login")
+    );
+  }
+
+  async function handleLogout() {
+    if (loggingOut) return;
+
+    setLoggingOut(true);
+
+    try {
+      const { error } = await supabase.auth.signOut();
+
+      if (error) throw error;
+
+      setUser(null);
+      setMenuOpen(false);
+
+      window.dispatchEvent(
+        new CustomEvent("zeta-auth-updated")
+      );
+
+      router.push("/");
+      router.refresh();
+    } catch (error) {
+      console.error("تعذر تسجيل الخروج:", error);
+    } finally {
+      setLoggingOut(false);
+    }
+  }
 
   function closeMenu() {
     setMenuOpen(false);
@@ -736,15 +862,21 @@ export default function HomePage() {
 
             <button
               type="button"
-              aria-label="الحساب"
-              onClick={() => {
-                window.dispatchEvent(
-                  new CustomEvent("zeta-open-login")
-                );
-              }}
-              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 transition hover:border-violet-400/30 hover:bg-violet-500/10 active:scale-95"
+              aria-label={user ? `حساب ${userName}` : "تسجيل الدخول"}
+              onClick={openAccountOrLogin}
+              className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-white/5 transition hover:border-violet-400/30 hover:bg-violet-500/10 active:scale-95"
             >
-              <span className="text-xl">👤</span>
+              {authLoaded && user && userAvatar ? (
+                <img
+                  src={userAvatar}
+                  alt={userName}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="text-xl">
+                  {authLoaded && user ? "👤" : "👤"}
+                </span>
+              )}
             </button>
 
             <button
@@ -1576,21 +1708,131 @@ export default function HomePage() {
                 ×
               </button>
 
-              <div className="flex items-center gap-3">
-                <div>
-                  <h2 className="text-lg font-black tracking-wider">ZETA</h2>
-                  <p className="mt-0.5 text-[10px] text-gray-500">قائمة المتجر</p>
+              <button
+                type="button"
+                onClick={() => {
+                  closeMenu();
+                  openAccountOrLogin();
+                }}
+                className="flex min-w-0 items-center gap-3 text-right"
+              >
+                <div className="min-w-0">
+                  <h2 className="truncate text-lg font-black">
+                    {user ? userName : "تسجيل الدخول"}
+                  </h2>
+
+                  <p className="mt-0.5 truncate text-[10px] text-gray-500">
+                    {user
+                      ? user.email || user.phone || "حساب ZETA"
+                      : "ادخل إلى حسابك في ZETA"}
+                  </p>
                 </div>
 
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-700 text-xl font-black shadow-lg shadow-violet-900/30">
-                  Z
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-700 text-xl font-black shadow-lg shadow-violet-900/30">
+                  {user && userAvatar ? (
+                    <img
+                      src={userAvatar}
+                      alt={userName}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : user ? (
+                    userName.charAt(0).toUpperCase()
+                  ) : (
+                    "Z"
+                  )}
                 </div>
-              </div>
+              </button>
             </div>
           </div>
 
           <nav className="flex-1 overflow-y-auto px-3 py-3 md:px-4 md:py-5">
             <div className="flex flex-col gap-1 md:gap-2">
+              {user ? (
+                <>
+                  <Link
+                    href="/notifications"
+                    onClick={closeMenu}
+                    className="drawer-item group flex items-center gap-3 rounded-[20px] border border-transparent px-4 py-2.5 text-sm font-black text-gray-200 transition hover:border-sky-400/20 hover:bg-sky-500/10 hover:text-white active:scale-[0.98] md:py-3.5"
+                  >
+                    <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-sky-500/10 text-xl transition group-hover:scale-110 md:h-10 md:w-10">
+                      🔔
+                    </span>
+                    <span>الإشعارات</span>
+                  </Link>
+
+                  <Link
+                    href="/orders"
+                    onClick={closeMenu}
+                    className="drawer-item group flex items-center gap-3 rounded-[20px] border border-transparent px-4 py-2.5 text-sm font-black text-gray-200 transition hover:border-violet-400/20 hover:bg-violet-500/10 hover:text-white active:scale-[0.98] md:py-3.5"
+                  >
+                    <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-violet-500/10 text-xl transition group-hover:scale-110 md:h-10 md:w-10">
+                      📦
+                    </span>
+                    <span>الطلبات</span>
+                  </Link>
+
+                  <Link
+                    href="/account"
+                    onClick={closeMenu}
+                    className="drawer-item group flex items-center gap-3 rounded-[20px] border border-transparent px-4 py-2.5 text-sm font-black text-gray-200 transition hover:border-fuchsia-400/20 hover:bg-fuchsia-500/10 hover:text-white active:scale-[0.98] md:py-3.5"
+                  >
+                    <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-fuchsia-500/10 text-xl transition group-hover:scale-110 md:h-10 md:w-10">
+                      👤
+                    </span>
+                    <span>حسابي</span>
+                  </Link>
+
+                  {isAdmin && (
+                    <Link
+                      href="/admin"
+                      onClick={closeMenu}
+                      className="drawer-item group flex items-center gap-3 rounded-[20px] border border-amber-400/20 bg-amber-500/5 px-4 py-2.5 text-sm font-black text-amber-200 transition hover:bg-amber-500/15 hover:text-white active:scale-[0.98] md:py-3.5"
+                    >
+                      <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-amber-500/15 text-xl transition group-hover:scale-110 md:h-10 md:w-10">
+                        ⚙️
+                      </span>
+                      <span>إدارة المتجر</span>
+                    </Link>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    disabled={loggingOut}
+                    className="drawer-item group flex w-full items-center gap-3 rounded-[20px] border border-transparent px-4 py-2.5 text-right text-sm font-black text-red-300 transition hover:border-red-400/20 hover:bg-red-500/10 hover:text-red-200 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 md:py-3.5"
+                  >
+                    <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-red-500/10 text-xl transition group-hover:scale-110 md:h-10 md:w-10">
+                      ↪
+                    </span>
+                    <span>
+                      {loggingOut
+                        ? "جاري تسجيل الخروج..."
+                        : "تسجيل الخروج"}
+                    </span>
+                  </button>
+
+                  <div className="my-2 h-px bg-white/[0.07]" />
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      closeMenu();
+                      openAccountOrLogin();
+                    }}
+                    className="drawer-item group flex w-full items-center gap-3 rounded-[20px] border border-violet-400/20 bg-violet-500/10 px-4 py-3 text-right text-sm font-black text-white transition hover:bg-violet-500/20 active:scale-[0.98]"
+                  >
+                    <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-violet-600 text-xl">
+                      👤
+                    </span>
+                    <span>تسجيل الدخول</span>
+                  </button>
+
+                  <div className="my-2 h-px bg-white/[0.07]" />
+                </>
+              )}
+
               <Link
                 href="/favorites"
                 onClick={closeMenu}

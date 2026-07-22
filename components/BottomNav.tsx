@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import type { User } from "@supabase/supabase-js";
 import LoginSheet from "@/components/LoginSheet";
+import { supabase } from "@/lib/supabase";
 
 type CartItem = {
   quantity?: number;
@@ -17,6 +19,30 @@ export default function BottomNav() {
 
   const [cartCount, setCartCount] = useState(0);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoaded, setAuthLoaded] = useState(false);
+
+  const userName = useMemo(() => {
+    if (!user) return "";
+
+    return (
+      user.user_metadata?.full_name ||
+      user.user_metadata?.name ||
+      user.email?.split("@")[0] ||
+      user.phone ||
+      "مستخدم"
+    );
+  }, [user]);
+
+  const avatarUrl = useMemo(() => {
+    if (!user) return "";
+
+    return (
+      user.user_metadata?.avatar_url ||
+      user.user_metadata?.picture ||
+      ""
+    );
+  }, [user]);
 
   function readCartCount() {
     try {
@@ -45,6 +71,15 @@ export default function BottomNav() {
 
   function closeLoginSheet() {
     setLoginOpen(false);
+  }
+
+  function openAccount() {
+    if (!user) {
+      openLoginSheet();
+      return;
+    }
+
+    router.push("/account");
   }
 
   function openSearch() {
@@ -76,11 +111,45 @@ export default function BottomNav() {
   useEffect(() => {
     readCartCount();
 
+    async function loadCurrentUser() {
+      try {
+        const {
+          data: { user: currentUser },
+        } = await supabase.auth.getUser();
+
+        setUser(currentUser);
+      } catch {
+        setUser(null);
+      } finally {
+        setAuthLoaded(true);
+      }
+    }
+
+    loadCurrentUser();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user ?? null);
+        setAuthLoaded(true);
+
+        if (session?.user) {
+          setLoginOpen(false);
+        }
+      }
+    );
+
     function handleCartUpdate() {
       readCartCount();
     }
 
     function handleOpenLogin() {
+      if (user) {
+        router.push("/account");
+        return;
+      }
+
       openLoginSheet();
     }
 
@@ -95,6 +164,8 @@ export default function BottomNav() {
     );
 
     return () => {
+      subscription.unsubscribe();
+
       window.removeEventListener(
         "storage",
         handleCartUpdate
@@ -108,13 +179,18 @@ export default function BottomNav() {
         handleOpenLogin
       );
     };
-  }, []);
+  }, [router, user]);
 
   const baseClass =
     "group flex min-h-[58px] flex-col items-center justify-center gap-1 rounded-[20px] text-white/85 transition duration-200 hover:-translate-y-2 hover:bg-white/15 hover:text-white hover:shadow-[0_14px_28px_rgba(139,92,246,0.55)] active:-translate-y-1 active:scale-95";
 
   const activeClass =
     "bg-white/15 text-white shadow-lg shadow-black/10";
+
+  const accountActive =
+    pathname.startsWith("/account") ||
+    pathname.startsWith("/orders") ||
+    pathname.startsWith("/notifications");
 
   return (
     <>
@@ -147,6 +223,7 @@ export default function BottomNav() {
                 d="M5.5 9.7v9.2h13V9.7M9.2 18.9v-5.4h5.6v5.4"
               />
             </svg>
+
             <span className="text-[9px] font-black">
               الرئيسية
             </span>
@@ -166,11 +243,36 @@ export default function BottomNav() {
               aria-hidden="true"
               className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9] transition duration-200 group-hover:scale-110"
             >
-              <rect x="3.5" y="3.5" width="6.5" height="6.5" rx="2" />
-              <rect x="14" y="3.5" width="6.5" height="6.5" rx="2" />
-              <rect x="3.5" y="14" width="6.5" height="6.5" rx="2" />
-              <rect x="14" y="14" width="6.5" height="6.5" rx="2" />
+              <rect
+                x="3.5"
+                y="3.5"
+                width="6.5"
+                height="6.5"
+                rx="2"
+              />
+              <rect
+                x="14"
+                y="3.5"
+                width="6.5"
+                height="6.5"
+                rx="2"
+              />
+              <rect
+                x="3.5"
+                y="14"
+                width="6.5"
+                height="6.5"
+                rx="2"
+              />
+              <rect
+                x="14"
+                y="14"
+                width="6.5"
+                height="6.5"
+                rx="2"
+              />
             </svg>
+
             <span className="text-[9px] font-black">
               التصنيفات
             </span>
@@ -211,26 +313,39 @@ export default function BottomNav() {
 
           <button
             type="button"
-            onClick={openLoginSheet}
-            aria-label="تسجيل الدخول"
+            onClick={openAccount}
+            aria-label={user ? `حساب ${userName}` : "تسجيل الدخول"}
             className={`${baseClass} ${
-              loginOpen ? activeClass : ""
+              (user && accountActive) || loginOpen
+                ? activeClass
+                : ""
             }`}
           >
-            <svg
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9] transition duration-200 group-hover:scale-110"
-            >
-              <circle cx="12" cy="7.2" r="3.2" />
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M5.8 20c.5-4 2.8-6.2 6.2-6.2s5.7 2.2 6.2 6.2"
-              />
-            </svg>
-            <span className="text-[9px] font-black">
-              الدخول
+            {authLoaded && user && avatarUrl ? (
+              <span className="relative flex h-[27px] w-[27px] items-center justify-center overflow-hidden rounded-full border border-white/30 shadow-md">
+                <img
+                  src={avatarUrl}
+                  alt={userName}
+                  className="h-full w-full object-cover"
+                />
+              </span>
+            ) : (
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                className="h-[25px] w-[25px] fill-none stroke-current stroke-[1.9] transition duration-200 group-hover:scale-110"
+              >
+                <circle cx="12" cy="7.2" r="3.2" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M5.8 20c.5-4 2.8-6.2 6.2-6.2s5.7 2.2 6.2 6.2"
+                />
+              </svg>
+            )}
+
+            <span className="max-w-[60px] truncate text-[9px] font-black">
+              {authLoaded && user ? "حسابي" : "الدخول"}
             </span>
           </button>
 
@@ -251,6 +366,7 @@ export default function BottomNav() {
                 d="m15.2 15.2 4.3 4.3"
               />
             </svg>
+
             <span className="text-[9px] font-black">
               بحث
             </span>
@@ -258,10 +374,12 @@ export default function BottomNav() {
         </div>
       </nav>
 
-      <LoginSheet
-        open={loginOpen}
-        onClose={closeLoginSheet}
-      />
+      {!user && (
+        <LoginSheet
+          open={loginOpen}
+          onClose={closeLoginSheet}
+        />
+      )}
 
       <style jsx global>{`
         @keyframes cartBadgePop {
