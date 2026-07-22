@@ -321,45 +321,45 @@ export default function LoginSheet({
         role="dialog"
         aria-modal="true"
         aria-label="تسجيل الدخول"
-        className={`absolute bottom-0 left-0 right-0 mx-auto max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-t-[28px] border-x border-t border-violet-300/15 bg-[#0e0b15] px-3 pb-[max(16px,env(safe-area-inset-bottom))] pt-2.5 shadow-[0_-30px_90px_rgba(76,29,149,0.4)] transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] sm:bottom-6 sm:max-h-[94vh] sm:max-w-lg sm:rounded-[34px] sm:border sm:px-4 sm:pb-[max(24px,env(safe-area-inset-bottom))] sm:pt-3 ${
+        className={`absolute bottom-0 left-0 right-0 mx-auto max-h-[94vh] w-[92%] max-w-[430px] sm:w-full sm:max-w-xl overflow-y-auto rounded-[30px] border-x border-t border-violet-300/15 bg-[#0e0b15] px-4 pb-[max(24px,env(safe-area-inset-bottom))] pt-3 shadow-[0_-30px_90px_rgba(76,29,149,0.4)] transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] sm:bottom-6 sm:max-w-lg sm:rounded-[34px] sm:border ${
           open
             ? "translate-y-0"
             : "translate-y-[110%]"
         }`}
       >
-        <div className="mx-auto h-1 w-12 rounded-full bg-white/15 sm:h-1.5 sm:w-14" />
+        <div className="mx-auto h-1.5 w-14 rounded-full bg-white/15" />
 
-        <div className="mt-3.5 flex items-start justify-between sm:mt-5">
+        <div className="mt-5 flex items-start justify-between">
           <button
             type="button"
             onClick={onClose}
             aria-label="إغلاق"
-            className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-lg text-gray-300 transition hover:bg-white/10 active:scale-90 sm:h-10 sm:w-10 sm:rounded-2xl sm:text-xl"
+            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-xl text-gray-300 transition hover:bg-white/10 active:scale-90"
           >
             ×
           </button>
 
           <div className="text-right">
-            <div className="flex items-center justify-end gap-2.5 sm:gap-3">
+            <div className="flex items-center justify-end gap-3">
               <div>
-                <h2 className="text-lg font-black sm:text-xl">تسجيل الدخول</h2>
-                <p className="mt-0.5 text-[11px] text-gray-500 sm:mt-1 sm:text-xs">
+                <h2 className="text-xl font-black">تسجيل الدخول</h2>
+                <p className="mt-1 text-xs text-gray-500">
                   ادخل إلى حسابك في ZETA
                 </p>
               </div>
 
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-700 text-lg font-black shadow-lg shadow-violet-950/40 sm:h-12 sm:w-12 sm:rounded-2xl sm:text-xl">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-700 text-xl font-black shadow-lg shadow-violet-950/40">
                 Z
               </div>
             </div>
           </div>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-1.5 rounded-[18px] border border-white/[0.07] bg-white/[0.03] p-1 sm:mt-6 sm:gap-2 sm:rounded-[20px] sm:p-1.5">
+        <div className="mt-6 grid grid-cols-2 gap-2 rounded-[20px] border border-white/[0.07] bg-white/[0.03] p-1.5">
           <button
             type="button"
             onClick={() => changeMethod("email")}
-            className={`rounded-xl px-3 py-2.5 text-[11px] font-black transition sm:rounded-2xl sm:px-4 sm:py-3 sm:text-xs ${
+            className={`rounded-2xl px-4 py-3 text-xs font-black transition sm:rounded-2xl sm:px-4 sm:py-3 sm:text-xs ${
               method === "email"
                 ? "bg-violet-600 text-white shadow-lg shadow-violet-950/30"
                 : "text-gray-500"
@@ -371,7 +371,7 @@ export default function LoginSheet({
           <button
             type="button"
             onClick={() => changeMethod("phone")}
-            className={`rounded-xl px-3 py-2.5 text-[11px] font-black transition sm:rounded-2xl sm:px-4 sm:py-3 sm:text-xs ${
+            className={`rounded-2xl px-4 py-3 text-xs font-black transition sm:rounded-2xl sm:px-4 sm:py-3 sm:text-xs ${
               method === "phone"
                 ? "bg-violet-600 text-white shadow-lg shadow-violet-950/30"
                 : "text-gray-500"
@@ -382,14 +382,14 @@ export default function LoginSheet({
         </div>
 
         {step === "identifier" ? (
-          <div className="mt-4 sm:mt-5">
+          <div className="mt-5">
             {method === "email" ? (
               <label className="block">
                 <span className="text-xs font-black text-gray-300">
                   البريد الإلكتروني
                 </span>
 
-                <div className="mt-2 flex items-center gap-2.5 rounded-[17px] border border-white/10 bg-white/[0.04] px-3 py-3 transition focus-within:border-violet-400/50 sm:gap-3 sm:rounded-[20px] sm:px-4 sm:py-4">
+                <div className="mt-2 flex items-center gap-3 rounded-[20px] border border-white/10 bg-white/[0.04] px-4 py-4 transition focus-within:border-violet-400/50">
                   <span className="text-lg">✉️</span>
 
                   <input
@@ -400,7 +400,7 @@ export default function LoginSheet({
                     placeholder="name@example.com"
                     autoComplete="email"
                     maxLength={120}
-                    className="min-w-0 flex-1 bg-transparent text-left text-[13px] text-white outline-none placeholder:text-gray-600 sm:text-sm"
+                    className="min-w-0 flex-1 bg-transparent text-left text-sm text-white outline-none placeholder:text-gray-600"
                     dir="ltr"
                   />
                 </div>
@@ -411,13 +411,13 @@ export default function LoginSheet({
                   رقم الجوال
                 </span>
 
-                <div className="relative mt-2 flex items-stretch rounded-[17px] border border-white/10 bg-white/[0.04] transition focus-within:border-violet-400/50 sm:rounded-[20px]">
+                <div className="relative mt-2 flex items-stretch rounded-[20px] border border-white/10 bg-white/[0.04] transition focus-within:border-violet-400/50">
                   <button
                     type="button"
                     onClick={() =>
                       setCountryMenuOpen((current) => !current)
                     }
-                    className="flex shrink-0 items-center gap-1.5 border-l border-white/10 px-2.5 text-[11px] font-black text-white sm:gap-2 sm:px-3 sm:text-xs"
+                    className="flex shrink-0 items-center gap-2 border-l border-white/10 px-3 text-xs font-black text-white"
                   >
                     <span>{selectedCountry.flag}</span>
                     <span dir="ltr">{selectedCountry.code}</span>
@@ -435,7 +435,7 @@ export default function LoginSheet({
                         : "رقم الجوال"
                     }
                     autoComplete="tel-national"
-                    className="min-w-0 flex-1 bg-transparent px-3 py-3 text-left text-[13px] tracking-wider text-white outline-none placeholder:text-gray-600 sm:px-4 sm:py-4 sm:text-sm"
+                    className="min-w-0 flex-1 bg-transparent px-4 py-4 text-left text-sm tracking-wider text-white outline-none placeholder:text-gray-600"
                     dir="ltr"
                   />
 
@@ -478,13 +478,13 @@ export default function LoginSheet({
               type="button"
               onClick={sendOtp}
               disabled={loading}
-              className="mt-4 flex w-full items-center justify-center rounded-[17px] bg-gradient-to-l from-violet-600 to-fuchsia-600 px-4 py-3.5 text-[13px] font-black text-white shadow-xl shadow-violet-950/35 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 sm:mt-5 sm:rounded-[20px] sm:px-5 sm:py-4 sm:text-sm"
+              className="mt-5 flex w-full items-center justify-center rounded-[20px] bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-4 text-sm font-black text-white shadow-xl shadow-violet-950/35 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? "جاري إرسال الرمز..." : "إرسال رمز التحقق"}
             </button>
           </div>
         ) : (
-          <div className="mt-4 sm:mt-5">
+          <div className="mt-5">
             <button
               type="button"
               onClick={() => {
@@ -522,7 +522,7 @@ export default function LoginSheet({
               type="button"
               onClick={verifyOtp}
               disabled={loading}
-              className="mt-4 flex w-full items-center justify-center rounded-[17px] bg-gradient-to-l from-violet-600 to-fuchsia-600 px-4 py-3.5 text-[13px] font-black text-white shadow-xl shadow-violet-950/35 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 sm:mt-5 sm:rounded-[20px] sm:px-5 sm:py-4 sm:text-sm"
+              className="mt-5 flex w-full items-center justify-center rounded-[20px] bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-4 text-sm font-black text-white shadow-xl shadow-violet-950/35 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? "جاري التحقق..." : "تأكيد وتسجيل الدخول"}
             </button>
@@ -550,7 +550,7 @@ export default function LoginSheet({
           </div>
         )}
 
-        <div className="my-4 flex items-center gap-3 sm:my-6">
+        <div className="my-6 flex items-center gap-3">
           <div className="h-px flex-1 bg-white/[0.07]" />
           <span className="text-[10px] font-bold text-gray-600">
             أو الدخول مباشرة
@@ -558,12 +558,12 @@ export default function LoginSheet({
           <div className="h-px flex-1 bg-white/[0.07]" />
         </div>
 
-        <div className="grid gap-2.5 sm:grid-cols-2 sm:gap-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <button
             type="button"
             onClick={() => signInWithProvider("google")}
             disabled={loading}
-            className="flex items-center justify-center gap-2.5 rounded-[17px] border border-white/10 bg-white px-3 py-3 text-[13px] font-black text-gray-900 shadow-sm transition hover:bg-gray-100 active:scale-[0.98] disabled:opacity-60 sm:gap-3 sm:rounded-[20px] sm:px-4 sm:py-3.5 sm:text-sm"
+            className="flex items-center justify-center gap-2.5 rounded-[20px] border border-white/10 bg-white px-4 py-3.5 text-sm font-black text-gray-900 shadow-sm transition hover:bg-gray-100 active:scale-[0.98] disabled:opacity-60 sm:gap-3 sm:rounded-[20px] sm:px-4 sm:py-3.5 sm:text-sm"
           >
             <svg
               viewBox="0 0 24 24"
@@ -594,14 +594,14 @@ export default function LoginSheet({
             type="button"
             onClick={() => signInWithProvider("apple")}
             disabled={loading}
-            className="flex items-center justify-center gap-2.5 rounded-[17px] border border-white/10 bg-black px-3 py-3 text-[13px] font-black text-white transition hover:bg-black/80 active:scale-[0.98] disabled:opacity-60 sm:gap-3 sm:rounded-[20px] sm:px-4 sm:py-3.5 sm:text-sm"
+            className="flex items-center justify-center gap-2.5 rounded-[20px] border border-white/10 bg-black px-4 py-3.5 text-sm font-black text-white transition hover:bg-black/80 active:scale-[0.98] disabled:opacity-60 sm:gap-3 sm:rounded-[20px] sm:px-4 sm:py-3.5 sm:text-sm"
           >
             <span className="text-xl"></span>
             <span>المتابعة مع Apple</span>
           </button>
         </div>
 
-        <p className="mt-4 text-center text-[9px] leading-4 text-gray-600 sm:mt-6 sm:text-[10px] sm:leading-5">
+        <p className="mt-6 text-center text-[10px] leading-5 text-gray-600">
           بمتابعتك أنت توافق على الشروط والأحكام وسياسة الخصوصية.
         </p>
       </section>
