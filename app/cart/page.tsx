@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import BottomNav from "@/components/BottomNav";
+import { supabase } from "@/lib/supabase";
 import { useEffect, useMemo, useState } from "react";
 
 type CartItem = {
@@ -23,6 +24,7 @@ export default function CartPage() {
   const [couponCode, setCouponCode] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState("");
   const [couponMessage, setCouponMessage] = useState("");
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
 
   useEffect(() => {
     try {
@@ -131,6 +133,42 @@ export default function CartPage() {
     setAppliedCoupon("");
     setCouponMessage("");
     localStorage.removeItem("zeta_coupon");
+  }
+
+  async function handleCheckout() {
+    if (cart.length === 0 || checkoutLoading) return;
+
+    setCheckoutLoading(true);
+
+    try {
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+
+      if (error) {
+        throw error;
+      }
+
+      if (!session) {
+        window.dispatchEvent(
+          new CustomEvent("zeta-open-login")
+        );
+
+        setCheckoutLoading(false);
+        return;
+      }
+
+      window.location.href = "/checkout";
+    } catch (error) {
+      console.error("تعذر التحقق من تسجيل الدخول:", error);
+
+      window.dispatchEvent(
+        new CustomEvent("zeta-open-login")
+      );
+
+      setCheckoutLoading(false);
+    }
   }
 
   const totalItems = useMemo(
@@ -547,10 +585,16 @@ export default function CartPage() {
 
               <button
                 type="button"
-                className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-4 text-sm font-black shadow-xl shadow-violet-900/30 transition hover:-translate-y-0.5 hover:brightness-110 active:scale-[0.98]"
+                onClick={handleCheckout}
+                disabled={checkoutLoading}
+                className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-4 text-sm font-black shadow-xl shadow-violet-900/30 transition hover:-translate-y-0.5 hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <span>إتمام الطلب</span>
-                <span>←</span>
+                <span>
+                  {checkoutLoading
+                    ? "جاري التحقق..."
+                    : "إتمام الطلب"}
+                </span>
+                <span>{checkoutLoading ? "⏳" : "←"}</span>
               </button>
             </aside>
           </div>

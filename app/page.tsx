@@ -103,6 +103,33 @@ const privateGames = [
   },
 ];
 
+const packageGames = [
+  {
+    id: 1,
+    name: "بكج الأكشن",
+    platform: "3 ألعاب PC",
+    price: 99,
+    oldPrice: 159,
+    image: "",
+  },
+  {
+    id: 2,
+    name: "بكج العالم المفتوح",
+    platform: "3 ألعاب PC",
+    price: 119,
+    oldPrice: 189,
+    image: "",
+  },
+  {
+    id: 3,
+    name: "بكج الرياضة والسباقات",
+    platform: "4 ألعاب PC",
+    price: 129,
+    oldPrice: 209,
+    image: "",
+  },
+];
+
 const searchableGames = [
   ...games.map((game) => ({
     id: `featured-${game.id}`,
@@ -122,6 +149,13 @@ const searchableGames = [
     id: `private-${game.id}`,
     name: game.name,
     type: "حساب PC خاص",
+    platform: game.platform,
+    price: game.price,
+  })),
+  ...packageGames.map((game) => ({
+    id: `package-${game.id}`,
+    name: game.name,
+    type: "بكج ألعاب",
     platform: game.platform,
     price: game.price,
   })),
@@ -323,7 +357,7 @@ export default function HomePage() {
       id: number;
       name: string;
     },
-    kind: "featured" | "shared" | "private"
+    kind: "featured" | "shared" | "private" | "package"
   ) {
     const favoriteId = `${kind}-${game.id}`;
 
@@ -466,7 +500,7 @@ export default function HomePage() {
       platform?: string;
       image?: string;
     },
-    kind: "featured" | "shared" | "private",
+    kind: "featured" | "shared" | "private" | "package",
     sourceElement?: HTMLElement
   ) {
     if (sourceElement) {
@@ -701,8 +735,14 @@ export default function HomePage() {
             </Link>
 
             <button
+              type="button"
               aria-label="الحساب"
-              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 transition active:scale-95"
+              onClick={() => {
+                window.dispatchEvent(
+                  new CustomEvent("zeta-open-login")
+                );
+              }}
+              className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 transition hover:border-violet-400/30 hover:bg-violet-500/10 active:scale-95"
             >
               <span className="text-xl">👤</span>
             </button>
@@ -1232,6 +1272,116 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* بكجات الألعاب */}
+      <section
+        id="game-packages"
+        className="scroll-mt-28 mx-auto max-w-7xl px-4 pt-12"
+      >
+        <div className="mb-5 flex items-end justify-between">
+          <div>
+            <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-[11px] font-bold text-amber-300">
+              وفر أكثر
+            </span>
+
+            <h2 className="mt-3 text-2xl font-black">
+              بكجات الألعاب
+            </h2>
+
+            <p className="mt-1 text-xs leading-5 text-gray-500">
+              أكثر من لعبة داخل بكج واحد بسعر مميز
+            </p>
+          </div>
+
+          <Link
+            href="/packages"
+            className="text-xs font-bold text-amber-400 transition hover:text-amber-300"
+          >
+            عرض المزيد
+          </Link>
+        </div>
+
+        <div className="scroll-clip">
+          <div className="smooth-scroll flex snap-x gap-3 overflow-x-auto pb-5 md:grid md:grid-cols-3 md:overflow-visible">
+            {packageGames.map((game) => (
+              <article
+                key={game.id}
+                className="group min-w-[72%] snap-start overflow-hidden rounded-[26px] border border-amber-500/15 bg-[#121019] transition duration-300 hover:-translate-y-1 hover:border-amber-400/50 hover:shadow-2xl hover:shadow-amber-950/20 sm:min-w-[290px] md:min-w-0"
+              >
+                <div
+                  data-game-image
+                  className="relative h-44 overflow-hidden"
+                >
+                  <Link
+                    href={`/game/package-${game.id}`}
+                    aria-label={`عرض تفاصيل ${game.name}`}
+                    className="absolute inset-0 z-10"
+                  />
+
+                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-700/20 via-violet-700/15 to-fuchsia-700/20 text-5xl transition duration-300 group-hover:scale-105">
+                    🎁
+                  </div>
+
+                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#121019] via-transparent to-transparent" />
+
+                  <span className="pointer-events-none absolute right-2 top-2 z-20 rounded-lg bg-gradient-to-l from-amber-500 to-orange-600 px-2 py-1 text-[9px] font-black text-white">
+                    بكج
+                  </span>
+                </div>
+
+                <div className="p-4">
+                  <p className="text-[11px] font-bold text-amber-400">
+                    {game.platform}
+                  </p>
+
+                  <Link
+                    href={`/game/package-${game.id}`}
+                    className="mt-1 block text-lg font-black transition hover:text-amber-300"
+                  >
+                    {game.name}
+                  </Link>
+
+                  <div className="mt-3 flex items-center justify-between">
+                    <div>
+                      <p className="text-base font-black">
+                        {game.price}
+                        <span className="mr-1 text-[9px] text-gray-500">
+                          ر.س
+                        </span>
+                      </p>
+
+                      <p className="text-[9px] text-gray-600 line-through">
+                        {game.oldPrice} ر.س
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      aria-label={`إضافة ${game.name} للسلة`}
+                      onClick={(event) =>
+                        addToCart(
+                          game,
+                          "package",
+                          event.currentTarget
+                        )
+                      }
+                      className={`flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-lg font-black text-white transition duration-200 active:scale-90 ${
+                        addingId === `package-${game.id}`
+                          ? "rotate-12 scale-90 brightness-125"
+                          : "rotate-0 scale-100"
+                      }`}
+                    >
+                      {addingId === `package-${game.id}`
+                        ? "✓"
+                        : "+"}
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* تقييمات العملاء */}
       <section className="mx-auto max-w-7xl px-4 pt-14">
         <div className="text-center">
@@ -1474,6 +1624,17 @@ export default function HomePage() {
               >
                 <span className="flex h-9 w-9 items-center justify-center md:h-10 md:w-10 rounded-2xl bg-fuchsia-500/10 text-xl transition group-hover:scale-110">🔐</span>
                 <span>ألعاب PC غير مشتركة</span>
+              </a>
+
+              <a
+                href="#game-packages"
+                onClick={closeMenu}
+                className="drawer-item group flex items-center gap-3 rounded-[20px] border border-transparent px-4 py-2.5 text-sm font-black text-gray-200 transition hover:border-amber-400/20 hover:bg-amber-500/10 hover:text-white active:scale-[0.98] md:py-3.5"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-amber-500/10 text-xl transition group-hover:scale-110 md:h-10 md:w-10">
+                  🎁
+                </span>
+                <span>البكجات</span>
               </a>
 
               <Link
