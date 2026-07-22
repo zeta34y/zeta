@@ -689,12 +689,12 @@ export default function HomePage() {
               </p>
 
               <div className="mt-6 flex items-center gap-3">
-                <a
-                  href="#shared-games"
+                <Link
+                  href="/offers"
                   className="rounded-2xl bg-gradient-to-l from-violet-600 to-fuchsia-600 px-6 py-3.5 text-sm font-black shadow-xl shadow-violet-800/30 transition duration-200 hover:-translate-y-0.5 hover:brightness-110 active:scale-95"
                 >
                   تسوق الآن
-                </a>
+                </Link>
 
                 <Link
                   href="/offers"
@@ -720,9 +720,7 @@ export default function HomePage() {
               <h2 className="mt-1 text-xl font-black">التصنيفات</h2>
             </div>
 
-            <button className="text-xs font-bold text-gray-400">
-              عرض الكل
-            </button>
+
           </div>
 
          <div className="scroll-clip mt-4">
@@ -780,9 +778,12 @@ export default function HomePage() {
               <h2 className="mt-1 text-xl font-black">ألعاب مميزة</h2>
             </div>
 
-            <button className="text-xs font-bold text-gray-400">
+            <Link
+              href="/featured-games"
+              className="text-xs font-bold text-gray-400 transition hover:text-violet-300"
+            >
               عرض المزيد
-            </button>
+            </Link>
           </div>
 
           <div id="best-sellers" className="scroll-mt-28 mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -901,9 +902,12 @@ export default function HomePage() {
             </p>
           </div>
 
-          <button className="text-xs font-bold text-violet-400">
-            عرض الكل
-          </button>
+          <Link
+            href="/shared-games"
+            className="text-xs font-bold text-violet-400 transition hover:text-violet-300"
+          >
+            عرض المزيد
+          </Link>
         </div>
 
         <div className="scroll-clip">
@@ -989,9 +993,12 @@ export default function HomePage() {
             </p>
           </div>
 
-          <button className="text-xs font-bold text-fuchsia-400">
-            عرض الكل
-          </button>
+          <Link
+            href="/private-games"
+            className="text-xs font-bold text-fuchsia-400 transition hover:text-fuchsia-300"
+          >
+            عرض المزيد
+          </Link>
         </div>
 
         <div className="scroll-clip">
