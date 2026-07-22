@@ -454,11 +454,6 @@ export default function CartPage() {
                   </div>
                 )}
 
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-500">التوصيل</span>
-                  <span className="font-bold text-emerald-400">مجاني</span>
-                </div>
-
                 <div className="pt-1">
                   <div className="mb-2 flex items-center justify-between">
                     <span className="text-gray-500">كود الخصم</span>

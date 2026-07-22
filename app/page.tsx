@@ -206,12 +206,7 @@ export default function HomePage() {
 
     if (!cartButton) return;
 
-    const gameCard = sourceElement.closest("article");
-    const gameImage =
-      gameCard?.querySelector<HTMLElement>("[data-game-image]") ??
-      sourceElement;
-
-    const sourceRect = gameImage.getBoundingClientRect();
+    const sourceRect = sourceElement.getBoundingClientRect();
     const cartRect = cartButton.getBoundingClientRect();
 
     const flyingGame = document.createElement("div");
@@ -259,9 +254,9 @@ export default function HomePage() {
           offset: 0,
         },
         {
-          transform: `translate(${targetX * 0.45}px, ${
-            targetY * 0.28 - 75
-          }px) scale(0.9) rotate(10deg)`,
+          transform: `translate(${targetX * 0.42}px, ${
+            targetY * 0.32 - 95
+          }px) scale(0.92) rotate(8deg)`,
           opacity: 1,
           offset: 0.45,
         },
@@ -272,7 +267,7 @@ export default function HomePage() {
         },
       ],
       {
-        duration: 1250,
+        duration: 1800,
         easing: "cubic-bezier(0.22, 1, 0.36, 1)",
         fill: "forwards",
       }
@@ -285,7 +280,7 @@ export default function HomePage() {
         { transform: "scale(1)" },
       ],
       {
-        duration: 1250,
+        duration: 1800,
         easing: "ease-out",
       }
     );
@@ -890,12 +885,13 @@ export default function HomePage() {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {privateGames.map((game) => (
-            <article
-              key={game.id}
-              className="group overflow-hidden rounded-[22px] border border-white/[0.07] bg-[#121019] transition duration-300 hover:-translate-y-1 hover:border-fuchsia-400/50 hover:shadow-2xl hover:shadow-fuchsia-950/30"
-            >
+        <div className="scroll-clip">
+          <div className="smooth-scroll flex snap-x gap-3 overflow-x-auto pb-5 md:grid md:grid-cols-3 md:overflow-visible">
+            {privateGames.map((game) => (
+              <article
+                key={game.id}
+                className="group min-w-[72%] snap-start overflow-hidden rounded-[26px] border border-fuchsia-500/15 bg-[#121019] transition duration-300 hover:-translate-y-1 hover:border-fuchsia-400/50 hover:shadow-2xl hover:shadow-fuchsia-950/30 sm:min-w-[290px] md:min-w-0"
+              >
               <div data-game-image className="relative aspect-[4/5] overflow-hidden">
                 <Link
                   href={`/game/private-${game.id}`}
@@ -954,8 +950,9 @@ export default function HomePage() {
                   </button>
                 </div>
               </div>
-            </article>
-          ))}
+              </article>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -1233,29 +1230,31 @@ export default function HomePage() {
       </div>
 
       {cartMessage && (
-        <div className="pointer-events-none fixed bottom-28 left-1/2 z-[180] w-[calc(100%-32px)] max-w-[340px] -translate-x-1/2 animate-[cartToast_520ms_cubic-bezier(0.22,1,0.36,1)_both]">
-          <div className="relative overflow-hidden rounded-[22px] border border-violet-300/20 bg-gradient-to-l from-[#1a1328]/95 via-[#15101f]/95 to-[#1a1328]/95 px-4 py-3.5 shadow-[0_18px_55px_rgba(76,29,149,0.45)] backdrop-blur-2xl">
-            <div className="absolute -right-10 -top-10 h-24 w-24 rounded-full bg-violet-600/20 blur-3xl" />
-            <div className="absolute -bottom-12 -left-8 h-24 w-24 rounded-full bg-fuchsia-600/15 blur-3xl" />
+        <div className="pointer-events-none fixed inset-x-0 bottom-28 z-[180] flex justify-center px-4">
+          <div className="w-full max-w-[340px] animate-[cartToast_620ms_cubic-bezier(0.22,1,0.36,1)_both]">
+            <div className="relative overflow-hidden rounded-[22px] border border-violet-300/20 bg-gradient-to-l from-[#1a1328]/95 via-[#15101f]/95 to-[#1a1328]/95 px-4 py-3.5 shadow-[0_18px_55px_rgba(76,29,149,0.45)] backdrop-blur-2xl">
+              <div className="absolute -right-10 -top-10 h-24 w-24 rounded-full bg-violet-600/20 blur-3xl" />
+              <div className="absolute -bottom-12 -left-8 h-24 w-24 rounded-full bg-fuchsia-600/15 blur-3xl" />
 
-            <div className="relative flex items-center justify-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-lg font-black text-white shadow-lg shadow-emerald-900/25">
-                ✓
+              <div className="relative flex items-center justify-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 text-lg font-black text-white shadow-lg shadow-emerald-900/25">
+                  ✓
+                </div>
+
+                <div className="min-w-0 text-center">
+                  <p className="text-[10px] font-bold text-violet-300">
+                    تمت الإضافة بنجاح
+                  </p>
+
+                  <p className="mt-1 truncate text-sm font-black text-white">
+                    {cartMessage.replace("تمت إضافة ", "").replace(" إلى السلة", "")}
+                  </p>
+                </div>
               </div>
 
-              <div className="min-w-0 text-center">
-                <p className="text-[10px] font-bold text-violet-300">
-                  تمت الإضافة بنجاح
-                </p>
-
-                <p className="mt-1 truncate text-sm font-black text-white">
-                  {cartMessage.replace("تمت إضافة ", "").replace(" إلى السلة", "")}
-                </p>
+              <div className="absolute bottom-0 left-0 h-[3px] w-full overflow-hidden bg-white/5">
+                <div className="h-full w-full origin-right animate-[toastProgress_2200ms_linear_forwards] bg-gradient-to-l from-violet-500 to-fuchsia-500" />
               </div>
-            </div>
-
-            <div className="absolute bottom-0 left-0 h-[3px] w-full overflow-hidden bg-white/5">
-              <div className="h-full w-full origin-right animate-[toastProgress_2200ms_linear_forwards] bg-gradient-to-l from-violet-500 to-fuchsia-500" />
             </div>
           </div>
         </div>
@@ -1438,19 +1437,19 @@ export default function HomePage() {
         @keyframes cartToast {
           0% {
             opacity: 0;
-            transform: translate(-50%, 24px) scale(0.9);
+            transform: translateY(24px) scale(0.9);
             filter: blur(8px);
           }
 
           55% {
             opacity: 1;
-            transform: translate(-50%, -4px) scale(1.03);
+            transform: translateY(-4px) scale(1.03);
             filter: blur(0);
           }
 
           100% {
             opacity: 1;
-            transform: translate(-50%, 0) scale(1);
+            transform: translateY(0) scale(1);
             filter: blur(0);
           }
         }
