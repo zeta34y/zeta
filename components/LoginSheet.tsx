@@ -39,6 +39,7 @@ export default function LoginSheet({
   const [countryCode, setCountryCode] = useState("+966");
   const [countryMenuOpen, setCountryMenuOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [resendSeconds, setResendSeconds] = useState(0);
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -76,6 +77,7 @@ export default function LoginSheet({
         setMessage("");
         setErrorMessage("");
         setCountryMenuOpen(false);
+        setResendSeconds(0);
       }, 350);
 
       return () => window.clearTimeout(timer);
@@ -105,6 +107,20 @@ export default function LoginSheet({
       subscription.unsubscribe();
     };
   }, [open, onClose]);
+
+  useEffect(() => {
+    if (resendSeconds <= 0) return;
+
+    const timer = window.setInterval(() => {
+      setResendSeconds((current) =>
+        current > 0 ? current - 1 : 0
+      );
+    }, 1000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, [resendSeconds]);
 
   function cleanPhone(value: string) {
     let numbers = value.replace(/\D/g, "");
@@ -192,10 +208,11 @@ export default function LoginSheet({
       }
 
       setStep("otp");
+      setResendSeconds(60);
       setMessage(
         method === "email"
           ? "أرسلنا رمز التحقق إلى بريدك"
-          : "أرسلنا رمز التحقق إلى جوالك"
+          : `أرسلنا رمز التحقق إلى ${countryCode}${phone}`
       );
     } catch (error) {
       setErrorMessage(
@@ -259,7 +276,7 @@ export default function LoginSheet({
     }
   }
 
-  async function signInWithProvider(provider: "google" | "apple") {
+  async function signInWithGoogle() {
     setErrorMessage("");
     setMessage("");
 
@@ -280,17 +297,13 @@ export default function LoginSheet({
 
     try {
       const { data, error } = await supabase.auth.signInWithOAuth({
-        provider,
+        provider: "google",
         options: {
           redirectTo: `${window.location.origin}/account`,
           skipBrowserRedirect: true,
-          ...(provider === "google"
-            ? {
-                queryParams: {
-                  prompt: "select_account",
-                },
-              }
-            : {}),
+          queryParams: {
+            prompt: "select_account",
+          },
         },
       });
 
@@ -298,9 +311,7 @@ export default function LoginSheet({
 
       if (!data.url) {
         throw new Error(
-          provider === "google"
-            ? "فعّل تسجيل Google من Supabase أولًا"
-            : "فعّل تسجيل Apple من Supabase أولًا"
+"فعّل تسجيل Google من Supabase أولًا"
         );
       }
 
@@ -316,9 +327,7 @@ export default function LoginSheet({
         message.toLowerCase().includes("unsupported")
       ) {
         setErrorMessage(
-          provider === "google"
-            ? "تسجيل Google غير مفعّل بعد في Supabase"
-            : "تسجيل Apple غير مفعّل بعد في Supabase"
+"تسجيل Google غير مفعّل بعد في Supabase"
         );
         return;
       }
@@ -515,7 +524,11 @@ export default function LoginSheet({
               disabled={loading}
               className="mt-5 flex w-full items-center justify-center rounded-[20px] bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-4 text-sm font-black text-white shadow-xl shadow-violet-950/35 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {loading ? "جاري إرسال الرمز..." : "إرسال رمز التحقق"}
+              {loading
+                ? "جاري إرسال الرمز..."
+                : method === "email"
+                ? "إرسال الرمز إلى البريد"
+                : "إرسال الرمز إلى الجوال"}
             </button>
           </div>
         ) : (
@@ -565,10 +578,12 @@ export default function LoginSheet({
             <button
               type="button"
               onClick={sendOtp}
-              disabled={loading}
-              className="mt-3 w-full rounded-[18px] border border-white/10 bg-white/5 px-4 py-3 text-xs font-black text-gray-300 transition active:scale-[0.98] disabled:opacity-60"
+              disabled={loading || resendSeconds > 0}
+              className="mt-3 w-full rounded-[18px] border border-white/10 bg-white/5 px-4 py-3 text-xs font-black text-gray-300 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45"
             >
-              إعادة إرسال الرمز
+              {resendSeconds > 0
+                ? `إعادة الإرسال بعد ${resendSeconds} ثانية`
+                : "إعادة إرسال الرمز"}
             </button>
           </div>
         )}
@@ -593,48 +608,37 @@ export default function LoginSheet({
           <div className="h-px flex-1 bg-white/[0.07]" />
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <button
-            type="button"
-            onClick={() => signInWithProvider("google")}
-            disabled={loading}
-            className="flex items-center justify-center gap-2.5 rounded-[20px] border border-white/10 bg-white px-4 py-3.5 text-sm font-black text-gray-900 shadow-sm transition hover:bg-gray-100 active:scale-[0.98] disabled:opacity-60 sm:gap-3 sm:rounded-[20px] sm:px-4 sm:py-3.5 sm:text-sm"
+        <button
+          type="button"
+          onClick={signInWithGoogle}
+          disabled={loading}
+          className="flex w-full items-center justify-center gap-3 rounded-[20px] border border-white/10 bg-white px-4 py-3.5 text-sm font-black text-gray-900 shadow-sm transition hover:bg-gray-100 active:scale-[0.98] disabled:opacity-60"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            className="h-5 w-5 shrink-0"
           >
-            <svg
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-              className="h-5 w-5 shrink-0 sm:h-5 sm:w-5"
-            >
-              <path
-                fill="#4285F4"
-                d="M21.35 12.24c0-.71-.06-1.39-.18-2.04H12v3.86h5.24a4.48 4.48 0 0 1-1.94 2.94v2.5h3.14c1.84-1.69 2.91-4.18 2.91-7.26Z"
-              />
-              <path
-                fill="#34A853"
-                d="M12 21.75c2.62 0 4.82-.87 6.43-2.35l-3.14-2.5c-.87.58-1.98.93-3.29.93-2.53 0-4.67-1.71-5.44-4.01H3.32v2.58A9.72 9.72 0 0 0 12 21.75Z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M6.56 13.82A5.85 5.85 0 0 1 6.26 12c0-.63.11-1.24.3-1.82V7.6H3.32A9.75 9.75 0 0 0 2.25 12c0 1.58.38 3.07 1.07 4.4l3.24-2.58Z"
-              />
-              <path
-                fill="#EA4335"
-                d="M12 6.17c1.43 0 2.71.49 3.72 1.45l2.79-2.79C16.82 3.25 14.62 2.25 12 2.25A9.72 9.72 0 0 0 3.32 7.6l3.24 2.58c.77-2.3 2.91-4.01 5.44-4.01Z"
-              />
-            </svg>
-            <span>المتابعة مع Google</span>
-          </button>
+            <path
+              fill="#4285F4"
+              d="M21.35 12.24c0-.71-.06-1.39-.18-2.04H12v3.86h5.24a4.48 4.48 0 0 1-1.94 2.94v2.5h3.14c1.84-1.69 2.91-4.18 2.91-7.26Z"
+            />
+            <path
+              fill="#34A853"
+              d="M12 21.75c2.62 0 4.82-.87 6.43-2.35l-3.14-2.5c-.87.58-1.98.93-3.29.93-2.53 0-4.67-1.71-5.44-4.01H3.32v2.58A9.72 9.72 0 0 0 12 21.75Z"
+            />
+            <path
+              fill="#FBBC05"
+              d="M6.56 13.82A5.85 5.85 0 0 1 6.26 12c0-.63.11-1.24.3-1.82V7.6H3.32A9.75 9.75 0 0 0 2.25 12c0 1.58.38 3.07 1.07 4.4l3.24-2.58Z"
+            />
+            <path
+              fill="#EA4335"
+              d="M12 6.17c1.43 0 2.71.49 3.72 1.45l2.79-2.79C16.82 3.25 14.62 2.25 12 2.25A9.72 9.72 0 0 0 3.32 7.6l3.24 2.58c.77-2.3 2.91-4.01 5.44-4.01Z"
+            />
+          </svg>
 
-          <button
-            type="button"
-            onClick={() => signInWithProvider("apple")}
-            disabled={loading}
-            className="flex items-center justify-center gap-2.5 rounded-[20px] border border-white/10 bg-black px-4 py-3.5 text-sm font-black text-white transition hover:bg-black/80 active:scale-[0.98] disabled:opacity-60 sm:gap-3 sm:rounded-[20px] sm:px-4 sm:py-3.5 sm:text-sm"
-          >
-            <span className="text-xl"></span>
-            <span>المتابعة مع Apple</span>
-          </button>
-        </div>
+          <span>المتابعة مع Google</span>
+        </button>
 
         <p className="mt-6 text-center text-[10px] leading-5 text-gray-600">
           بمتابعتك أنت توافق على الشروط والأحكام وسياسة الخصوصية.
