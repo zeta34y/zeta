@@ -170,7 +170,7 @@ export default function LoginSheet({
     setErrorMessage("");
     setMessage("");
 
-    if (method === "phone") {
+    if (String(method) === "phone") {
       setErrorMessage(
         "تسجيل الدخول برقم الجوال متوقف مؤقتًا. الرجاء التسجيل عبر البريد الإلكتروني."
       );
