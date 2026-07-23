@@ -170,6 +170,13 @@ export default function LoginSheet({
     setErrorMessage("");
     setMessage("");
 
+    if (method === "phone") {
+      setErrorMessage(
+        "تسجيل الدخول برقم الجوال متوقف مؤقتًا. الرجاء التسجيل عبر البريد الإلكتروني."
+      );
+      return;
+    }
+
     if (method === "email" && !validateEmail(email)) {
       setErrorMessage("اكتب بريدًا إلكترونيًا صحيحًا");
       return;
@@ -429,6 +436,26 @@ export default function LoginSheet({
           </button>
         </div>
 
+        {method === "phone" && (
+          <div className="mt-4 rounded-[20px] border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-center">
+            <p className="text-sm font-black text-amber-300">
+              ⚠️ تسجيل الدخول برقم الجوال متوقف مؤقتًا
+            </p>
+
+            <p className="mt-1 text-xs leading-5 text-gray-400">
+              الرجاء التسجيل أو تسجيل الدخول عبر البريد الإلكتروني.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => changeMethod("email")}
+              className="mt-3 rounded-xl border border-violet-400/20 bg-violet-500/10 px-4 py-2.5 text-xs font-black text-violet-200 transition hover:bg-violet-500/15 active:scale-95"
+            >
+              الانتقال إلى البريد الإلكتروني
+            </button>
+          </div>
+        )}
+
         {step === "identifier" ? (
           <div className="mt-5">
             {method === "email" ? (
@@ -462,10 +489,12 @@ export default function LoginSheet({
                 <div className="relative mt-2 flex items-stretch rounded-[20px] border border-white/10 bg-white/[0.04] transition focus-within:border-violet-400/50">
                   <button
                     type="button"
-                    onClick={() =>
-                      setCountryMenuOpen((current) => !current)
-                    }
-                    className="flex shrink-0 items-center gap-2 border-l border-white/10 px-3 text-xs font-black text-white"
+                    onClick={() => {
+                      if (method === "phone") return;
+                      setCountryMenuOpen((current) => !current);
+                    }}
+                    disabled={method === "phone"}
+                    className="flex shrink-0 items-center gap-2 border-l border-white/10 px-3 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-45"
                   >
                     <span>{selectedCountry.flag}</span>
                     <span dir="ltr">{selectedCountry.code}</span>
@@ -483,7 +512,8 @@ export default function LoginSheet({
                         : "رقم الجوال"
                     }
                     autoComplete="tel-national"
-                    className="min-w-0 flex-1 bg-transparent px-4 py-4 text-left text-sm tracking-wider text-white outline-none placeholder:text-gray-600"
+                    disabled={method === "phone"}
+                    className="min-w-0 flex-1 bg-transparent px-4 py-4 text-left text-sm tracking-wider text-white outline-none placeholder:text-gray-600 disabled:cursor-not-allowed disabled:opacity-45"
                     dir="ltr"
                   />
 
@@ -525,14 +555,14 @@ export default function LoginSheet({
             <button
               type="button"
               onClick={sendOtp}
-              disabled={loading}
-              className="mt-5 flex w-full items-center justify-center rounded-[20px] bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-4 text-sm font-black text-white shadow-xl shadow-violet-950/35 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={loading || method === "phone"}
+              className="mt-5 flex w-full items-center justify-center rounded-[20px] bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-4 text-sm font-black text-white shadow-xl shadow-violet-950/35 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45"
             >
               {loading
                 ? "جاري إرسال الرمز..."
                 : method === "email"
                 ? "إرسال الرمز إلى البريد"
-                : "إرسال الرمز إلى الجوال"}
+                : "رقم الجوال متوقف مؤقتًا"}
             </button>
           </div>
         ) : (
