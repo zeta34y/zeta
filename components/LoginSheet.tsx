@@ -229,8 +229,8 @@ export default function LoginSheet({
     setErrorMessage("");
     setMessage("");
 
-    if (!/^\d{6}$/.test(otp)) {
-      setErrorMessage("رمز التحقق يجب أن يتكوّن من 6 أرقام");
+    if (!/^[\d]{8}$/.test(otp)) {
+      setErrorMessage("رمز التحقق يجب أن يتكوّن من 8 أرقام");
       return;
     }
 
