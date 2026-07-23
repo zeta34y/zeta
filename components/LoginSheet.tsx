@@ -284,6 +284,13 @@ export default function LoginSheet({
         options: {
           redirectTo: `${window.location.origin}/account`,
           skipBrowserRedirect: true,
+          ...(provider === "google"
+            ? {
+                queryParams: {
+                  prompt: "select_account",
+                },
+              }
+            : {}),
         },
       });
 
