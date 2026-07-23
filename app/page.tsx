@@ -1196,7 +1196,7 @@ export default function HomePage() {
                             event.currentTarget
                           )
                         }
-                        className={`relative z-30 flex h-9 w-9 items-center justify-center rounded-xl bg-violet-600 text-lg font-bold transition duration-200 active:scale-90 ${
+                        className={`relative z-30 flex h-9 w-9 touch-manipulation select-none items-center justify-center rounded-xl bg-violet-600 text-lg font-bold transition duration-200 active:scale-90 ${
                           addingId === `featured-${game.id}`
                             ? "rotate-12 scale-90 brightness-125"
                             : "rotate-0 scale-100"
@@ -1288,14 +1288,19 @@ export default function HomePage() {
 
                   <button
                     type="button"
-                    onClick={(event) => addToCart(game, "shared", event.currentTarget)}
-                    className={`rounded-2xl bg-violet-600 px-5 py-3 text-xs font-black shadow-lg shadow-violet-900/30 transition duration-200 active:scale-95 ${
+                    aria-label={`إضافة ${game.name} للسلة`}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      addToCart(game, "shared", event.currentTarget);
+                    }}
+                    className={`relative z-30 flex h-9 w-9 touch-manipulation select-none items-center justify-center rounded-xl bg-violet-600 text-lg font-bold transition duration-200 active:scale-90 ${
                       addingId === `shared-${game.id}`
-                        ? "scale-90 brightness-125"
-                        : "scale-100"
+                        ? "rotate-12 scale-90 brightness-125"
+                        : "rotate-0 scale-100"
                     }`}
                   >
-                    {addingId === `shared-${game.id}` ? "تمت الإضافة ✓" : "أضف للسلة"}
+                    {addingId === `shared-${game.id}` ? "✓" : "+"}
                   </button>
                 </div>
               </div>
@@ -1382,8 +1387,12 @@ export default function HomePage() {
                   <button
                     type="button"
                     aria-label={`إضافة ${game.name} للسلة`}
-                    onClick={(event) => addToCart(game, "private", event.currentTarget)}
-                    className={`flex h-9 w-9 items-center justify-center rounded-xl bg-fuchsia-600 text-lg font-black transition duration-200 active:scale-90 ${
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      addToCart(game, "private", event.currentTarget);
+                    }}
+                    className={`relative z-30 flex h-9 w-9 touch-manipulation select-none items-center justify-center rounded-xl bg-fuchsia-600 text-lg font-black transition duration-200 active:scale-90 ${
                       addingId === `private-${game.id}`
                         ? "rotate-12 scale-90 brightness-125"
                         : "rotate-0 scale-100"
@@ -1484,22 +1493,22 @@ export default function HomePage() {
                     <button
                       type="button"
                       aria-label={`إضافة ${game.name} للسلة`}
-                      onClick={(event) =>
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
                         addToCart(
                           game,
                           "package",
                           event.currentTarget
-                        )
-                      }
-                      className={`flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-lg font-black text-white transition duration-200 active:scale-90 ${
+                        );
+                      }}
+                      className={`relative z-30 flex h-9 w-9 touch-manipulation select-none items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-lg font-black text-white transition duration-200 active:scale-90 ${
                         addingId === `package-${game.id}`
                           ? "rotate-12 scale-90 brightness-125"
                           : "rotate-0 scale-100"
                       }`}
                     >
-                      {addingId === `package-${game.id}`
-                        ? "✓"
-                        : "+"}
+                      {addingId === `package-${game.id}` ? "✓" : "+"}
                     </button>
                   </div>
                 </div>
@@ -2001,6 +2010,12 @@ export default function HomePage() {
           -webkit-tap-highlight-color: transparent;
         }
 
+        .touch-manipulation {
+          touch-action: manipulation;
+          -webkit-user-select: none;
+          user-select: none;
+        }
+
         .discount-track {
           animation: discountScroll 20s linear infinite;
           will-change: transform;
@@ -2049,6 +2064,7 @@ export default function HomePage() {
           scrollbar-color: transparent transparent;
           overscroll-behavior-inline: contain;
           -webkit-overflow-scrolling: touch;
+          touch-action: pan-x;
         }
 
         .zeta-logo {
