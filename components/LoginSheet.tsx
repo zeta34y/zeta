@@ -50,6 +50,8 @@ export default function LoginSheet({
     [countryCode]
   );
 
+  const otpLength = method === "email" ? 8 : 6;
+
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
 
@@ -229,8 +231,10 @@ export default function LoginSheet({
     setErrorMessage("");
     setMessage("");
 
-    if (!/^[\d]{8}$/.test(otp)) {
-      setErrorMessage("رمز التحقق يجب أن يتكوّن من 8 أرقام");
+    if (otp.length !== otpLength) {
+      setErrorMessage(
+        `رمز التحقق يجب أن يتكوّن من ${otpLength} أرقام`
+      );
       return;
     }
 
@@ -547,21 +551,31 @@ export default function LoginSheet({
             </button>
 
             <label className="mt-4 block">
-              <span className="text-xs font-black text-gray-300">
-                رمز التحقق
-              </span>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-xs font-black text-gray-300">
+                  رمز التحقق
+                </span>
+
+                <span className="text-[10px] text-gray-600">
+                  {otpLength} أرقام
+                </span>
+              </div>
 
               <input
                 type="text"
                 inputMode="numeric"
-                maxLength={6}
+                maxLength={otpLength}
                 value={otp}
                 onChange={(event) =>
-                  setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))
+                  setOtp(
+                    event.target.value
+                      .replace(/\D/g, "")
+                      .slice(0, otpLength)
+                  )
                 }
-                placeholder="000000"
+                placeholder={method === "email" ? "00000000" : "000000"}
                 autoComplete="one-time-code"
-                className="mt-2 w-full rounded-[20px] border border-white/10 bg-white/[0.04] px-4 py-4 text-center text-2xl font-black tracking-[10px] text-white outline-none transition placeholder:text-gray-700 focus:border-violet-400/50"
+                className="mt-2 w-full rounded-[20px] border border-white/10 bg-white/[0.04] px-4 py-4 text-center text-2xl font-black tracking-[7px] sm:tracking-[10px] text-white outline-none transition placeholder:text-gray-700 focus:border-violet-400/50"
                 dir="ltr"
               />
             </label>
