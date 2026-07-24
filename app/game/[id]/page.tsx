@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import BottomNav from "@/components/BottomNav";
+import { supabase } from "@/lib/supabase";
 
 type GameDetails = {
   id: string;
@@ -22,9 +23,11 @@ type GameDetails = {
     image: string;
     title: string;
   }[];
+  discountPercent?: number;
+  promoCode?: string;
 };
 
-const games: Record<string, GameDetails> = {
+const fallbackGames: Record<string, GameDetails> = {
   "featured-1": {
     id: "featured-1",
     name: "EA SPORTS FC 26",
@@ -227,32 +230,157 @@ const games: Record<string, GameDetails> = {
   },
 };
 
-const purchaseCounts: Record<string, number> = {
-  "featured-1": 0,
-  "featured-2": 0,
-  "featured-3": 0,
-  "featured-4": 0,
-  "shared-1": 0,
-  "shared-2": 0,
-  "shared-3": 0,
-  "private-1": 0,
-  "private-2": 0,
-  "private-3": 0,
-};
-
-// غيّر الرقم لاحقًا إلى عدد الثواني التي تريدها للعرض.
-// حاليًا صفر، لذلك تظهر عبارة: انتهت صلاحية العرض.
-const INITIAL_OFFER_SECONDS = 0;
-
 export default function GameDetailsPage() {
   const params = useParams<{ id: string }>();
-  const game = games[params.id];
+  const productId = params.id;
+  const [game, setGame] = useState<GameDetails | null>(
+    fallbackGames[productId] ?? null
+  );
+  const [loadingGame, setLoadingGame] = useState(true);
+  const [purchaseCount, setPurchaseCount] = useState(0);
+  const [offerEndsAt, setOfferEndsAt] = useState<string | null>(null);
 
   const [currentSlide, setCurrentSlide] = useState(0);
   const [favorite, setFavorite] = useState(false);
   const [adding, setAdding] = useState(false);
   const [message, setMessage] = useState("");
-  const [offerSeconds, setOfferSeconds] = useState(INITIAL_OFFER_SECONDS);
+  const [offerSeconds, setOfferSeconds] = useState(0);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadGame() {
+      setLoadingGame(true);
+      const fallback = fallbackGames[productId] ?? null;
+
+      try {
+        const isUuid =
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+            productId
+          );
+
+        if (!isUuid) {
+          if (mounted) {
+            setGame(fallback);
+            setPurchaseCount(0);
+            setOfferEndsAt(null);
+          }
+          return;
+        }
+
+        const now = new Date().toISOString();
+        const [productResult, imagesResult, offerResult] = await Promise.all([
+          supabase
+            .from("products")
+            .select(
+              "id, name, display_kind, card_badge, platform, detail_category_label, price, old_price, discount_percent, description, delivery_text, ownership_text, usage_text, sold_count, cover_url, promo_code, is_active"
+            )
+            .eq("id", productId)
+            .eq("is_active", true)
+            .maybeSingle(),
+          supabase
+            .from("product_images")
+            .select("id, image_url, title, sort_order")
+            .eq("product_id", productId)
+            .order("sort_order", { ascending: true }),
+          supabase
+            .from("offers")
+            .select("starts_at, ends_at")
+            .eq("product_id", productId)
+            .eq("is_active", true)
+            .lte("starts_at", now)
+            .or(`ends_at.is.null,ends_at.gt.${now}`)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+        ]);
+
+        if (productResult.error) throw productResult.error;
+        if (imagesResult.error) throw imagesResult.error;
+        if (offerResult.error) throw offerResult.error;
+        if (!mounted) return;
+
+        const product = productResult.data;
+        if (!product) {
+          setGame(fallback);
+          setPurchaseCount(0);
+          setOfferEndsAt(null);
+          return;
+        }
+
+        const loadedGallery = (imagesResult.data ?? []).map((image, index) => ({
+          image: image.image_url,
+          title: image.title || `صورة ${index + 1}`,
+        }));
+
+        if (!loadedGallery.length && product.cover_url) {
+          loadedGallery.push({ image: product.cover_url, title: "غلاف اللعبة" });
+        }
+
+        if (!loadedGallery.length) {
+          loadedGallery.push({ image: "", title: "غلاف اللعبة" });
+        }
+
+        const kind: "featured" | "shared" | "private" =
+          product.display_kind === "shared" || product.display_kind === "private"
+            ? product.display_kind
+            : "featured";
+
+        setGame({
+          id: product.id,
+          name: product.name,
+          kind,
+          label:
+            kind === "shared"
+              ? "حساب PC مشترك"
+              : kind === "private"
+                ? "حساب PC خاص"
+                : "نسخة رقمية",
+          platform: product.platform || "PC",
+          category: product.detail_category_label || "ألعاب PC",
+          price: Number(product.price || 0),
+          oldPrice: Number(product.old_price ?? product.price ?? 0),
+          description:
+            product.description || "تفاصيل اللعبة والاستلام تظهر هنا.",
+          delivery:
+            product.delivery_text || "تسليم رقمي بعد تأكيد الطلب",
+          ownership:
+            product.ownership_text ||
+            (kind === "shared"
+              ? "حساب مشترك وليس حسابًا خاصًا"
+              : kind === "private"
+                ? "حساب خاص ببيانات مستقلة"
+                : "نسخة رقمية للكمبيوتر"),
+          usage:
+            product.usage_text || "تصل تعليمات الاستخدام مع الطلب",
+          gallery: loadedGallery,
+          discountPercent:
+            product.discount_percent === null ||
+            product.discount_percent === undefined
+              ? undefined
+              : Number(product.discount_percent),
+          promoCode: product.promo_code || "",
+        });
+        setPurchaseCount(Math.max(0, Number(product.sold_count || 0)));
+        setOfferEndsAt(offerResult.data?.ends_at ?? null);
+        setCurrentSlide(0);
+      } catch (error) {
+        console.error("تعذر تحميل اللعبة:", error);
+        if (mounted) {
+          setGame(fallback);
+          setPurchaseCount(0);
+          setOfferEndsAt(null);
+        }
+      } finally {
+        if (mounted) setLoadingGame(false);
+      }
+    }
+
+    loadGame();
+    return () => {
+      mounted = false;
+    };
+  }, [productId]);
 
   useEffect(() => {
     if (!game) return;
@@ -267,21 +395,23 @@ export default function GameDetailsPage() {
   }, [game]);
 
   useEffect(() => {
-    if (offerSeconds <= 0) return;
+    function updateOfferSeconds() {
+      if (!offerEndsAt) {
+        setOfferSeconds(0);
+        return;
+      }
 
-    const timer = window.setInterval(() => {
-      setOfferSeconds((current) => {
-        if (current <= 1) {
-          window.clearInterval(timer);
-          return 0;
-        }
+      const remaining = Math.max(
+        0,
+        Math.floor((new Date(offerEndsAt).getTime() - Date.now()) / 1000)
+      );
+      setOfferSeconds(remaining);
+    }
 
-        return current - 1;
-      });
-    }, 1000);
-
+    updateOfferSeconds();
+    const timer = window.setInterval(updateOfferSeconds, 1000);
     return () => window.clearInterval(timer);
-  }, [offerSeconds]);
+  }, [offerEndsAt]);
 
 
   function nextSlide() {
@@ -327,7 +457,7 @@ export default function GameDetailsPage() {
               oldPrice: game.oldPrice,
               platform: game.platform,
               quantity: 1,
-              image: "",
+              image: game.gallery[0]?.image || "",
             },
           ];
 
@@ -397,6 +527,17 @@ export default function GameDetailsPage() {
     }
   }
 
+  if (loadingGame && !game) {
+    return (
+      <main dir="rtl" className="flex min-h-screen items-center justify-center bg-[#08070d] text-white">
+        <div className="text-center">
+          <div className="mx-auto h-11 w-11 animate-spin rounded-full border-4 border-white/10 border-t-violet-500" />
+          <p className="mt-4 text-xs text-gray-400">جاري تحميل اللعبة...</p>
+        </div>
+      </main>
+    );
+  }
+
   if (!game) {
     return (
       <main
@@ -423,12 +564,13 @@ export default function GameDetailsPage() {
     );
   }
 
-  const discount = Math.round(
-    ((game.oldPrice - game.price) / game.oldPrice) * 100
-  );
+  const automaticDiscount =
+    game.oldPrice > game.price
+      ? Math.round(((game.oldPrice - game.price) / game.oldPrice) * 100)
+      : 0;
+  const discount = game.discountPercent ?? automaticDiscount;
 
-  const activeSlide = game.gallery[currentSlide];
-  const purchaseCount = purchaseCounts[game.id] ?? 0;
+  const activeSlide = game.gallery[currentSlide] ?? game.gallery[0];
 
   const offerDays = Math.floor(offerSeconds / 86400);
   const offerHours = Math.floor((offerSeconds % 86400) / 3600);
@@ -699,6 +841,20 @@ export default function GameDetailsPage() {
                 ))}
               </div>
             </div>
+
+            {game.promoCode && (
+              <div className="mt-3 rounded-[20px] border border-emerald-400/15 bg-emerald-500/[0.06] p-3.5 sm:mt-4 sm:p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] text-gray-500">كود الخصم المتاح</p>
+                    <p dir="ltr" className="mt-1 text-left text-lg font-black tracking-[3px] text-emerald-300">
+                      {game.promoCode}
+                    </p>
+                  </div>
+                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/10 text-lg">🏷️</span>
+                </div>
+              </div>
+            )}
 
             <div className="mt-4 space-y-2 sm:mt-5 sm:space-y-3">
               <div className="flex items-start gap-3">

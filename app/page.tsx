@@ -25,6 +25,8 @@ type HomeGame = {
   oldPrice: number;
   image: string;
   detailsHref: string;
+  badge?: string;
+  discountPercent?: number;
 };
 
 type HomePackage = {
@@ -46,6 +48,9 @@ type HomeProductRelation = {
   old_price: number | null;
   cover_url: string | null;
   is_shared: boolean;
+  card_badge: string | null;
+  detail_category_label: string | null;
+  discount_percent: number | null;
 };
 
 type HomePackageRelation = {
@@ -491,7 +496,10 @@ export default function HomePage() {
                   price,
                   old_price,
                   cover_url,
-                  is_shared
+                  is_shared,
+                  card_badge,
+                  detail_category_label,
+                  discount_percent
                 ),
                 packages (
                   id,
@@ -541,6 +549,7 @@ export default function HomePage() {
             id: product.id,
             name: product.name,
             category:
+              product.detail_category_label ||
               product.short_description ||
               (section === "shared"
                 ? "مشترك"
@@ -560,6 +569,12 @@ export default function HomePage() {
             ),
             image: product.cover_url ?? "",
             detailsHref: `/game/${product.id}`,
+            badge: product.card_badge || "",
+            discountPercent:
+              product.discount_percent === null ||
+              product.discount_percent === undefined
+                ? undefined
+                : toNumber(product.discount_percent),
           };
         };
 
@@ -1498,9 +1513,13 @@ export default function HomePage() {
 
           <div id="best-sellers" className="scroll-mt-28 mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {games.map((game) => {
-              const discount = Math.round(
-                ((game.oldPrice - game.price) / game.oldPrice) * 100
-              );
+              const automaticDiscount =
+                game.oldPrice > game.price
+                  ? Math.round(
+                      ((game.oldPrice - game.price) / game.oldPrice) * 100
+                    )
+                  : 0;
+              const discount = game.discountPercent ?? automaticDiscount;
 
               return (
                 <article
@@ -1659,6 +1678,12 @@ export default function HomePage() {
                 <span className="pointer-events-none absolute right-3 top-3 z-20 rounded-xl border border-white/10 bg-black/60 px-3 py-1.5 text-[10px] font-bold backdrop-blur-md">
                   مشترك
                 </span>
+
+                {game.badge && (
+                  <span className="pointer-events-none absolute left-3 top-3 z-20 max-w-[48%] truncate rounded-xl border border-violet-300/20 bg-violet-500/15 px-3 py-1.5 text-[9px] font-black text-violet-100 backdrop-blur-md">
+                    {game.badge}
+                  </span>
+                )}
               </div>
 
               <div className="p-4">
@@ -1763,6 +1788,12 @@ export default function HomePage() {
                 <span className="pointer-events-none absolute right-2 top-2 z-20 rounded-lg bg-gradient-to-l from-fuchsia-600 to-violet-600 px-2 py-1 text-[9px] font-black">
                   خاص
                 </span>
+
+                {game.badge && (
+                  <span className="pointer-events-none absolute left-2 top-2 z-20 max-w-[48%] truncate rounded-lg border border-fuchsia-300/20 bg-fuchsia-500/15 px-2 py-1 text-[8px] font-black text-fuchsia-100 backdrop-blur-md">
+                    {game.badge}
+                  </span>
+                )}
               </div>
 
               <div className="p-4">

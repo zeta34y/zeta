@@ -27,6 +27,8 @@ type Game = {
   image: string;
   detailsHref: string;
   isPackage: boolean;
+  badge?: string;
+  discountPercent?: number;
 };
 
 type ProductRelation = {
@@ -38,6 +40,8 @@ type ProductRelation = {
   old_price: number | null;
   cover_url: string | null;
   is_shared: boolean;
+  card_badge: string | null;
+  discount_percent: number | null;
 };
 
 type PackageRelation = {
@@ -371,7 +375,9 @@ export default function CategoryDetailsPage() {
                 price,
                 old_price,
                 cover_url,
-                is_shared
+                is_shared,
+                card_badge,
+                discount_percent
               ),
               packages (
                 id,
@@ -425,6 +431,12 @@ export default function CategoryDetailsPage() {
                 image: product.cover_url ?? "",
                 detailsHref: `/game/${product.id}`,
                 isPackage: false,
+                badge: product.card_badge || "",
+                discountPercent:
+                  product.discount_percent === null ||
+                  product.discount_percent === undefined
+                    ? undefined
+                    : toNumber(product.discount_percent),
               };
             }
 
@@ -696,6 +708,12 @@ export default function CategoryDetailsPage() {
                     >
                       {favorites.includes(game.id) ? "♥" : "♡"}
                     </button>
+
+                    {game.badge && (
+                      <span className="pointer-events-none absolute left-2 top-12 z-20 max-w-[58%] truncate rounded-lg border border-violet-300/20 bg-violet-500/15 px-2 py-1 text-[8px] font-black text-violet-100 backdrop-blur-md">
+                        {game.badge}
+                      </span>
+                    )}
                   </div>
 
                   <div className="p-3">

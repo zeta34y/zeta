@@ -6,7 +6,13 @@ import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
-type AdminTab = "users" | "home" | "notifications" | "offers" | "announcement";
+type AdminTab =
+  | "users"
+  | "games"
+  | "home"
+  | "notifications"
+  | "offers"
+  | "announcement";
 
 type AnnouncementBar = {
   id: number;
@@ -18,9 +24,37 @@ type AnnouncementBar = {
 
 type ProductOption = {
   id: string;
+  category_id: string | null;
   name: string;
-  price: number;
+  slug: string;
+  short_description: string | null;
+  description: string | null;
   cover_url: string | null;
+  price: number;
+  old_price: number | null;
+  stock: number;
+  platform: string;
+  is_shared: boolean;
+  is_featured: boolean;
+  is_best_seller_manual: boolean;
+  is_active: boolean;
+  sold_count: number;
+  display_kind: "featured" | "shared" | "private";
+  card_badge: string | null;
+  detail_category_label: string | null;
+  delivery_text: string | null;
+  ownership_text: string | null;
+  usage_text: string | null;
+  discount_percent: number | null;
+  promo_code: string | null;
+};
+
+type ProductImageRow = {
+  id: string;
+  product_id: string;
+  image_url: string;
+  title: string;
+  sort_order: number;
 };
 
 type PackageOption = {
@@ -293,7 +327,35 @@ export default function AdminPage() {
     useState<AnnouncementBar>(defaultAnnouncement);
 
   const [products, setProducts] = useState<ProductOption[]>([]);
+  const [productImages, setProductImages] = useState<ProductImageRow[]>([]);
   const [packages, setPackages] = useState<PackageOption[]>([]);
+
+  const [productFormOpen, setProductFormOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<ProductOption | null>(null);
+  const [productName, setProductName] = useState("");
+  const [productPlatform, setProductPlatform] = useState("PC");
+  const [productDetailCategory, setProductDetailCategory] = useState("");
+  const [productCardBadge, setProductCardBadge] = useState("");
+  const [productPrice, setProductPrice] = useState("");
+  const [productOldPrice, setProductOldPrice] = useState("");
+  const [productDiscountPercent, setProductDiscountPercent] = useState("");
+  const [productDescription, setProductDescription] = useState("");
+  const [productDelivery, setProductDelivery] = useState("");
+  const [productOwnership, setProductOwnership] = useState("");
+  const [productUsage, setProductUsage] = useState("");
+  const [productSoldCount, setProductSoldCount] = useState("0");
+  const [productStock, setProductStock] = useState("0");
+  const [productDisplayKind, setProductDisplayKind] =
+    useState<"featured" | "shared" | "private">("featured");
+  const [productHomeSection, setProductHomeSection] =
+    useState<"" | "featured" | "shared" | "private">("");
+  const [productCategoryIds, setProductCategoryIds] = useState<string[]>([]);
+  const [productPromoCode, setProductPromoCode] = useState("");
+  const [productActive, setProductActive] = useState(true);
+  const [productNewImages, setProductNewImages] = useState<File[]>([]);
+  const [editingProductImages, setEditingProductImages] =
+    useState<ProductImageRow[]>([]);
+  const [savingProduct, setSavingProduct] = useState(false);
   const [homeCategories, setHomeCategories] =
     useState<HomeCategory[]>([]);
   const [homeCategoryItems, setHomeCategoryItems] =
@@ -557,6 +619,7 @@ export default function AdminPage() {
         ordersResult,
         announcementResult,
         productsResult,
+        productImagesResult,
         packagesResult,
         offersResult,
         offersHeroResult,
@@ -585,9 +648,16 @@ export default function AdminPage() {
 
         supabase
           .from("products")
-          .select("id, name, price, cover_url")
-          .eq("is_active", true)
-          .order("name", { ascending: true }),
+          .select(
+            "id, category_id, name, slug, short_description, description, cover_url, price, old_price, stock, platform, is_shared, is_featured, is_best_seller_manual, is_active, sold_count, display_kind, card_badge, detail_category_label, delivery_text, ownership_text, usage_text, discount_percent, promo_code"
+          )
+          .order("created_at", { ascending: false }),
+
+        supabase
+          .from("product_images")
+          .select("id, product_id, image_url, title, sort_order")
+          .order("product_id", { ascending: true })
+          .order("sort_order", { ascending: true }),
 
         supabase
           .from("packages")
@@ -641,6 +711,7 @@ export default function AdminPage() {
       if (ordersResult.error) throw ordersResult.error;
       if (announcementResult.error) throw announcementResult.error;
       if (productsResult.error) throw productsResult.error;
+      if (productImagesResult.error) throw productImagesResult.error;
       if (packagesResult.error) throw packagesResult.error;
       if (offersResult.error) throw offersResult.error;
       if (offersHeroResult.error) throw offersHeroResult.error;
@@ -667,9 +738,50 @@ export default function AdminPage() {
       setProducts(
         (productsResult.data ?? []).map((product) => ({
           id: product.id,
+          category_id: product.category_id ?? null,
           name: product.name,
-          price: toNumber(product.price),
+          slug: product.slug ?? product.id,
+          short_description: product.short_description ?? null,
+          description: product.description ?? null,
           cover_url: product.cover_url ?? null,
+          price: toNumber(product.price),
+          old_price:
+            product.old_price === null || product.old_price === undefined
+              ? null
+              : toNumber(product.old_price),
+          stock: Math.max(0, Math.floor(toNumber(product.stock))),
+          platform: product.platform || "PC",
+          is_shared: Boolean(product.is_shared),
+          is_featured: Boolean(product.is_featured),
+          is_best_seller_manual: Boolean(product.is_best_seller_manual),
+          is_active: Boolean(product.is_active),
+          sold_count: Math.max(0, Math.floor(toNumber(product.sold_count))),
+          display_kind:
+            product.display_kind === "shared" ||
+            product.display_kind === "private"
+              ? product.display_kind
+              : "featured",
+          card_badge: product.card_badge ?? null,
+          detail_category_label: product.detail_category_label ?? null,
+          delivery_text: product.delivery_text ?? null,
+          ownership_text: product.ownership_text ?? null,
+          usage_text: product.usage_text ?? null,
+          discount_percent:
+            product.discount_percent === null ||
+            product.discount_percent === undefined
+              ? null
+              : toNumber(product.discount_percent),
+          promo_code: product.promo_code ?? null,
+        }))
+      );
+
+      setProductImages(
+        (productImagesResult.data ?? []).map((image) => ({
+          id: image.id,
+          product_id: image.product_id,
+          image_url: image.image_url,
+          title: image.title || "صورة اللعبة",
+          sort_order: Number(image.sort_order ?? 0),
         }))
       );
 
@@ -788,6 +900,400 @@ export default function AdminPage() {
     window.setTimeout(() => {
       setMessage("");
     }, 2400);
+  }
+
+  function makeProductSlug(value: string) {
+    return value
+      .trim()
+      .toLowerCase()
+      .replace(/[\u064B-\u065F]/g, "")
+      .replace(/[^a-z0-9\u0600-\u06ff]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
+
+  async function uploadProductImage(file: File) {
+    if (!file.type.startsWith("image/")) {
+      throw new Error("اختر ملفات صور فقط");
+    }
+
+    if (file.size > 8 * 1024 * 1024) {
+      throw new Error("حجم الصورة يجب ألا يتجاوز 8 ميجابايت");
+    }
+
+    const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
+    const path = `products/${crypto.randomUUID()}.${extension}`;
+    const { error } = await supabase.storage
+      .from("product-images")
+      .upload(path, file, { cacheControl: "3600", upsert: false });
+
+    if (error) throw error;
+
+    const { data } = supabase.storage
+      .from("product-images")
+      .getPublicUrl(path);
+
+    return data.publicUrl;
+  }
+
+  function resetProductForm() {
+    setEditingProduct(null);
+    setProductName("");
+    setProductPlatform("PC");
+    setProductDetailCategory("");
+    setProductCardBadge("");
+    setProductPrice("");
+    setProductOldPrice("");
+    setProductDiscountPercent("");
+    setProductDescription("");
+    setProductDelivery("");
+    setProductOwnership("");
+    setProductUsage("");
+    setProductSoldCount("0");
+    setProductStock("0");
+    setProductDisplayKind("featured");
+    setProductHomeSection("");
+    setProductCategoryIds([]);
+    setProductPromoCode("");
+    setProductActive(true);
+    setProductNewImages([]);
+    setEditingProductImages([]);
+  }
+
+  function openProductForm(product?: ProductOption) {
+    resetProductForm();
+
+    if (product) {
+      setEditingProduct(product);
+      setProductName(product.name);
+      setProductPlatform(product.platform || "PC");
+      setProductDetailCategory(product.detail_category_label || "");
+      setProductCardBadge(product.card_badge || "");
+      setProductPrice(String(product.price));
+      setProductOldPrice(
+        product.old_price === null ? "" : String(product.old_price)
+      );
+      setProductDiscountPercent(
+        product.discount_percent === null
+          ? ""
+          : String(product.discount_percent)
+      );
+      setProductDescription(product.description || "");
+      setProductDelivery(product.delivery_text || "");
+      setProductOwnership(product.ownership_text || "");
+      setProductUsage(product.usage_text || "");
+      setProductSoldCount(String(product.sold_count));
+      setProductStock(String(product.stock));
+      setProductDisplayKind(product.display_kind);
+      setProductPromoCode(product.promo_code || "");
+      setProductActive(product.is_active);
+      setEditingProductImages(
+        productImages
+          .filter((image) => image.product_id === product.id)
+          .sort((first, second) => first.sort_order - second.sort_order)
+      );
+
+      const homeItem = homePageItems.find(
+        (item) => item.product_id === product.id
+      );
+      setProductHomeSection(
+        homeItem && homeItem.section_key !== "packages"
+          ? homeItem.section_key
+          : ""
+      );
+
+      setProductCategoryIds(
+        homeCategoryItems
+          .filter((item) => item.product_id === product.id)
+          .map((item) => item.category_id)
+      );
+    }
+
+    setProductFormOpen(true);
+  }
+
+  async function syncProductPlacements(productId: string) {
+    const { error: deleteHomeError } = await supabase
+      .from("home_page_items")
+      .delete()
+      .eq("product_id", productId);
+
+    if (deleteHomeError) throw deleteHomeError;
+
+    if (productHomeSection) {
+      const sectionItems = homePageItems.filter(
+        (item) => item.section_key === productHomeSection
+      );
+      const nextOrder = sectionItems.length
+        ? Math.max(...sectionItems.map((item) => item.sort_order)) + 1
+        : 0;
+
+      const { error } = await supabase.from("home_page_items").insert({
+        section_key: productHomeSection,
+        product_id: productId,
+        package_id: null,
+        sort_order: nextOrder,
+        is_active: true,
+      });
+      if (error) throw error;
+    }
+
+    const { error: deleteCategoriesError } = await supabase
+      .from("home_category_items")
+      .delete()
+      .eq("product_id", productId);
+
+    if (deleteCategoriesError) throw deleteCategoriesError;
+
+    if (productCategoryIds.length) {
+      const rows = productCategoryIds.map((categoryId) => {
+        const existingItems = homeCategoryItems.filter(
+          (item) =>
+            item.category_id === categoryId && item.product_id !== productId
+        );
+        const nextOrder = existingItems.length
+          ? Math.max(...existingItems.map((item) => item.sort_order)) + 1
+          : 0;
+
+        return {
+          category_id: categoryId,
+          product_id: productId,
+          package_id: null,
+          sort_order: nextOrder,
+          is_active: true,
+        };
+      });
+
+      const { error } = await supabase
+        .from("home_category_items")
+        .insert(rows);
+      if (error) throw error;
+    }
+  }
+
+  async function saveProduct() {
+    setErrorMessage("");
+
+    if (!productName.trim()) {
+      setErrorMessage("اكتب اسم اللعبة");
+      return;
+    }
+
+    if (!productPrice || toNumber(productPrice) < 0) {
+      setErrorMessage("اكتب سعر اللعبة");
+      return;
+    }
+
+    const discountPercent = productDiscountPercent
+      ? Math.min(100, Math.max(0, toNumber(productDiscountPercent)))
+      : null;
+
+    setSavingProduct(true);
+
+    try {
+      const payload = {
+        name: productName.trim(),
+        slug:
+          editingProduct?.slug ||
+          `${makeProductSlug(productName) || "game"}-${Date.now()}`,
+        short_description: productCardBadge.trim() || null,
+        description: productDescription.trim() || null,
+        price: toNumber(productPrice),
+        old_price: productOldPrice ? toNumber(productOldPrice) : null,
+        stock: Math.max(0, Math.floor(toNumber(productStock))),
+        platform: productPlatform.trim() || "PC",
+        is_shared: productDisplayKind === "shared",
+        is_featured: productDisplayKind === "featured",
+        is_best_seller_manual: false,
+        is_active: productActive,
+        sold_count: Math.max(0, Math.floor(toNumber(productSoldCount))),
+        display_kind: productDisplayKind,
+        card_badge: productCardBadge.trim() || null,
+        detail_category_label: productDetailCategory.trim() || null,
+        delivery_text: productDelivery.trim() || null,
+        ownership_text: productOwnership.trim() || null,
+        usage_text: productUsage.trim() || null,
+        discount_percent: discountPercent,
+        promo_code: productPromoCode.trim().toUpperCase() || null,
+      };
+
+      let productId = editingProduct?.id;
+
+      if (editingProduct) {
+        const { error } = await supabase
+          .from("products")
+          .update(payload)
+          .eq("id", editingProduct.id);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase
+          .from("products")
+          .insert({
+            ...payload,
+            category_id: null,
+            cover_url: null,
+            created_by: user?.id ?? null,
+          })
+          .select("id")
+          .single();
+        if (error) throw error;
+        productId = data.id;
+      }
+
+      if (!productId) throw new Error("تعذر حفظ اللعبة");
+
+      const startingOrder = editingProductImages.length;
+      const uploadedRows: Array<{
+        product_id: string;
+        image_url: string;
+        title: string;
+        sort_order: number;
+      }> = [];
+
+      for (let index = 0; index < productNewImages.length; index += 1) {
+        const file = productNewImages[index];
+        const imageUrl = await uploadProductImage(file);
+        uploadedRows.push({
+          product_id: productId,
+          image_url: imageUrl,
+          title: file.name.replace(/\.[^.]+$/, "") || `صورة ${index + 1}`,
+          sort_order: startingOrder + index,
+        });
+      }
+
+      if (uploadedRows.length) {
+        const { error } = await supabase
+          .from("product_images")
+          .insert(uploadedRows);
+        if (error) throw error;
+      }
+
+      const allImages = [
+        ...editingProductImages.map((image) => image.image_url),
+        ...uploadedRows.map((image) => image.image_url),
+      ];
+      const coverUrl = allImages[0] || editingProduct?.cover_url || null;
+
+      const { error: coverError } = await supabase
+        .from("products")
+        .update({ cover_url: coverUrl })
+        .eq("id", productId);
+      if (coverError) throw coverError;
+
+      await syncProductPlacements(productId);
+
+      showMessage(editingProduct ? "تم تعديل اللعبة" : "تمت إضافة اللعبة");
+      setProductFormOpen(false);
+      resetProductForm();
+      await loadData();
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "تعذر حفظ اللعبة"
+      );
+    } finally {
+      setSavingProduct(false);
+    }
+  }
+
+  async function deleteProduct(product: ProductOption) {
+    if (!window.confirm(`حذف لعبة ${product.name} نهائيًا؟`)) return;
+
+    const { error } = await supabase
+      .from("products")
+      .delete()
+      .eq("id", product.id);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
+    showMessage("تم حذف اللعبة");
+    await loadData();
+  }
+
+  async function toggleProductActive(product: ProductOption) {
+    const { error } = await supabase
+      .from("products")
+      .update({ is_active: !product.is_active })
+      .eq("id", product.id);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
+    await loadData();
+  }
+
+  async function deleteProductImage(image: ProductImageRow) {
+    if (!window.confirm("حذف هذه الصورة؟")) return;
+
+    const { error } = await supabase
+      .from("product_images")
+      .delete()
+      .eq("id", image.id);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
+    const remaining = editingProductImages.filter(
+      (current) => current.id !== image.id
+    );
+    setEditingProductImages(remaining);
+
+    if (editingProduct?.cover_url === image.image_url) {
+      await supabase
+        .from("products")
+        .update({ cover_url: remaining[0]?.image_url ?? null })
+        .eq("id", editingProduct.id);
+    }
+  }
+
+  async function moveProductImage(
+    image: ProductImageRow,
+    direction: "up" | "down"
+  ) {
+    const items = [...editingProductImages].sort(
+      (first, second) => first.sort_order - second.sort_order
+    );
+    const index = items.findIndex((item) => item.id === image.id);
+    const targetIndex = direction === "up" ? index - 1 : index + 1;
+
+    if (index < 0 || targetIndex < 0 || targetIndex >= items.length) return;
+
+    const target = items[targetIndex];
+    const { error: firstError } = await supabase
+      .from("product_images")
+      .update({ sort_order: target.sort_order })
+      .eq("id", image.id);
+    if (firstError) {
+      setErrorMessage(firstError.message);
+      return;
+    }
+
+    const { error: secondError } = await supabase
+      .from("product_images")
+      .update({ sort_order: image.sort_order })
+      .eq("id", target.id);
+    if (secondError) {
+      setErrorMessage(secondError.message);
+      return;
+    }
+
+    const reordered = [...items];
+    reordered[index] = { ...target, sort_order: image.sort_order };
+    reordered[targetIndex] = { ...image, sort_order: target.sort_order };
+    reordered.sort((first, second) => first.sort_order - second.sort_order);
+    setEditingProductImages(reordered);
+
+    if (editingProduct && reordered[0]?.image_url) {
+      await supabase
+        .from("products")
+        .update({ cover_url: reordered[0].image_url })
+        .eq("id", editingProduct.id);
+    }
   }
 
   async function saveAnnouncement() {
@@ -1972,6 +2478,19 @@ export default function AdminPage() {
 
             <button
               type="button"
+              onClick={() => setTab("games")}
+              className={`flex min-h-[64px] items-center justify-center gap-2 rounded-[18px] px-3 py-3 text-xs font-black transition active:scale-[0.98] lg:min-h-0 lg:justify-start ${
+                tab === "games"
+                  ? "bg-violet-500/15 text-violet-200"
+                  : "text-gray-400 hover:bg-white/5 hover:text-white"
+              }`}
+            >
+              <span className="text-lg">🎮</span>
+              <span>إدارة الألعاب</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setTab("home")}
               className={`flex min-h-[64px] items-center justify-center gap-2 rounded-[18px] px-3 py-3 text-xs font-black transition active:scale-[0.98] lg:min-h-0 lg:justify-start ${
                 tab === "home"
@@ -2185,6 +2704,133 @@ export default function AdminPage() {
                     <p className="mt-2 text-xs text-gray-500">
                       جرّب كتابة اسم أو بريد مختلف.
                     </p>
+                  </div>
+                )}
+              </div>
+            </section>
+          )}
+
+          {tab === "games" && (
+            <section className="rounded-[28px] border border-white/[0.07] bg-[#121019] p-4 sm:p-6">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-bold text-violet-300">
+                    إدارة محتوى المتجر
+                  </p>
+                  <h2 className="mt-1 text-xl font-black">إدارة الألعاب</h2>
+                  <p className="mt-2 text-xs leading-6 text-gray-500">
+                    أضف اللعبة وعدّل بطاقتها وصفحة تفاصيلها وصورها ومكان ظهورها، بدون تغيير التصميم.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => openProductForm()}
+                  className="shrink-0 rounded-[18px] bg-gradient-to-l from-violet-600 to-fuchsia-600 px-4 py-3 text-xs font-black shadow-lg shadow-violet-950/30"
+                >
+                  + إضافة لعبة
+                </button>
+              </div>
+
+              <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {products.map((product) => {
+                  const automaticDiscount =
+                    product.old_price && product.old_price > product.price
+                      ? Math.round(
+                          ((product.old_price - product.price) /
+                            product.old_price) *
+                            100
+                        )
+                      : 0;
+                  const discount =
+                    product.discount_percent ?? automaticDiscount;
+
+                  return (
+                    <article
+                      key={product.id}
+                      className="overflow-hidden rounded-[22px] border border-white/10 bg-black/20"
+                    >
+                      <div className="relative aspect-[16/10] overflow-hidden bg-gradient-to-br from-violet-700/20 to-fuchsia-700/15">
+                        {product.cover_url ? (
+                          <img
+                            src={product.cover_url}
+                            alt={product.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-full items-center justify-center text-5xl">🎮</div>
+                        )}
+
+                        {discount > 0 && (
+                          <span className="absolute right-2 top-2 rounded-lg bg-red-500 px-2 py-1 text-[9px] font-black">
+                            -{discount}%
+                          </span>
+                        )}
+
+                        {product.card_badge && (
+                          <span className="absolute left-2 top-2 max-w-[55%] truncate rounded-lg border border-white/10 bg-black/60 px-2 py-1 text-[8px] font-black backdrop-blur-md">
+                            {product.card_badge}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-black">{product.name}</p>
+                            <p className="mt-1 text-[9px] text-gray-500">
+                              {product.detail_category_label || "بدون تصنيف"} • {product.platform}
+                            </p>
+                          </div>
+                          <span
+                            className={`rounded-full px-2 py-1 text-[8px] font-black ${
+                              product.is_active
+                                ? "bg-emerald-500/10 text-emerald-300"
+                                : "bg-red-500/10 text-red-300"
+                            }`}
+                          >
+                            {product.is_active ? "ظاهر" : "مخفي"}
+                          </span>
+                        </div>
+
+                        <div className="mt-3 flex items-end justify-between">
+                          <p className="text-base font-black">{formatMoney(product.price)}</p>
+                          <p className="text-[9px] text-gray-500">
+                            {product.sold_count.toLocaleString("ar-SA")} شراء
+                          </p>
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-3 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openProductForm(product)}
+                            className="rounded-xl border border-violet-400/20 bg-violet-500/10 px-2 py-2.5 text-[9px] font-black text-violet-200"
+                          >
+                            تعديل
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleProductActive(product)}
+                            className="rounded-xl border border-white/10 bg-white/5 px-2 py-2.5 text-[9px] font-black"
+                          >
+                            {product.is_active ? "إخفاء" : "إظهار"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteProduct(product)}
+                            className="rounded-xl border border-red-400/20 bg-red-500/10 px-2 py-2.5 text-[9px] font-black text-red-300"
+                          >
+                            حذف
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+
+                {!products.length && (
+                  <div className="sm:col-span-2 xl:col-span-3 rounded-[22px] border border-dashed border-white/10 px-4 py-12 text-center text-xs text-gray-500">
+                    لا توجد ألعاب حتى الآن. اضغط «إضافة لعبة».
                   </div>
                 )}
               </div>
@@ -3788,6 +4434,204 @@ export default function AdminPage() {
           )}
         </div>
       </section>
+
+      {productFormOpen && (
+        <Modal
+          title={editingProduct ? `تعديل ${editingProduct.name}` : "إضافة لعبة جديدة"}
+          onClose={() => {
+            setProductFormOpen(false);
+            resetProductForm();
+          }}
+        >
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <AdminField label="اسم اللعبة">
+                <input
+                  value={productName}
+                  onChange={(event) => setProductName(event.target.value)}
+                  placeholder="مثال: GTA V"
+                  className={adminInputClass}
+                />
+              </AdminField>
+
+              <AdminField label="المنصة أو الوسم العلوي">
+                <input
+                  value={productPlatform}
+                  onChange={(event) => setProductPlatform(event.target.value)}
+                  placeholder="Rockstar PC"
+                  className={adminInputClass}
+                />
+              </AdminField>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <AdminField label="تصنيف اللعبة أعلى الصفحة">
+                <input
+                  value={productDetailCategory}
+                  onChange={(event) => setProductDetailCategory(event.target.value)}
+                  placeholder="عالم مفتوح"
+                  className={adminInputClass}
+                />
+              </AdminField>
+
+              <AdminField label="العبارة الصغيرة على البطاقة">
+                <input
+                  value={productCardBadge}
+                  onChange={(event) => setProductCardBadge(event.target.value)}
+                  placeholder="حماية Denuvo"
+                  className={adminInputClass}
+                />
+              </AdminField>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <AdminField label="السعر">
+                <input type="number" min="0" step="0.01" value={productPrice} onChange={(event) => setProductPrice(event.target.value)} className={adminInputClass} />
+              </AdminField>
+              <AdminField label="السعر القديم">
+                <input type="number" min="0" step="0.01" value={productOldPrice} onChange={(event) => setProductOldPrice(event.target.value)} className={adminInputClass} />
+              </AdminField>
+              <AdminField label="الخصم الأحمر %">
+                <input type="number" min="0" max="100" value={productDiscountPercent} onChange={(event) => setProductDiscountPercent(event.target.value)} placeholder="27" className={adminInputClass} />
+              </AdminField>
+              <AdminField label="عدد مرات الشراء">
+                <input type="number" min="0" step="1" value={productSoldCount} onChange={(event) => setProductSoldCount(event.target.value)} className={adminInputClass} />
+              </AdminField>
+            </div>
+
+            <AdminField label="الوصف تحت اسم اللعبة">
+              <textarea
+                value={productDescription}
+                onChange={(event) => setProductDescription(event.target.value)}
+                rows={4}
+                placeholder="اكتب وصف اللعبة..."
+                className={`${adminInputClass} resize-none leading-7`}
+              />
+            </AdminField>
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <AdminField label="طريقة الاستلام">
+                <textarea value={productDelivery} onChange={(event) => setProductDelivery(event.target.value)} rows={3} className={`${adminInputClass} resize-none`} />
+              </AdminField>
+              <AdminField label="نوع الملكية">
+                <textarea value={productOwnership} onChange={(event) => setProductOwnership(event.target.value)} rows={3} className={`${adminInputClass} resize-none`} />
+              </AdminField>
+              <AdminField label="تعليمات الاستخدام">
+                <textarea value={productUsage} onChange={(event) => setProductUsage(event.target.value)} rows={3} className={`${adminInputClass} resize-none`} />
+              </AdminField>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-3">
+              <AdminField label="نوع اللعبة">
+                <select value={productDisplayKind} onChange={(event) => setProductDisplayKind(event.target.value as "featured" | "shared" | "private")} className={adminInputClass}>
+                  <option value="featured">نسخة رقمية / مميزة</option>
+                  <option value="shared">حساب PC مشترك</option>
+                  <option value="private">حساب PC خاص</option>
+                </select>
+              </AdminField>
+
+              <AdminField label="مكانها في الصفحة الرئيسية">
+                <select value={productHomeSection} onChange={(event) => setProductHomeSection(event.target.value as "" | "featured" | "shared" | "private")} className={adminInputClass}>
+                  <option value="">لا تظهر في الرئيسية</option>
+                  <option value="featured">ألعاب مميزة</option>
+                  <option value="shared">ألعاب PC مشتركة</option>
+                  <option value="private">ألعاب PC خاصة</option>
+                </select>
+              </AdminField>
+
+              <AdminField label="المخزون">
+                <input type="number" min="0" step="1" value={productStock} onChange={(event) => setProductStock(event.target.value)} className={adminInputClass} />
+              </AdminField>
+            </div>
+
+            <AdminField label="كود الخصم الظاهر تحت المؤقت (اختياري)">
+              <input
+                value={productPromoCode}
+                onChange={(event) => setProductPromoCode(event.target.value)}
+                placeholder="ZETA10"
+                className={adminInputClass}
+              />
+            </AdminField>
+
+            <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
+              <h3 className="text-sm font-black">التصنيفات التي تظهر فيها اللعبة</h3>
+              <p className="mt-1 text-[10px] text-gray-500">تقدر تختار أكثر من تصنيف.</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                {homeCategories.filter((category) => category.slug).map((category) => (
+                  <label key={category.id} className="flex items-center gap-3 rounded-[16px] border border-white/10 bg-black/20 p-3 text-xs font-black">
+                    <input
+                      type="checkbox"
+                      checked={productCategoryIds.includes(category.id)}
+                      onChange={(event) =>
+                        setProductCategoryIds((current) =>
+                          event.target.checked
+                            ? [...current, category.id]
+                            : current.filter((id) => id !== category.id)
+                        )
+                      }
+                    />
+                    <span>{category.icon}</span>
+                    <span>{category.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
+              <h3 className="text-sm font-black">صور اللعبة</h3>
+              <p className="mt-1 text-[10px] leading-5 text-gray-500">
+                أول صورة تكون الغلاف. تستطيع رفع أكثر من صورة وترتيبها، وستظهر متناسبة على الجوال والكمبيوتر.
+              </p>
+
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(event) => setProductNewImages(Array.from(event.target.files ?? []))}
+                className="mt-4 block w-full rounded-[18px] border border-dashed border-violet-400/25 bg-violet-500/[0.06] p-4 text-xs text-gray-300 file:ml-3 file:rounded-xl file:border-0 file:bg-violet-600 file:px-3 file:py-2 file:text-xs file:font-black file:text-white"
+              />
+
+              {productNewImages.length > 0 && (
+                <div className="mt-3 rounded-[16px] bg-black/20 p-3 text-[10px] text-gray-400">
+                  {productNewImages.length} صورة جديدة جاهزة للرفع
+                </div>
+              )}
+
+              <div className="mt-4 space-y-2">
+                {editingProductImages.map((image, index) => (
+                  <div key={image.id} className="flex items-center gap-3 rounded-[16px] border border-white/10 bg-black/20 p-2">
+                    <img src={image.image_url} alt={image.title} className="h-14 w-20 rounded-xl object-cover" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-black">{image.title}</p>
+                      <p className="mt-1 text-[8px] text-gray-500">{index === 0 ? "الغلاف الرئيسي" : `الصورة ${index + 1}`}</p>
+                    </div>
+                    <button type="button" disabled={index === 0} onClick={() => moveProductImage(image, "up")} className="rounded-lg bg-white/5 px-2 py-2 text-xs disabled:opacity-30">↑</button>
+                    <button type="button" disabled={index === editingProductImages.length - 1} onClick={() => moveProductImage(image, "down")} className="rounded-lg bg-white/5 px-2 py-2 text-xs disabled:opacity-30">↓</button>
+                    <button type="button" onClick={() => deleteProductImage(image)} className="rounded-lg bg-red-500/10 px-2 py-2 text-[9px] font-black text-red-300">حذف</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <label className="flex items-center justify-between gap-4 rounded-[20px] border border-white/10 bg-white/[0.03] p-4">
+              <div>
+                <p className="text-xs font-black">اللعبة ظاهرة في المتجر</p>
+                <p className="mt-1 text-[9px] text-gray-500">عطّلها لإخفائها بدون حذفها.</p>
+              </div>
+              <input type="checkbox" checked={productActive} onChange={(event) => setProductActive(event.target.checked)} className="h-5 w-5" />
+            </label>
+
+            <button
+              type="button"
+              onClick={saveProduct}
+              disabled={savingProduct}
+              className="w-full rounded-[20px] bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-4 text-sm font-black disabled:opacity-50"
+            >
+              {savingProduct ? "جاري حفظ اللعبة والصور..." : "حفظ اللعبة"}
+            </button>
+          </div>
+        </Modal>
+      )}
 
       {selectedProfile && !selectedOrder && (
         <Modal
