@@ -352,6 +352,8 @@ export default function AdminPage() {
   const [productPromoCode, setProductPromoCode] = useState("");
   const [productActive, setProductActive] = useState(true);
   const [productNewImages, setProductNewImages] = useState<File[]>([]);
+  const [productNewImagePreviews, setProductNewImagePreviews] =
+    useState<string[]>([]);
   const [editingProductImages, setEditingProductImages] =
     useState<ProductImageRow[]>([]);
   const [savingProduct, setSavingProduct] = useState(false);
@@ -407,8 +409,8 @@ export default function AdminPage() {
   const [editingCategoryId, setEditingCategoryId] =
     useState<string | null>(null);
 
-  const [selectedTimeOfferId, setSelectedTimeOfferId] = useState("");
-  const [offerStartsAt, setOfferStartsAt] = useState("");
+  const [selectedDiscountProductId, setSelectedDiscountProductId] =
+    useState("");
   const [offerEndsAt, setOfferEndsAt] = useState("");
   const [savingOfferTime, setSavingOfferTime] = useState(false);
 
@@ -893,6 +895,29 @@ export default function AdminPage() {
     }
   }
 
+
+  useEffect(() => {
+    if (
+      authorized &&
+      activeTab === "offers" &&
+      offersInnerTab === "discounts"
+    ) {
+      void loadData();
+    }
+  }, [authorized, activeTab, offersInnerTab]);
+
+  useEffect(() => {
+    const previewUrls = productNewImages.map((file) =>
+      URL.createObjectURL(file)
+    );
+
+    setProductNewImagePreviews(previewUrls);
+
+    return () => {
+      previewUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [productNewImages]);
+
   function showMessage(value: string) {
     setMessage(value);
 
@@ -1168,7 +1193,11 @@ export default function AdminPage() {
 
       if (!productId) throw new Error("تعذر حفظ اللعبة");
 
-      const startingOrder = editingProductImages.length;
+      const startingOrder = editingProductImages.length
+        ? Math.max(
+            ...editingProductImages.map((image) => image.sort_order)
+          ) + 1
+        : 0;
       const uploadedRows: Array<{
         product_id: string;
         image_url: string;
@@ -2205,82 +2234,123 @@ export default function AdminPage() {
     await loadData();
   }
 
-  function selectOfferTime(offerId: string) {
-    setSelectedTimeOfferId(offerId);
+  function selectDiscountProduct(productId: string) {
+    setSelectedDiscountProductId(productId);
     setErrorMessage("");
 
     const selectedOffer = offers.find(
-      (offer) => offer.id === offerId
+      (offer) => offer.product_id === productId
     );
 
-    if (!selectedOffer) {
-      setOfferStartsAt("");
-      setOfferEndsAt("");
-      return;
-    }
-
-    setOfferStartsAt(
-      toDateTimeLocal(selectedOffer.starts_at)
-    );
     setOfferEndsAt(
-      toDateTimeLocal(selectedOffer.ends_at)
+      toDateTimeLocal(selectedOffer?.ends_at)
     );
   }
 
   async function saveOfferTime() {
     setErrorMessage("");
 
-    if (!selectedTimeOfferId) {
-      setErrorMessage("اختر اللعبة التي تريد تعديل وقتها");
-      return;
-    }
-
-    if (!offerStartsAt) {
-      setErrorMessage("حدد وقت بداية التخفيض");
+    if (!selectedDiscountProductId) {
+      setErrorMessage("اختر اللعبة");
       return;
     }
 
     if (!offerEndsAt) {
-      setErrorMessage("حدد وقت نهاية التخفيض");
+      setErrorMessage("حدد تاريخ انتهاء التخفيضات");
       return;
     }
 
-    const startsAt = new Date(offerStartsAt);
     const endsAt = new Date(offerEndsAt);
 
-    if (
-      Number.isNaN(startsAt.getTime()) ||
-      Number.isNaN(endsAt.getTime())
-    ) {
-      setErrorMessage("وقت التخفيض غير صحيح");
+    if (Number.isNaN(endsAt.getTime())) {
+      setErrorMessage("تاريخ انتهاء التخفيضات غير صحيح");
       return;
     }
 
-    if (endsAt <= startsAt) {
-      setErrorMessage("وقت النهاية لازم يكون بعد وقت البداية");
+    if (endsAt <= new Date()) {
+      setErrorMessage("تاريخ انتهاء التخفيضات لازم يكون في المستقبل");
+      return;
+    }
+
+    const product = products.find(
+      (item) => item.id === selectedDiscountProductId
+    );
+
+    if (!product) {
+      setErrorMessage("اللعبة غير موجودة");
+      return;
+    }
+
+    const existingOffer = offers.find(
+      (offer) => offer.product_id === selectedDiscountProductId
+    );
+
+    const automaticDiscount =
+      product.old_price && product.old_price > product.price
+        ? Math.round(
+            ((product.old_price - product.price) /
+              product.old_price) *
+              100
+          )
+        : 0;
+
+    const discountValue = Math.max(
+      0,
+      toNumber(product.discount_percent ?? automaticDiscount)
+    );
+
+    if (!existingOffer && discountValue <= 0) {
+      setErrorMessage(
+        "اكتب نسبة الخصم الأحمر داخل بيانات اللعبة أولًا"
+      );
       return;
     }
 
     setSavingOfferTime(true);
 
     try {
-      const { error } = await supabase
-        .from("offers")
-        .update({
-          starts_at: startsAt.toISOString(),
-          ends_at: endsAt.toISOString(),
-        })
-        .eq("id", selectedTimeOfferId);
+      if (existingOffer) {
+        const { error } = await supabase
+          .from("offers")
+          .update({
+            ends_at: endsAt.toISOString(),
+            is_active: true,
+          })
+          .eq("id", existingOffer.id);
 
-      if (error) throw error;
+        if (error) throw error;
+      } else {
+        const defaultCategory =
+          offerCategories.find(
+            (category) => category.is_active && category.is_system
+          ) ??
+          offerCategories.find((category) => category.is_active) ??
+          null;
 
-      showMessage("تم حفظ وقت التخفيض");
+        const { error } = await supabase
+          .from("offers")
+          .insert({
+            title: `تخفيض على ${product.name}`,
+            product_id: product.id,
+            package_id: null,
+            offer_category_id: defaultCategory?.id ?? null,
+            discount_type: "percentage",
+            discount_value: discountValue,
+            starts_at: new Date().toISOString(),
+            ends_at: endsAt.toISOString(),
+            is_active: true,
+          });
+
+        if (error) throw error;
+      }
+
+      showMessage("تم حفظ تاريخ انتهاء التخفيضات");
       await loadData();
     } catch (error) {
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : "تعذر حفظ وقت التخفيض"
+          : "تعذر حفظ تاريخ انتهاء التخفيضات"
       );
     } finally {
       setSavingOfferTime(false);
@@ -3679,7 +3749,11 @@ export default function AdminPage() {
 
                 <button
                   type="button"
-                  onClick={() => setOffersInnerTab("discounts")}
+                  onClick={async () => {
+                    setOffersInnerTab("discounts");
+                    setSelectedDiscountProductId("");
+                    await loadData();
+                  }}
                   className={`rounded-2xl px-4 py-3 text-xs font-black transition ${
                     offersInnerTab === "discounts"
                       ? "bg-violet-600 text-white"
@@ -3905,67 +3979,103 @@ export default function AdminPage() {
                 <div className="mt-5 space-y-5">
                   <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
                     <h3 className="text-sm font-black">
-                      تعديل وقت التخفيض
+                      تاريخ انتهاء التخفيضات
                     </h3>
 
                     <p className="mt-1 text-[10px] leading-5 text-gray-500">
-                      اختر اللعبة ثم عدّل وقت بداية ونهاية التخفيض فقط.
+                      اختر أي لعبة موجودة في المتجر وحدد تاريخ انتهاء التخفيضات. الألعاب الجديدة تظهر هنا مباشرة.
                     </p>
 
                     <div className="mt-4 space-y-4">
                       <AdminField label="اختر اللعبة">
                         <select
-                          value={selectedTimeOfferId}
+                          key={`discount-product-${products.length}-${products
+                            .map((product) => product.id)
+                            .join("-")}`}
+                          value={selectedDiscountProductId}
                           onChange={(event) =>
-                            selectOfferTime(event.target.value)
+                            selectDiscountProduct(event.target.value)
                           }
                           className={adminInputClass}
+                          style={{ colorScheme: "dark" }}
                         >
-                          <option value="">اختر لعبة</option>
-                          {offers.map((offer) => {
-                            const product = products.find(
-                              (item) => item.id === offer.product_id
-                            );
+                          <option
+                            value=""
+                            style={{
+                              backgroundColor: "#171322",
+                              color: "#ffffff",
+                            }}
+                          >
+                            اختر لعبة
+                          </option>
 
-                            return (
-                              <option
-                                key={offer.id}
-                                value={offer.id}
-                              >
-                                {product?.name || "لعبة محذوفة"} — {offer.title}
-                              </option>
-                            );
-                          })}
+                          {[...products]
+                            .sort((first, second) =>
+                              first.name.localeCompare(second.name, "ar")
+                            )
+                            .map((product) => {
+                              const currentOffer = offers.find(
+                                (offer) => offer.product_id === product.id
+                              );
+
+                              return (
+                                <option
+                                  key={product.id}
+                                  value={product.id}
+                                  style={{
+                                    backgroundColor: "#171322",
+                                    color: "#ffffff",
+                                  }}
+                                >
+                                  {product.name}
+                                  {!product.is_active ? " — مخفية" : ""}
+                                  {currentOffer ? " — يوجد تخفيض" : ""}
+                                </option>
+                              );
+                            })}
                         </select>
                       </AdminField>
 
-                      {selectedTimeOfferId && (
+                      {selectedDiscountProductId && (
                         <div className="rounded-[18px] border border-violet-400/15 bg-violet-500/[0.07] px-4 py-3">
                           {(() => {
-                            const selectedOffer = offers.find(
-                              (offer) =>
-                                offer.id === selectedTimeOfferId
-                            );
                             const selectedProduct = products.find(
                               (product) =>
-                                product.id === selectedOffer?.product_id
+                                product.id === selectedDiscountProductId
+                            );
+                            const selectedOffer = offers.find(
+                              (offer) =>
+                                offer.product_id ===
+                                selectedDiscountProductId
                             );
 
-                            if (!selectedOffer) return null;
+                            if (!selectedProduct) return null;
+
+                            const automaticDiscount =
+                              selectedProduct.old_price &&
+                              selectedProduct.old_price >
+                                selectedProduct.price
+                                ? Math.round(
+                                    ((selectedProduct.old_price -
+                                      selectedProduct.price) /
+                                      selectedProduct.old_price) *
+                                      100
+                                  )
+                                : 0;
+                            const shownDiscount =
+                              selectedProduct.discount_percent ??
+                              automaticDiscount;
 
                             return (
                               <>
                                 <p className="text-xs font-black text-violet-100">
-                                  {selectedProduct?.name || "لعبة محذوفة"}
+                                  {selectedProduct.name}
                                 </p>
                                 <p className="mt-1 text-[9px] text-gray-400">
-                                  {selectedOffer.discount_type === "percentage"
-                                    ? `الخصم الحالي ${selectedOffer.discount_value}%`
-                                    : `الخصم الحالي ${formatMoney(
-                                        selectedOffer.discount_value
-                                      )}`}
-                                  {" • "}
-                                  لن تتغير قيمة الخصم
+                                  الخصم الأحمر {shownDiscount}%
+                                  {selectedOffer
+                                    ? " • سيتم تعديل التاريخ الموجود"
+                                    : " • سيتم إنشاء تخفيض لهذه اللعبة"}
                                 </p>
                               </>
                             );
@@ -3973,43 +4083,31 @@ export default function AdminPage() {
                         </div>
                       )}
 
-                      <div className="grid grid-cols-2 gap-3">
-                        <AdminField label="بداية التخفيض">
-                          <input
-                            type="datetime-local"
-                            value={offerStartsAt}
-                            onChange={(event) =>
-                              setOfferStartsAt(event.target.value)
-                            }
-                            disabled={!selectedTimeOfferId}
-                            className={`${adminInputClass} disabled:cursor-not-allowed disabled:opacity-40`}
-                          />
-                        </AdminField>
-
-                        <AdminField label="نهاية التخفيض">
-                          <input
-                            type="datetime-local"
-                            value={offerEndsAt}
-                            onChange={(event) =>
-                              setOfferEndsAt(event.target.value)
-                            }
-                            disabled={!selectedTimeOfferId}
-                            className={`${adminInputClass} disabled:cursor-not-allowed disabled:opacity-40`}
-                          />
-                        </AdminField>
-                      </div>
+                      <AdminField label="تاريخ انتهاء التخفيضات">
+                        <input
+                          type="datetime-local"
+                          value={offerEndsAt}
+                          onChange={(event) =>
+                            setOfferEndsAt(event.target.value)
+                          }
+                          disabled={!selectedDiscountProductId}
+                          className={adminInputClass}
+                        />
+                      </AdminField>
 
                       <button
                         type="button"
                         onClick={saveOfferTime}
                         disabled={
-                          savingOfferTime || !selectedTimeOfferId
+                          savingOfferTime ||
+                          !selectedDiscountProductId ||
+                          !offerEndsAt
                         }
-                        className="w-full rounded-[20px] bg-gradient-to-l from-amber-500 to-orange-600 px-5 py-4 text-sm font-black disabled:opacity-50"
+                        className="w-full rounded-[20px] bg-gradient-to-l from-amber-500 to-orange-500 px-5 py-4 text-sm font-black text-black disabled:opacity-50"
                       >
                         {savingOfferTime
-                          ? "جاري حفظ الوقت..."
-                          : "حفظ وقت التخفيض"}
+                          ? "جاري الحفظ..."
+                          : "حفظ تاريخ انتهاء التخفيضات"}
                       </button>
                     </div>
                   </div>
@@ -4019,7 +4117,7 @@ export default function AdminPage() {
                       <h3 className="text-sm font-black">
                         التخفيضات الحالية
                       </h3>
-                      <span className="text-[10px] text-gray-500">
+                      <span className="text-[9px] text-gray-500">
                         {offers.length} تخفيض
                       </span>
                     </div>
@@ -4033,58 +4131,27 @@ export default function AdminPage() {
                         return (
                           <div
                             key={offer.id}
-                            className="rounded-[20px] border border-white/10 bg-white/[0.03] p-4"
+                            className="rounded-[20px] border border-white/10 bg-black/20 p-4"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <p className="truncate text-sm font-black">
-                                  {offer.title}
+                                <p className="truncate text-xs font-black">
+                                  {product?.name || offer.title}
                                 </p>
-                                <p className="mt-1 text-[10px] text-gray-500">
-                                  {product?.name || "لعبة محذوفة"}
-                                </p>
-                                <p className="mt-2 text-[10px] text-gray-500">
-                                  {offer.discount_type === "percentage"
-                                    ? `خصم ${offer.discount_value}%`
-                                    : `خصم ${formatMoney(
-                                        offer.discount_value
-                                      )}`}
-                                  {" • "}
-                                  ينتهي {formatDate(offer.ends_at)}
+                                <p className="mt-1 text-[9px] text-gray-500">
+                                  ينتهي: {formatDate(offer.ends_at)}
                                 </p>
                               </div>
 
                               <span
-                                className={`rounded-full px-2 py-1 text-[8px] font-black ${
+                                className={`shrink-0 rounded-full px-3 py-1.5 text-[9px] font-black ${
                                   offer.is_active
                                     ? "bg-emerald-500/10 text-emerald-300"
                                     : "bg-red-500/10 text-red-300"
                                 }`}
                               >
-                                {offer.is_active
-                                  ? "مفعّل"
-                                  : "متوقف"}
+                                {offer.is_active ? "فعال" : "متوقف"}
                               </span>
-                            </div>
-
-                            <div className="mt-4 grid grid-cols-2 gap-2">
-                              <button
-                                type="button"
-                                onClick={() => toggleDiscount(offer)}
-                                className="rounded-xl border border-violet-400/20 bg-violet-500/10 px-3 py-2.5 text-[10px] font-black text-violet-200"
-                              >
-                                {offer.is_active
-                                  ? "إيقاف"
-                                  : "تشغيل"}
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => deleteDiscount(offer)}
-                                className="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2.5 text-[10px] font-black text-red-300"
-                              >
-                                حذف
-                              </button>
                             </div>
                           </div>
                         );
@@ -4092,7 +4159,7 @@ export default function AdminPage() {
 
                       {!offers.length && (
                         <div className="rounded-[20px] border border-dashed border-white/10 px-4 py-10 text-center text-xs text-gray-500">
-                          لا توجد تخفيضات حتى الآن.
+                          لا توجد تخفيضات حاليًا.
                         </div>
                       )}
                     </div>
@@ -4615,71 +4682,93 @@ export default function AdminPage() {
             </div>
 
             <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
-              <h3 className="text-sm font-black">صور اللعبة</h3>
-              <p className="mt-1 text-[10px] leading-5 text-gray-500">
-                أول صورة تكون الغلاف. تستطيع رفع أكثر من صورة وترتيبها، وستظهر متناسبة على الجوال والكمبيوتر.
-              </p>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-black">صور اللعبة</h3>
+                  <p className="mt-1 text-[10px] leading-5 text-gray-500">
+                    أول صورة تكون الغلاف. اضغط زر إضافة الصور أكثر من مرة، وكل صورة جديدة تنضاف مع الصور السابقة.
+                  </p>
+                </div>
 
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={(event) => {
-                  addProductImageFiles(event.target.files);
-                  event.target.value = "";
-                }}
-                className="mt-4 block w-full rounded-[18px] border border-dashed border-violet-400/25 bg-violet-500/[0.06] p-4 text-xs text-gray-300 file:ml-3 file:rounded-xl file:border-0 file:bg-violet-600 file:px-3 file:py-2 file:text-xs file:font-black file:text-white"
-              />
+                <span className="shrink-0 rounded-xl bg-violet-500/10 px-3 py-2 text-[10px] font-black text-violet-200">
+                  {editingProductImages.length + productNewImages.length} صورة
+                </span>
+              </div>
 
-              <p className="mt-2 text-[9px] leading-5 text-gray-500">
-                تقدر تختار عدة صور دفعة واحدة، أو تضيف صورة ثم تفتح الاختيار مرة ثانية؛ الصور الجديدة تتجمع ولا تستبدل السابقة.
+              <label className="mt-4 flex cursor-pointer items-center justify-center gap-2 rounded-[18px] border border-dashed border-violet-400/30 bg-violet-500/[0.08] px-4 py-4 text-xs font-black text-violet-100 transition hover:bg-violet-500/[0.13]">
+                <span className="text-lg">＋</span>
+                <span>إضافة صورة أو أكثر</span>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  multiple
+                  onChange={(event) => {
+                    addProductImageFiles(event.target.files);
+                    event.currentTarget.value = "";
+                  }}
+                  className="hidden"
+                />
+              </label>
+
+              <p className="mt-2 text-center text-[9px] leading-5 text-gray-500">
+                تقدر تختار عدة صور معًا، أو تختار صورة واحدة ثم تضغط الزر مرة ثانية لإضافة صورة أخرى.
               </p>
 
               {productNewImages.length > 0 && (
-                <div className="mt-3 space-y-2">
+                <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
                   {productNewImages.map((file, index) => (
                     <div
                       key={`${file.name}-${file.size}-${file.lastModified}`}
-                      className="flex items-center justify-between gap-3 rounded-[16px] border border-violet-400/15 bg-violet-500/[0.06] p-3"
+                      className="overflow-hidden rounded-[16px] border border-violet-400/15 bg-violet-500/[0.06]"
                     >
-                      <div className="min-w-0">
-                        <p className="truncate text-[10px] font-black text-violet-100">
-                          {index === 0 && editingProductImages.length === 0
-                            ? "الغلاف الرئيسي — "
-                            : ""}
-                          {file.name}
-                        </p>
-                        <p className="mt-1 text-[8px] text-gray-500">
-                          {(file.size / 1024 / 1024).toFixed(2)} MB
-                        </p>
+                      <div className="aspect-[4/3] overflow-hidden bg-black/30">
+                        {productNewImagePreviews[index] && (
+                          <img
+                            src={productNewImagePreviews[index]}
+                            alt={file.name}
+                            className="h-full w-full object-cover"
+                          />
+                        )}
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => removeProductNewImage(index)}
-                        className="shrink-0 rounded-xl bg-red-500/10 px-3 py-2 text-[9px] font-black text-red-300"
-                      >
-                        إزالة
-                      </button>
+                      <div className="p-2.5">
+                        <p className="truncate text-[9px] font-black text-violet-100">
+                          {editingProductImages.length === 0 && index === 0
+                            ? "الغلاف الرئيسي"
+                            : `صورة جديدة ${index + 1}`}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => removeProductNewImage(index)}
+                          className="mt-2 w-full rounded-lg bg-red-500/10 px-2 py-2 text-[8px] font-black text-red-300"
+                        >
+                          إزالة الصورة
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
 
-              <div className="mt-4 space-y-2">
-                {editingProductImages.map((image, index) => (
-                  <div key={image.id} className="flex items-center gap-3 rounded-[16px] border border-white/10 bg-black/20 p-2">
-                    <img src={image.image_url} alt={image.title} className="h-14 w-20 rounded-xl object-cover" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-black">{image.title}</p>
-                      <p className="mt-1 text-[8px] text-gray-500">{index === 0 ? "الغلاف الرئيسي" : `الصورة ${index + 1}`}</p>
+              {editingProductImages.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  <p className="text-[10px] font-black text-gray-300">
+                    الصور المحفوظة
+                  </p>
+                  {editingProductImages.map((image, index) => (
+                    <div key={image.id} className="flex items-center gap-3 rounded-[16px] border border-white/10 bg-black/20 p-2">
+                      <img src={image.image_url} alt={image.title} className="h-14 w-20 rounded-xl object-cover" />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-black">{image.title}</p>
+                        <p className="mt-1 text-[8px] text-gray-500">{index === 0 ? "الغلاف الرئيسي" : `الصورة ${index + 1}`}</p>
+                      </div>
+                      <button type="button" disabled={index === 0} onClick={() => moveProductImage(image, "up")} className="rounded-lg bg-white/5 px-2 py-2 text-xs disabled:opacity-30">↑</button>
+                      <button type="button" disabled={index === editingProductImages.length - 1} onClick={() => moveProductImage(image, "down")} className="rounded-lg bg-white/5 px-2 py-2 text-xs disabled:opacity-30">↓</button>
+                      <button type="button" onClick={() => deleteProductImage(image)} className="rounded-lg bg-red-500/10 px-2 py-2 text-[9px] font-black text-red-300">حذف</button>
                     </div>
-                    <button type="button" disabled={index === 0} onClick={() => moveProductImage(image, "up")} className="rounded-lg bg-white/5 px-2 py-2 text-xs disabled:opacity-30">↑</button>
-                    <button type="button" disabled={index === editingProductImages.length - 1} onClick={() => moveProductImage(image, "down")} className="rounded-lg bg-white/5 px-2 py-2 text-xs disabled:opacity-30">↓</button>
-                    <button type="button" onClick={() => deleteProductImage(image)} className="rounded-lg bg-red-500/10 px-2 py-2 text-[9px] font-black text-red-300">حذف</button>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <label className="flex items-center justify-between gap-4 rounded-[20px] border border-white/10 bg-white/[0.03] p-4">
