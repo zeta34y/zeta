@@ -64,6 +64,12 @@ type PackageOption = {
   image_url: string | null;
 };
 
+type HomeSourceOption = {
+  id: string;
+  name: string;
+  price: number;
+};
+
 type HomeSectionKey =
   | "featured"
   | "shared"
@@ -329,6 +335,9 @@ export default function AdminPage() {
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [productImages, setProductImages] = useState<ProductImageRow[]>([]);
   const [packages, setPackages] = useState<PackageOption[]>([]);
+  const [homeProducts, setHomeProducts] = useState<HomeSourceOption[]>([]);
+  const [homePackages, setHomePackages] = useState<HomeSourceOption[]>([]);
+  const [loadingHomeSources, setLoadingHomeSources] = useState(false);
 
   const [productFormOpen, setProductFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductOption | null>(null);
@@ -409,6 +418,13 @@ export default function AdminPage() {
   const [editingCategoryId, setEditingCategoryId] =
     useState<string | null>(null);
 
+  const [selectedOfferCategoryProductId, setSelectedOfferCategoryProductId] =
+    useState("");
+  const [selectedOfferCategoryId, setSelectedOfferCategoryId] =
+    useState("");
+  const [savingOfferCategoryAssignment, setSavingOfferCategoryAssignment] =
+    useState(false);
+
   const [selectedDiscountProductId, setSelectedDiscountProductId] =
     useState("");
   const [offerEndsAt, setOfferEndsAt] = useState("");
@@ -487,12 +503,14 @@ export default function AdminPage() {
   }, [selectedProfileOrders]);
 
   const homeSourceOptions = useMemo(() => {
-    return homeSectionKey === "packages" ? packages : products;
-  }, [homeSectionKey, packages, products]);
+    return homeSectionKey === "packages" ? homePackages : homeProducts;
+  }, [homeSectionKey, homePackages, homeProducts]);
 
   const homeCategorySourceOptions = useMemo(() => {
-    return homeCategorySourceType === "package" ? packages : products;
-  }, [homeCategorySourceType, packages, products]);
+    return homeCategorySourceType === "package"
+      ? homePackages
+      : homeProducts;
+  }, [homeCategorySourceType, homePackages, homeProducts]);
 
   const selectedHomeCategoryItems = useMemo(() => {
     return homeCategoryItems
@@ -609,6 +627,56 @@ export default function AdminPage() {
       subscription.unsubscribe();
     };
   }, [router]);
+
+  async function loadHomeSourceOptions() {
+    setLoadingHomeSources(true);
+
+    try {
+      const [productsResult, packagesResult] = await Promise.all([
+        supabase
+          .from("products")
+          .select("id, name, price")
+          .order("name", { ascending: true }),
+
+        supabase
+          .from("packages")
+          .select("id, name, price")
+          .order("name", { ascending: true }),
+      ]);
+
+      if (productsResult.error) throw productsResult.error;
+      if (packagesResult.error) throw packagesResult.error;
+
+      setHomeProducts(
+        (productsResult.data ?? []).map((product) => ({
+          id: product.id,
+          name: product.name,
+          price: toNumber(product.price),
+        }))
+      );
+
+      setHomePackages(
+        (packagesResult.data ?? []).map((pkg) => ({
+          id: pkg.id,
+          name: pkg.name,
+          price: toNumber(pkg.price),
+        }))
+      );
+    } catch (error) {
+      console.error(
+        "تعذر تحميل الألعاب والبكجات لقوائم الصفحة الرئيسية:",
+        error
+      );
+
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "تعذر تحميل الألعاب والبكجات"
+      );
+    } finally {
+      setLoadingHomeSources(false);
+    }
+  }
 
   async function loadData() {
     setRefreshing(true);
@@ -795,6 +863,22 @@ export default function AdminPage() {
         }))
       );
 
+      setHomeProducts(
+        (productsResult.data ?? []).map((product) => ({
+          id: product.id,
+          name: product.name,
+          price: toNumber(product.price),
+        }))
+      );
+
+      setHomePackages(
+        (packagesResult.data ?? []).map((pkg) => ({
+          id: pkg.id,
+          name: pkg.name,
+          price: toNumber(pkg.price),
+        }))
+      );
+
       const loadedHomeCategories =
         (homeCategoriesResult.data ?? []).map((category) => ({
           id: category.id,
@@ -905,6 +989,12 @@ export default function AdminPage() {
       void loadData();
     }
   }, [authorized, tab, offersInnerTab]);
+
+  useEffect(() => {
+    if (authorized && tab === "home") {
+      void loadHomeSourceOptions();
+    }
+  }, [authorized, tab]);
 
   useEffect(() => {
     const previewUrls = productNewImages.map((file) =>
@@ -2234,6 +2324,107 @@ export default function AdminPage() {
     await loadData();
   }
 
+  async function saveOfferCategoryAssignment() {
+    setErrorMessage("");
+
+    if (!selectedOfferCategoryProductId) {
+      setErrorMessage("اختر اللعبة");
+      return;
+    }
+
+    if (!selectedOfferCategoryId) {
+      setErrorMessage("اختر قسم العروض");
+      return;
+    }
+
+    const product = products.find(
+      (item) => item.id === selectedOfferCategoryProductId
+    );
+    const category = offerCategories.find(
+      (item) => item.id === selectedOfferCategoryId
+    );
+
+    if (!product) {
+      setErrorMessage("اللعبة غير موجودة");
+      return;
+    }
+
+    if (!category) {
+      setErrorMessage("قسم العروض غير موجود");
+      return;
+    }
+
+    const existingOffer = offers.find(
+      (offer) => offer.product_id === product.id
+    );
+
+    const automaticDiscount =
+      product.old_price && product.old_price > product.price
+        ? Math.round(
+            ((product.old_price - product.price) /
+              product.old_price) *
+              100
+          )
+        : 0;
+
+    const discountValue = Math.max(
+      0,
+      toNumber(product.discount_percent ?? automaticDiscount)
+    );
+
+    if (!existingOffer && discountValue <= 0) {
+      setErrorMessage(
+        "اكتب نسبة الخصم الأحمر داخل بيانات اللعبة أولًا"
+      );
+      return;
+    }
+
+    setSavingOfferCategoryAssignment(true);
+
+    try {
+      if (existingOffer) {
+        const { error } = await supabase
+          .from("offers")
+          .update({
+            offer_category_id: category.id,
+            is_active: true,
+          })
+          .eq("id", existingOffer.id);
+
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("offers")
+          .insert({
+            title: `تخفيض على ${product.name}`,
+            product_id: product.id,
+            package_id: null,
+            offer_category_id: category.id,
+            discount_type: "percentage",
+            discount_value: discountValue,
+            starts_at: new Date().toISOString(),
+            ends_at: null,
+            is_active: true,
+          });
+
+        if (error) throw error;
+      }
+
+      setSelectedOfferCategoryProductId("");
+      setSelectedOfferCategoryId("");
+      showMessage(`تمت إضافة ${product.name} إلى قسم ${category.name}`);
+      await loadData();
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "تعذر إضافة اللعبة إلى قسم العروض"
+      );
+    } finally {
+      setSavingOfferCategoryAssignment(false);
+    }
+  }
+
   function selectDiscountProduct(productId: string) {
     setSelectedDiscountProductId(productId);
     setErrorMessage("");
@@ -3317,397 +3508,6 @@ export default function AdminPage() {
                   </button>
                 </div>
 
-                <div className="rounded-[24px] border border-fuchsia-400/15 bg-fuchsia-500/[0.03] p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-sm font-black">
-                        محتوى صفحة التصنيف
-                      </h3>
-                      <p className="mt-1 text-[10px] leading-5 text-gray-500">
-                        أضف الألعاب أو البكجات ورتّبها داخل التصنيف المختار.
-                      </p>
-                    </div>
-
-                    <span className="rounded-xl bg-fuchsia-500/10 px-3 py-2 text-[10px] font-black text-fuchsia-200">
-                      {selectedHomeCategoryItems.length} عنصر
-                    </span>
-                  </div>
-
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <AdminField label="نوع العنصر">
-                      <select
-                        value={homeCategorySourceType}
-                        onChange={(event) => {
-                          setHomeCategorySourceType(
-                            event.target.value as
-                              | "product"
-                              | "package"
-                          );
-                          setHomeCategorySourceId("");
-                        }}
-                        disabled={!selectedHomeCategoryId}
-                        className={`${adminInputClass} disabled:opacity-40`}
-                      >
-                        <option value="product">لعبة</option>
-                        <option value="package">بكج ألعاب</option>
-                      </select>
-                    </AdminField>
-
-                    <AdminField
-                      label={
-                        homeCategorySourceType === "package"
-                          ? "اختر البكج"
-                          : "اختر اللعبة"
-                      }
-                    >
-                      <select
-                        value={homeCategorySourceId}
-                        onChange={(event) =>
-                          setHomeCategorySourceId(
-                            event.target.value
-                          )
-                        }
-                        disabled={!selectedHomeCategoryId}
-                        className={`${adminInputClass} disabled:opacity-40`}
-                      >
-                        <option value="">
-                          {homeCategorySourceType === "package"
-                            ? "اختر بكج"
-                            : "اختر لعبة"}
-                        </option>
-                        {homeCategorySourceOptions.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.name} — {formatMoney(item.price)}
-                          </option>
-                        ))}
-                      </select>
-                    </AdminField>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={addHomeCategoryItem}
-                    disabled={
-                      savingHomeCategoryItem ||
-                      !selectedHomeCategoryId
-                    }
-                    className="mt-3 w-full rounded-[20px] bg-gradient-to-l from-fuchsia-600 to-violet-600 px-5 py-4 text-sm font-black disabled:opacity-50"
-                  >
-                    {savingHomeCategoryItem
-                      ? "جاري الإضافة..."
-                      : "إضافة إلى صفحة التصنيف"}
-                  </button>
-
-                  <div className="mt-5 space-y-3">
-                    {selectedHomeCategoryItems.map(
-                      (item, index) => {
-                        const product = products.find(
-                          (current) =>
-                            current.id === item.product_id
-                        );
-                        const pkg = packages.find(
-                          (current) =>
-                            current.id === item.package_id
-                        );
-                        const source = product || pkg;
-
-                        return (
-                          <div
-                            key={item.id}
-                            className="flex items-center gap-3 rounded-[18px] border border-white/10 bg-black/20 p-3"
-                          >
-                            <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/5 text-xl">
-                              {(
-                                product?.cover_url ||
-                                pkg?.image_url
-                              ) ? (
-                                <img
-                                  src={
-                                    product?.cover_url ||
-                                    pkg?.image_url ||
-                                    ""
-                                  }
-                                  alt={source?.name || "عنصر"}
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : item.package_id ? (
-                                "🎁"
-                              ) : (
-                                "🎮"
-                              )}
-                            </div>
-
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-xs font-black">
-                                {source?.name || "عنصر محذوف"}
-                              </p>
-                              <p className="mt-1 text-[8px] text-gray-500">
-                                {item.package_id
-                                  ? "بكج ألعاب"
-                                  : "لعبة"}
-                              </p>
-                            </div>
-
-                            <button
-                              type="button"
-                              disabled={index === 0}
-                              onClick={() =>
-                                moveHomeCategoryItem(item, "up")
-                              }
-                              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[9px] disabled:opacity-30"
-                            >
-                              ↑
-                            </button>
-
-                            <button
-                              type="button"
-                              disabled={
-                                index ===
-                                selectedHomeCategoryItems.length - 1
-                              }
-                              onClick={() =>
-                                moveHomeCategoryItem(item, "down")
-                              }
-                              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[9px] disabled:opacity-30"
-                            >
-                              ↓
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                deleteHomeCategoryItem(item)
-                              }
-                              className="rounded-xl border border-red-400/15 bg-red-500/10 px-3 py-2 text-[9px] font-black text-red-300"
-                            >
-                              حذف
-                            </button>
-                          </div>
-                        );
-                      }
-                    )}
-
-                    {selectedHomeCategoryId &&
-                      !selectedHomeCategoryItems.length && (
-                        <div className="rounded-[18px] border border-dashed border-white/10 px-4 py-8 text-center text-xs text-gray-500">
-                          لا توجد ألعاب داخل هذا التصنيف حتى الآن.
-                        </div>
-                      )}
-
-                    {!selectedHomeCategoryId && (
-                      <div className="rounded-[18px] border border-dashed border-white/10 px-4 py-8 text-center text-xs text-gray-500">
-                        اختر صفحة تصنيف من الأعلى أولًا.
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-sm font-black">
-                        الألعاب والبكجات الظاهرة
-                      </h3>
-                      <p className="mt-1 text-[10px] leading-5 text-gray-500">
-                        اختر القسم ثم اختر اللعبة أو البكج الذي تريد إظهاره فيه.
-                      </p>
-                    </div>
-
-                    <span className="rounded-xl bg-fuchsia-500/10 px-3 py-2 text-[10px] font-black text-fuchsia-200">
-                      {homePageItems.length} عنصر
-                    </span>
-                  </div>
-
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <AdminField label="مكان الظهور">
-                      <select
-                        value={homeSectionKey}
-                        onChange={(event) => {
-                          setHomeSectionKey(
-                            event.target.value as HomeSectionKey
-                          );
-                          setHomeSourceId("");
-                        }}
-                        className={adminInputClass}
-                      >
-                        {(
-                          Object.keys(
-                            homeSectionLabel
-                          ) as HomeSectionKey[]
-                        ).map((sectionKey) => (
-                          <option
-                            key={sectionKey}
-                            value={sectionKey}
-                          >
-                            {homeSectionLabel[sectionKey]}
-                          </option>
-                        ))}
-                      </select>
-                    </AdminField>
-
-                    <AdminField
-                      label={
-                        homeSectionKey === "packages"
-                          ? "اختر البكج"
-                          : "اختر اللعبة"
-                      }
-                    >
-                      <select
-                        value={homeSourceId}
-                        onChange={(event) =>
-                          setHomeSourceId(event.target.value)
-                        }
-                        className={adminInputClass}
-                      >
-                        <option value="">
-                          {homeSectionKey === "packages"
-                            ? "اختر بكج"
-                            : "اختر لعبة"}
-                        </option>
-
-                        {homeSourceOptions.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.name} — {formatMoney(item.price)}
-                          </option>
-                        ))}
-                      </select>
-                    </AdminField>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={saveHomePageItem}
-                    disabled={savingHomeItem}
-                    className="mt-3 w-full rounded-[20px] bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-4 text-sm font-black disabled:opacity-50"
-                  >
-                    {savingHomeItem
-                      ? "جاري الإضافة..."
-                      : "إضافة إلى الصفحة الرئيسية"}
-                  </button>
-
-                  <div className="mt-5 space-y-3">
-                    {homePageItems.map((item) => {
-                      const product = products.find(
-                        (current) =>
-                          current.id === item.product_id
-                      );
-                      const pkg = packages.find(
-                        (current) =>
-                          current.id === item.package_id
-                      );
-                      const source = product || pkg;
-
-                      return (
-                        <div
-                          key={item.id}
-                          className="rounded-[20px] border border-white/10 bg-black/20 p-3"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-violet-500/10 text-2xl">
-                              {(
-                                product?.cover_url ||
-                                pkg?.image_url
-                              ) ? (
-                                <img
-                                  src={
-                                    product?.cover_url ||
-                                    pkg?.image_url ||
-                                    ""
-                                  }
-                                  alt={source?.name || "عنصر"}
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : item.package_id ? (
-                                "🎁"
-                              ) : (
-                                "🎮"
-                              )}
-                            </div>
-
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-xs font-black">
-                                {source?.name || "عنصر محذوف"}
-                              </p>
-                              <p className="mt-1 text-[9px] text-gray-500">
-                                {homeSectionLabel[item.section_key]}
-                              </p>
-                            </div>
-
-                            <span className="rounded-xl bg-white/5 px-2 py-1 text-[8px] text-gray-400">
-                              ترتيب {item.sort_order + 1}
-                            </span>
-                          </div>
-
-                          <div className="mt-3 grid grid-cols-[1fr_auto_auto_auto] gap-2">
-                            {item.product_id ? (
-                              <select
-                                value={item.section_key}
-                                onChange={(event) =>
-                                  changeHomePageItemSection(
-                                    item,
-                                    event.target
-                                      .value as HomeSectionKey
-                                  )
-                                }
-                                className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[9px] text-white outline-none"
-                              >
-                                <option value="featured">
-                                  ألعاب مميزة
-                                </option>
-                                <option value="shared">
-                                  ألعاب PC مشتركة
-                                </option>
-                                <option value="private">
-                                  ألعاب PC خاصة
-                                </option>
-                              </select>
-                            ) : (
-                              <div className="rounded-xl border border-amber-400/15 bg-amber-500/10 px-3 py-2 text-[9px] font-black text-amber-300">
-                                بكجات الألعاب
-                              </div>
-                            )}
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                moveHomePageItem(item, "up")
-                              }
-                              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[10px]"
-                            >
-                              ↑
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                moveHomePageItem(item, "down")
-                              }
-                              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[10px]"
-                            >
-                              ↓
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() =>
-                                deleteHomePageItem(item)
-                              }
-                              className="rounded-xl border border-red-400/15 bg-red-500/10 px-3 py-2 text-[9px] font-black text-red-300"
-                            >
-                              حذف
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    {!homePageItems.length && (
-                      <div className="rounded-[20px] border border-dashed border-white/10 px-4 py-10 text-center text-xs text-gray-500">
-                        لم تتم إضافة ألعاب أو بكجات للصفحة الرئيسية بعد.
-                      </div>
-                    )}
-                  </div>
-                </div>
               </div>
             </section>
           )}
@@ -3970,6 +3770,91 @@ export default function AdminPage() {
                           </button>
                         </div>
                       ))}
+                    </div>
+
+                    <div className="mt-5 border-t border-white/10 pt-5">
+                      <h4 className="text-xs font-black">
+                        إضافة لعبة إلى قسم في صفحة العروض
+                      </h4>
+
+                      <p className="mt-1 text-[10px] leading-5 text-gray-500">
+                        اختر أي لعبة أضفتها من إدارة الألعاب، ثم اختر القسم الذي تظهر داخله.
+                      </p>
+
+                      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                        <AdminField label="اختر اللعبة">
+                          <select
+                            value={selectedOfferCategoryProductId}
+                            onChange={(event) =>
+                              setSelectedOfferCategoryProductId(
+                                event.target.value
+                              )
+                            }
+                            className={adminInputClass}
+                          >
+                            <option value="">اختر لعبة</option>
+                            {products.map((product) => {
+                              const currentOffer = offers.find(
+                                (offer) =>
+                                  offer.product_id === product.id
+                              );
+                              const currentCategory =
+                                offerCategories.find(
+                                  (category) =>
+                                    category.id ===
+                                    currentOffer?.offer_category_id
+                                );
+
+                              return (
+                                <option
+                                  key={product.id}
+                                  value={product.id}
+                                >
+                                  {product.name}
+                                  {currentCategory
+                                    ? ` — ${currentCategory.name}`
+                                    : ""}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        </AdminField>
+
+                        <AdminField label="اختر القسم">
+                          <select
+                            value={selectedOfferCategoryId}
+                            onChange={(event) =>
+                              setSelectedOfferCategoryId(
+                                event.target.value
+                              )
+                            }
+                            className={adminInputClass}
+                          >
+                            <option value="">اختر قسمًا</option>
+                            {offerCategories
+                              .filter((category) => category.is_active)
+                              .map((category) => (
+                                <option
+                                  key={category.id}
+                                  value={category.id}
+                                >
+                                  {category.name}
+                                </option>
+                              ))}
+                          </select>
+                        </AdminField>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={saveOfferCategoryAssignment}
+                        disabled={savingOfferCategoryAssignment}
+                        className="mt-4 w-full rounded-[18px] bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-4 text-xs font-black disabled:opacity-50"
+                      >
+                        {savingOfferCategoryAssignment
+                          ? "جاري الإضافة..."
+                          : "إضافة اللعبة إلى القسم"}
+                      </button>
                     </div>
                   </div>
                 </div>
