@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
-type AdminTab = "users" | "announcement";
+type AdminTab = "users" | "notifications" | "announcement";
 
 type AnnouncementBar = {
   id: number;
@@ -161,6 +161,14 @@ export default function AdminPage() {
   const [orders, setOrders] = useState<UserOrder[]>([]);
   const [search, setSearch] = useState("");
 
+  const [notificationTitle, setNotificationTitle] = useState("");
+  const [notificationBody, setNotificationBody] = useState("");
+  const [notificationAudience, setNotificationAudience] =
+    useState<"all" | "user">("all");
+  const [notificationUserId, setNotificationUserId] = useState("");
+  const [notificationUserSearch, setNotificationUserSearch] = useState("");
+  const [sendingNotification, setSendingNotification] = useState(false);
+
   const [selectedProfile, setSelectedProfile] =
     useState<Profile | null>(null);
   const [selectedOrder, setSelectedOrder] =
@@ -213,6 +221,24 @@ export default function AdminPage() {
       (order) => order.user_id === selectedProfile.id
     );
   }, [orders, selectedProfile]);
+
+  const filteredNotificationUsers = useMemo(() => {
+    const query = notificationUserSearch
+      .trim()
+      .toLocaleLowerCase("ar");
+
+    if (!query) return profiles;
+
+    return profiles.filter((profile) =>
+      [profile.display_name, profile.email, profile.phone]
+        .filter(Boolean)
+        .some((value) =>
+          String(value)
+            .toLocaleLowerCase("ar")
+            .includes(query)
+        )
+    );
+  }, [profiles, notificationUserSearch]);
 
   const selectedProfilePaidTotal = useMemo(() => {
     return selectedProfileOrders
@@ -430,6 +456,72 @@ export default function AdminPage() {
     }
   }
 
+  async function sendNotification() {
+    setErrorMessage("");
+    setMessage("");
+
+    const title = notificationTitle.trim();
+    const body = notificationBody.trim();
+
+    if (!title) {
+      setErrorMessage("اكتب موضوع الإشعار");
+      return;
+    }
+
+    if (!body) {
+      setErrorMessage("اكتب وصف الإشعار");
+      return;
+    }
+
+    if (
+      notificationAudience === "user" &&
+      !notificationUserId
+    ) {
+      setErrorMessage("اختر المستخدم الذي سيستلم الإشعار");
+      return;
+    }
+
+    setSendingNotification(true);
+
+    try {
+      const { error } = await supabase
+        .from("notifications")
+        .insert({
+          title,
+          body,
+          audience: notificationAudience,
+          target_user_id:
+            notificationAudience === "user"
+              ? notificationUserId
+              : null,
+          is_active: true,
+          created_by: user?.id ?? null,
+        });
+
+      if (error) throw error;
+
+      setNotificationTitle("");
+      setNotificationBody("");
+      setNotificationAudience("all");
+      setNotificationUserId("");
+      setNotificationUserSearch("");
+
+      showMessage(
+        notificationAudience === "all"
+          ? "تم إرسال الإشعار لكل المستخدمين"
+          : "تم إرسال الإشعار للمستخدم المحدد"
+      );
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "تعذر إرسال الإشعار"
+      );
+    } finally {
+      setSendingNotification(false);
+    }
+  }
+
   async function logout() {
     await supabase.auth.signOut();
     router.replace("/");
@@ -545,6 +637,19 @@ export default function AdminPage() {
             >
               <span className="text-lg">👥</span>
               <span>المستخدمون</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTab("notifications")}
+              className={`flex min-h-[64px] items-center justify-center gap-2 rounded-[18px] px-3 py-3 text-xs font-black transition active:scale-[0.98] lg:min-h-0 lg:justify-start ${
+                tab === "notifications"
+                  ? "bg-violet-500/15 text-violet-200"
+                  : "text-gray-400 hover:bg-white/5 hover:text-white"
+              }`}
+            >
+              <span className="text-lg">🔔</span>
+              <span>الإشعارات</span>
             </button>
 
             <button
@@ -725,6 +830,206 @@ export default function AdminPage() {
                     </p>
                   </div>
                 )}
+              </div>
+            </section>
+          )}
+
+          {tab === "notifications" && (
+            <section className="rounded-[28px] border border-white/[0.07] bg-[#121019] p-4 sm:p-6">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-bold text-violet-300">
+                    التواصل مع العملاء
+                  </p>
+
+                  <h2 className="mt-1 text-xl font-black">
+                    إنشاء إشعار
+                  </h2>
+
+                  <p className="mt-2 text-xs leading-6 text-gray-500">
+                    أرسل إشعارًا لكل المستخدمين أو لمستخدم محدد.
+                  </p>
+                </div>
+
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-500/10 text-2xl">
+                  🔔
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-4">
+                <label className="block">
+                  <span className="mb-2 block text-xs font-black text-gray-300">
+                    موضوع الإشعار
+                  </span>
+
+                  <input
+                    value={notificationTitle}
+                    onChange={(event) =>
+                      setNotificationTitle(event.target.value)
+                    }
+                    placeholder="مثال: وصل عرض جديد"
+                    maxLength={120}
+                    className="w-full rounded-[20px] border border-white/10 bg-white/[0.04] px-4 py-4 text-sm text-white outline-none transition placeholder:text-gray-600 focus:border-violet-400/50"
+                  />
+                </label>
+
+                <label className="block">
+                  <span className="mb-2 block text-xs font-black text-gray-300">
+                    وصف الإشعار
+                  </span>
+
+                  <textarea
+                    value={notificationBody}
+                    onChange={(event) =>
+                      setNotificationBody(event.target.value)
+                    }
+                    rows={5}
+                    placeholder="اكتب تفاصيل الإشعار التي ستظهر للمستخدم"
+                    maxLength={1000}
+                    className="w-full resize-none rounded-[20px] border border-white/10 bg-white/[0.04] px-4 py-4 text-sm leading-7 text-white outline-none transition placeholder:text-gray-600 focus:border-violet-400/50"
+                  />
+                </label>
+
+                <div>
+                  <span className="mb-2 block text-xs font-black text-gray-300">
+                    إرسال إلى
+                  </span>
+
+                  <div className="grid grid-cols-2 gap-2 rounded-[20px] border border-white/10 bg-white/[0.03] p-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setNotificationAudience("all");
+                        setNotificationUserId("");
+                        setNotificationUserSearch("");
+                      }}
+                      className={`rounded-2xl px-4 py-3 text-xs font-black transition ${
+                        notificationAudience === "all"
+                          ? "bg-violet-600 text-white shadow-lg shadow-violet-950/30"
+                          : "text-gray-500"
+                      }`}
+                    >
+                      كل المستخدمين
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setNotificationAudience("user")
+                      }
+                      className={`rounded-2xl px-4 py-3 text-xs font-black transition ${
+                        notificationAudience === "user"
+                          ? "bg-violet-600 text-white shadow-lg shadow-violet-950/30"
+                          : "text-gray-500"
+                      }`}
+                    >
+                      مستخدم محدد
+                    </button>
+                  </div>
+                </div>
+
+                {notificationAudience === "user" && (
+                  <div className="space-y-3">
+                    <label className="block">
+                      <span className="mb-2 block text-xs font-black text-gray-300">
+                        ابحث عن المستخدم
+                      </span>
+
+                      <input
+                        type="search"
+                        value={notificationUserSearch}
+                        onChange={(event) =>
+                          setNotificationUserSearch(
+                            event.target.value
+                          )
+                        }
+                        placeholder="اكتب الاسم أو البريد أو رقم الجوال"
+                        className="w-full rounded-[20px] border border-white/10 bg-white/[0.04] px-4 py-4 text-sm text-white outline-none transition placeholder:text-gray-600 focus:border-violet-400/50"
+                      />
+                    </label>
+
+                    <div className="max-h-64 space-y-2 overflow-y-auto rounded-[20px] border border-white/10 bg-white/[0.03] p-2">
+                      {filteredNotificationUsers.map(
+                        (profile) => (
+                          <button
+                            key={profile.id}
+                            type="button"
+                            onClick={() =>
+                              setNotificationUserId(
+                                profile.id
+                              )
+                            }
+                            className={`flex w-full items-center gap-3 rounded-[16px] px-3 py-3 text-right transition ${
+                              notificationUserId ===
+                              profile.id
+                                ? "bg-violet-500/15 text-violet-200"
+                                : "hover:bg-white/5"
+                            }`}
+                          >
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-violet-500/10 text-sm font-black">
+                              {profile.avatar_url ? (
+                                <img
+                                  src={profile.avatar_url}
+                                  alt={
+                                    profile.display_name ||
+                                    "مستخدم"
+                                  }
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                (
+                                  profile.display_name ||
+                                  profile.email ||
+                                  "م"
+                                ).charAt(0)
+                              )}
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-black">
+                                {profile.display_name ||
+                                  "بدون اسم"}
+                              </p>
+
+                              <p
+                                dir="ltr"
+                                className="mt-1 truncate text-left text-[9px] text-gray-500"
+                              >
+                                {profile.email ||
+                                  profile.phone ||
+                                  "—"}
+                              </p>
+                            </div>
+
+                            {notificationUserId ===
+                              profile.id && (
+                              <span className="text-violet-300">
+                                ✓
+                              </span>
+                            )}
+                          </button>
+                        )
+                      )}
+
+                      {!filteredNotificationUsers.length && (
+                        <div className="px-4 py-8 text-center text-xs text-gray-500">
+                          لا يوجد مستخدم بهذا الاسم.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={sendNotification}
+                  disabled={sendingNotification}
+                  className="flex w-full items-center justify-center rounded-[20px] bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-4 text-sm font-black text-white shadow-xl shadow-violet-950/35 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {sendingNotification
+                    ? "جاري إرسال الإشعار..."
+                    : "إرسال الإشعار"}
+                </button>
               </div>
             </section>
           )}

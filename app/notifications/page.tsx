@@ -7,62 +7,58 @@ import type { User } from "@supabase/supabase-js";
 import BottomNav from "@/components/BottomNav";
 import { supabase } from "@/lib/supabase";
 
-type NotificationItem = {
-  id: number;
+type NotificationRow = {
+  id: string;
   title: string;
-  description: string;
-  time: string;
-  icon: string;
-  read: boolean;
-  type: "order" | "offer" | "account" | "system";
+  body: string;
+  image_url: string | null;
+  link_url: string | null;
+  audience: "all" | "user";
+  target_user_id: string | null;
+  is_active: boolean;
+  created_at: string;
 };
 
-const initialNotifications: NotificationItem[] = [
-  {
-    id: 1,
-    title: "تم تسجيل دخول جديد",
-    description: "تم تسجيل الدخول إلى حسابك في متجر ZETA بنجاح.",
-    time: "الآن",
-    icon: "👤",
-    read: false,
-    type: "account",
-  },
-  {
-    id: 2,
-    title: "خصم افتتاح المتجر",
-    description: "استخدم كود ZETA10 واحصل على خصم 10% على طلبك.",
-    time: "منذ ساعة",
-    icon: "🔥",
-    read: false,
-    type: "offer",
-  },
-  {
-    id: 3,
-    title: "طلباتك تظهر هنا",
-    description: "بعد إتمام أي طلب سنرسل لك تحديثات حالة الطلب هنا.",
-    time: "اليوم",
-    icon: "📦",
-    read: true,
-    type: "order",
-  },
-  {
-    id: 4,
-    title: "مرحبًا بك في ZETA",
-    description: "تابع أحدث الألعاب والعروض والبكجات من صفحة المتجر.",
-    time: "اليوم",
-    icon: "🎮",
-    read: true,
-    type: "system",
-  },
-];
+type NotificationState = {
+  notification_id: string;
+  user_id: string;
+  read_at: string | null;
+  deleted_at: string | null;
+};
+
+type NotificationItem = NotificationRow & {
+  read: boolean;
+};
+
+function formatNotificationTime(value: string) {
+  const date = new Date(value);
+  const now = new Date();
+  const difference = now.getTime() - date.getTime();
+  const minutes = Math.floor(difference / 60000);
+  const hours = Math.floor(difference / 3600000);
+  const days = Math.floor(difference / 86400000);
+
+  if (minutes < 1) return "الآن";
+  if (minutes < 60) return `منذ ${minutes} دقيقة`;
+  if (hours < 24) return `منذ ${hours} ساعة`;
+  if (days < 7) return `منذ ${days} يوم`;
+
+  return new Intl.DateTimeFormat("ar-SA", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
 
 export default function NotificationsPage() {
   const router = useRouter();
 
   const [user, setUser] = useState<User | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
+  const [loadingNotifications, setLoadingNotifications] =
+    useState(true);
   const [notifications, setNotifications] =
-    useState<NotificationItem[]>(initialNotifications);
+    useState<NotificationItem[]>([]);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const unreadCount = useMemo(
     () =>
@@ -75,7 +71,7 @@ export default function NotificationsPage() {
   useEffect(() => {
     let mounted = true;
 
-    async function loadUser() {
+    async function startPage() {
       try {
         const {
           data: { user: currentUser },
@@ -89,47 +85,192 @@ export default function NotificationsPage() {
           return;
         }
 
-        if (mounted) {
-          setUser(currentUser);
-        }
+        if (!mounted) return;
+
+        setUser(currentUser);
+
+        await createAutomaticLoginNotification(currentUser);
+        await loadNotifications(currentUser.id, mounted);
       } catch (error) {
-        console.error(
-          "تعذر التحقق من المستخدم:",
-          error
-        );
+        console.error("تعذر تحميل الإشعارات:", error);
 
         if (mounted) {
-          router.replace("/");
+          setErrorMessage(
+            error instanceof Error
+              ? error.message
+              : "تعذر تحميل الإشعارات"
+          );
         }
       } finally {
         if (mounted) {
           setLoadingUser(false);
+          setLoadingNotifications(false);
         }
       }
     }
 
-    loadUser();
+    startPage();
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      async (_event, session) => {
         if (!session?.user) {
           router.replace("/");
           return;
         }
 
         setUser(session.user);
+        await loadNotifications(session.user.id, true);
       }
     );
+
+    const channel = supabase
+      .channel("zeta-notifications-live")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+        },
+        async () => {
+          const {
+            data: { user: currentUser },
+          } = await supabase.auth.getUser();
+
+          if (currentUser) {
+            await loadNotifications(currentUser.id, true);
+          }
+        }
+      )
+      .subscribe();
 
     return () => {
       mounted = false;
       subscription.unsubscribe();
+      supabase.removeChannel(channel);
     };
   }, [router]);
 
-  function markAsRead(id: number) {
+  async function createAutomaticLoginNotification(
+    currentUser: User
+  ) {
+    const sessionKey = `zeta_login_notification_${currentUser.id}`;
+
+    if (sessionStorage.getItem(sessionKey)) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("notifications")
+      .insert({
+        title: "تم تسجيل الدخول",
+        body: "تم تسجيل الدخول إلى حسابك في متجر ZETA بنجاح.",
+        audience: "user",
+        target_user_id: currentUser.id,
+        is_active: true,
+        created_by: null,
+      });
+
+    if (!error) {
+      sessionStorage.setItem(sessionKey, "1");
+    }
+  }
+
+  async function loadNotifications(
+    userId: string,
+    shouldUpdate = true
+  ) {
+    setLoadingNotifications(true);
+    setErrorMessage("");
+
+    try {
+      const [notificationsResult, statesResult] =
+        await Promise.all([
+          supabase
+            .from("notifications")
+            .select(
+              "id, title, body, image_url, link_url, audience, target_user_id, is_active, created_at"
+            )
+            .eq("is_active", true)
+            .or(
+              `audience.eq.all,and(audience.eq.user,target_user_id.eq.${userId})`
+            )
+            .order("created_at", { ascending: false }),
+
+          supabase
+            .from("notification_user_states")
+            .select(
+              "notification_id, user_id, read_at, deleted_at"
+            )
+            .eq("user_id", userId),
+        ]);
+
+      if (notificationsResult.error) {
+        throw notificationsResult.error;
+      }
+
+      if (statesResult.error) {
+        throw statesResult.error;
+      }
+
+      const states = new Map(
+        ((statesResult.data ?? []) as NotificationState[]).map(
+          (state) => [state.notification_id, state]
+        )
+      );
+
+      const visibleNotifications = (
+        (notificationsResult.data ?? []) as NotificationRow[]
+      )
+        .filter(
+          (notification) =>
+            !states.get(notification.id)?.deleted_at
+        )
+        .map((notification) => ({
+          ...notification,
+          read: Boolean(
+            states.get(notification.id)?.read_at
+          ),
+        }));
+
+      if (shouldUpdate) {
+        setNotifications(visibleNotifications);
+      }
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "تعذر تحميل الإشعارات"
+      );
+    } finally {
+      setLoadingNotifications(false);
+    }
+  }
+
+  async function markAsRead(id: string) {
+    if (!user) return;
+
+    const { error } = await supabase
+      .from("notification_user_states")
+      .upsert(
+        {
+          notification_id: id,
+          user_id: user.id,
+          read_at: new Date().toISOString(),
+          deleted_at: null,
+        },
+        {
+          onConflict: "notification_id,user_id",
+        }
+      );
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
     setNotifications((current) =>
       current.map((notification) =>
         notification.id === id
@@ -139,7 +280,30 @@ export default function NotificationsPage() {
     );
   }
 
-  function markAllAsRead() {
+  async function markAllAsRead() {
+    if (!user || !notifications.length) return;
+
+    const now = new Date().toISOString();
+
+    const { error } = await supabase
+      .from("notification_user_states")
+      .upsert(
+        notifications.map((notification) => ({
+          notification_id: notification.id,
+          user_id: user.id,
+          read_at: now,
+          deleted_at: null,
+        })),
+        {
+          onConflict: "notification_id,user_id",
+        }
+      );
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
     setNotifications((current) =>
       current.map((notification) => ({
         ...notification,
@@ -148,7 +312,27 @@ export default function NotificationsPage() {
     );
   }
 
-  function deleteNotification(id: number) {
+  async function deleteNotification(id: string) {
+    if (!user) return;
+
+    const { error } = await supabase
+      .from("notification_user_states")
+      .upsert(
+        {
+          notification_id: id,
+          user_id: user.id,
+          deleted_at: new Date().toISOString(),
+        },
+        {
+          onConflict: "notification_id,user_id",
+        }
+      );
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
     setNotifications((current) =>
       current.filter(
         (notification) => notification.id !== id
@@ -156,12 +340,34 @@ export default function NotificationsPage() {
     );
   }
 
-  function clearAll() {
+  async function clearAll() {
+    if (!user || !notifications.length) return;
+
     const confirmed = window.confirm(
-      "هل تريد حذف جميع الإشعارات؟"
+      "هل تريد حذف جميع الإشعارات من حسابك؟"
     );
 
     if (!confirmed) return;
+
+    const now = new Date().toISOString();
+
+    const { error } = await supabase
+      .from("notification_user_states")
+      .upsert(
+        notifications.map((notification) => ({
+          notification_id: notification.id,
+          user_id: user.id,
+          deleted_at: now,
+        })),
+        {
+          onConflict: "notification_id,user_id",
+        }
+      );
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
 
     setNotifications([]);
   }
@@ -174,6 +380,7 @@ export default function NotificationsPage() {
       >
         <div className="text-center">
           <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-white/10 border-t-violet-500" />
+
           <p className="mt-4 text-sm text-gray-400">
             جاري تحميل الإشعارات...
           </p>
@@ -182,9 +389,7 @@ export default function NotificationsPage() {
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   return (
     <main
@@ -227,6 +432,20 @@ export default function NotificationsPage() {
       </header>
 
       <section className="relative z-10 mx-auto max-w-3xl px-4 py-6">
+        {errorMessage && (
+          <div className="mb-4 rounded-[20px] border border-red-400/20 bg-red-500/10 px-4 py-3 text-xs font-bold text-red-300">
+            {errorMessage}
+
+            <button
+              type="button"
+              onClick={() => setErrorMessage("")}
+              className="mr-3 text-white"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="text-[10px] font-bold text-sky-400">
@@ -243,9 +462,9 @@ export default function NotificationsPage() {
               <button
                 type="button"
                 onClick={markAllAsRead}
-                className="rounded-xl border border-sky-400/15 bg-sky-500/10 px-3 py-2 text-[10px] font-black text-sky-300 transition hover:bg-sky-500/15 active:scale-95"
+                className="rounded-xl border border-sky-400/15 bg-sky-500/10 px-3 py-2 text-[9px] font-black text-sky-300 transition active:scale-95 sm:text-[10px]"
               >
-                تحديد الكل كمقروء
+                قراءة الكل
               </button>
             )}
 
@@ -253,7 +472,7 @@ export default function NotificationsPage() {
               <button
                 type="button"
                 onClick={clearAll}
-                className="rounded-xl border border-red-400/15 bg-red-500/10 px-3 py-2 text-[10px] font-black text-red-300 transition hover:bg-red-500/15 active:scale-95"
+                className="rounded-xl border border-red-400/15 bg-red-500/10 px-3 py-2 text-[9px] font-black text-red-300 transition active:scale-95 sm:text-[10px]"
               >
                 حذف الكل
               </button>
@@ -261,7 +480,11 @@ export default function NotificationsPage() {
           </div>
         </div>
 
-        {notifications.length === 0 ? (
+        {loadingNotifications ? (
+          <div className="mt-8 text-center text-sm text-gray-500">
+            جاري تحديث الإشعارات...
+          </div>
+        ) : notifications.length === 0 ? (
           <div className="mt-6 rounded-[30px] border border-white/[0.07] bg-[#121019] px-5 py-12 text-center shadow-2xl">
             <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-[26px] bg-sky-500/10 text-4xl">
               🔔
@@ -298,18 +521,16 @@ export default function NotificationsPage() {
                 )}
 
                 <div className="flex gap-3">
-                  <div
-                    className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-xl ${
-                      notification.type === "offer"
-                        ? "bg-amber-500/10"
-                        : notification.type === "order"
-                        ? "bg-violet-500/10"
-                        : notification.type === "account"
-                        ? "bg-sky-500/10"
-                        : "bg-white/5"
-                    }`}
-                  >
-                    {notification.icon}
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-sky-500/10 text-xl">
+                    {notification.image_url ? (
+                      <img
+                        src={notification.image_url}
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      "🔔"
+                    )}
                   </div>
 
                   <div className="min-w-0 flex-1">
@@ -320,7 +541,9 @@ export default function NotificationsPage() {
                         </h3>
 
                         <p className="mt-1 text-[10px] text-gray-500">
-                          {notification.time}
+                          {formatNotificationTime(
+                            notification.created_at
+                          )}
                         </p>
                       </div>
 
@@ -330,7 +553,7 @@ export default function NotificationsPage() {
                     </div>
 
                     <p className="mt-3 text-xs leading-6 text-gray-400">
-                      {notification.description}
+                      {notification.body}
                     </p>
 
                     <div className="mt-4 flex flex-wrap gap-2">
@@ -338,42 +561,32 @@ export default function NotificationsPage() {
                         <button
                           type="button"
                           onClick={() =>
-                            markAsRead(
-                              notification.id
-                            )
+                            markAsRead(notification.id)
                           }
-                          className="rounded-xl border border-sky-400/15 bg-sky-500/10 px-3 py-2 text-[10px] font-black text-sky-300 transition hover:bg-sky-500/15 active:scale-95"
+                          className="rounded-xl border border-sky-400/15 bg-sky-500/10 px-3 py-2 text-[10px] font-black text-sky-300 transition active:scale-95"
                         >
                           تحديد كمقروء
                         </button>
                       )}
 
-                      {notification.type === "order" && (
+                      {notification.link_url && (
                         <Link
-                          href="/orders"
-                          className="rounded-xl border border-violet-400/15 bg-violet-500/10 px-3 py-2 text-[10px] font-black text-violet-300 transition hover:bg-violet-500/15 active:scale-95"
+                          href={notification.link_url}
+                          onClick={() =>
+                            markAsRead(notification.id)
+                          }
+                          className="rounded-xl border border-violet-400/15 bg-violet-500/10 px-3 py-2 text-[10px] font-black text-violet-300 transition active:scale-95"
                         >
-                          عرض الطلبات
-                        </Link>
-                      )}
-
-                      {notification.type === "offer" && (
-                        <Link
-                          href="/offers"
-                          className="rounded-xl border border-amber-400/15 bg-amber-500/10 px-3 py-2 text-[10px] font-black text-amber-300 transition hover:bg-amber-500/15 active:scale-95"
-                        >
-                          عرض العروض
+                          فتح
                         </Link>
                       )}
 
                       <button
                         type="button"
                         onClick={() =>
-                          deleteNotification(
-                            notification.id
-                          )
+                          deleteNotification(notification.id)
                         }
-                        className="rounded-xl border border-red-400/10 bg-red-500/[0.06] px-3 py-2 text-[10px] font-black text-red-300 transition hover:bg-red-500/10 active:scale-95"
+                        className="rounded-xl border border-red-400/10 bg-red-500/[0.06] px-3 py-2 text-[10px] font-black text-red-300 transition active:scale-95"
                       >
                         حذف
                       </button>
