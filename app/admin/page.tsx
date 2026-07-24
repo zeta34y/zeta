@@ -27,7 +27,6 @@ type OfferRow = {
   id: string;
   title: string;
   product_id: string | null;
-  offer_category_id: string | null;
   discount_type: "percentage" | "fixed";
   discount_value: number;
   starts_at: string;
@@ -40,16 +39,11 @@ type OffersHeroSettings = {
   badge_text: string;
   title: string;
   description: string;
-};
-
-type OfferCategory = {
-  id: string;
-  name: string;
-  slug: string;
-  filter_key: string;
-  sort_order: number;
-  is_active: boolean;
-  is_system: boolean;
+  primary_button_text: string;
+  primary_button_link: string;
+  secondary_button_text: string;
+  secondary_button_link: string;
+  is_visible: boolean;
 };
 
 type Profile = {
@@ -132,9 +126,14 @@ const defaultAnnouncement: AnnouncementBar = {
 const defaultOffersHero: OffersHeroSettings = {
   id: 1,
   badge_text: "عروض محدودة 🔥",
-  title: "وفر أكثر على ألعابك المفضلة",
+  title: "وفّر أكثر على ألعابك المفضلة",
   description:
-    "مجموعة من أفضل الخصومات المتاحة حاليًا داخل متجر ZETA.",
+    "اشترِ ألعابك الرقمية بأسعار رمزية واستلمها مباشرة بعد الدفع.",
+  primary_button_text: "تسوق الآن",
+  primary_button_link: "/",
+  secondary_button_text: "اكتشف العروض",
+  secondary_button_link: "#offers",
+  is_visible: true,
 };
 
 const statusLabel: Record<OrderStatus, string> = {
@@ -193,6 +192,20 @@ function formatDate(value: string | null | undefined) {
   }).format(new Date(value));
 }
 
+function toDateTimeLocal(value: string | null | undefined) {
+  if (!value) return "";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "";
+
+  const localDate = new Date(
+    date.getTime() - date.getTimezoneOffset() * 60_000
+  );
+
+  return localDate.toISOString().slice(0, 16);
+}
+
 export default function AdminPage() {
   const router = useRouter();
 
@@ -223,27 +236,16 @@ export default function AdminPage() {
 
   const [products, setProducts] = useState<ProductOption[]>([]);
   const [offers, setOffers] = useState<OfferRow[]>([]);
-  const [offerCategories, setOfferCategories] =
-    useState<OfferCategory[]>([]);
   const [offersHero, setOffersHero] =
     useState<OffersHeroSettings>(defaultOffersHero);
   const [offersInnerTab, setOffersInnerTab] =
     useState<"content" | "discounts">("content");
   const [savingOffersHero, setSavingOffersHero] = useState(false);
 
-  const [categoryName, setCategoryName] = useState("");
-  const [editingCategoryId, setEditingCategoryId] =
-    useState<string | null>(null);
-
-  const [discountTitle, setDiscountTitle] = useState("");
-  const [discountProductId, setDiscountProductId] = useState("");
-  const [discountCategoryId, setDiscountCategoryId] = useState("");
-  const [discountType, setDiscountType] =
-    useState<"percentage" | "fixed">("percentage");
-  const [discountValue, setDiscountValue] = useState("");
-  const [discountStartsAt, setDiscountStartsAt] = useState("");
-  const [discountEndsAt, setDiscountEndsAt] = useState("");
-  const [savingDiscount, setSavingDiscount] = useState(false);
+  const [timeOfferId, setTimeOfferId] = useState("");
+  const [timeStartsAt, setTimeStartsAt] = useState("");
+  const [timeEndsAt, setTimeEndsAt] = useState("");
+  const [savingOfferTime, setSavingOfferTime] = useState(false);
 
   const [savingAnnouncement, setSavingAnnouncement] =
     useState(false);
@@ -408,7 +410,6 @@ export default function AdminPage() {
         productsResult,
         offersResult,
         offersHeroResult,
-        offerCategoriesResult,
       ] = await Promise.all([
         supabase
           .from("profiles")
@@ -441,21 +442,16 @@ export default function AdminPage() {
         supabase
           .from("offers")
           .select(
-            "id, title, product_id, offer_category_id, discount_type, discount_value, starts_at, ends_at, is_active"
+            "id, title, product_id, discount_type, discount_value, starts_at, ends_at, is_active"
           )
           .not("product_id", "is", null)
           .order("created_at", { ascending: false }),
 
         supabase
           .from("offers_hero_settings")
-          .select("id, badge_text, title, description")
+          .select("*")
           .eq("id", 1)
           .maybeSingle(),
-
-        supabase
-          .from("offer_categories")
-          .select("*")
-          .order("sort_order", { ascending: true }),
       ]);
 
       if (profilesResult.error) {
@@ -480,10 +476,6 @@ export default function AdminPage() {
 
       if (offersHeroResult.error) {
         throw offersHeroResult.error;
-      }
-
-      if (offerCategoriesResult.error) {
-        throw offerCategoriesResult.error;
       }
 
       setProfiles(
@@ -521,7 +513,6 @@ export default function AdminPage() {
           id: offer.id,
           title: offer.title,
           product_id: offer.product_id,
-          offer_category_id: offer.offer_category_id ?? null,
           discount_type: offer.discount_type,
           discount_value: toNumber(offer.discount_value),
           starts_at: offer.starts_at,
@@ -542,12 +533,23 @@ export default function AdminPage() {
           description:
             offersHeroResult.data.description ??
             defaultOffersHero.description,
+          primary_button_text:
+            offersHeroResult.data.primary_button_text ??
+            defaultOffersHero.primary_button_text,
+          primary_button_link:
+            offersHeroResult.data.primary_button_link ??
+            defaultOffersHero.primary_button_link,
+          secondary_button_text:
+            offersHeroResult.data.secondary_button_text ??
+            defaultOffersHero.secondary_button_text,
+          secondary_button_link:
+            offersHeroResult.data.secondary_button_link ??
+            defaultOffersHero.secondary_button_link,
+          is_visible: Boolean(
+            offersHeroResult.data.is_visible
+          ),
         });
       }
-
-      setOfferCategories(
-        (offerCategoriesResult.data ?? []) as OfferCategory[]
-      );
     } catch (error) {
       setErrorMessage(
         error instanceof Error
@@ -626,246 +628,120 @@ export default function AdminPage() {
           {
             id: 1,
             badge_text:
-              offersHero.badge_text.trim() || "عروض محدودة 🔥",
+              offersHero.badge_text.trim() || null,
             title: offersHero.title.trim(),
             description:
               offersHero.description.trim() || null,
+            primary_button_text:
+              offersHero.primary_button_text.trim() ||
+              "تسوق الآن",
+            primary_button_link:
+              offersHero.primary_button_link.trim() || "/",
+            secondary_button_text:
+              offersHero.secondary_button_text.trim() ||
+              "اكتشف العروض",
+            secondary_button_link:
+              offersHero.secondary_button_link.trim() ||
+              "#offers",
+            is_visible: offersHero.is_visible,
             updated_at: new Date().toISOString(),
           },
           { onConflict: "id" }
         );
 
       if (error) throw error;
-      showMessage("تم حفظ كتابة صفحة العروض");
+
+      showMessage("تم حفظ واجهة العروض");
     } catch (error) {
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : "تعذر حفظ كتابة صفحة العروض"
+          : "تعذر حفظ واجهة العروض"
       );
     } finally {
       setSavingOffersHero(false);
     }
   }
 
-  function makeCategorySlug(value: string) {
-    const base = value
-      .trim()
-      .toLowerCase()
-      .replace(/[\u064B-\u065F]/g, "")
-      .replace(/[^a-z0-9\u0600-\u06ff]+/g, "-")
-      .replace(/^-+|-+$/g, "");
-
-    return `${base || "category"}-${Date.now()}`;
-  }
-
-  async function saveOfferCategory() {
-    const name = categoryName.trim();
-
-    if (!name) {
-      setErrorMessage("اكتب اسم التصنيف");
-      return;
-    }
-
+  function chooseOfferTime(offerId: string) {
+    setTimeOfferId(offerId);
     setErrorMessage("");
 
-    try {
-      if (editingCategoryId) {
-        const { error } = await supabase
-          .from("offer_categories")
-          .update({ name })
-          .eq("id", editingCategoryId);
+    const selectedOffer = offers.find(
+      (offer) => offer.id === offerId
+    );
 
-        if (error) throw error;
-        showMessage("تم تعديل اسم التصنيف");
-      } else {
-        const nextOrder =
-          offerCategories.length > 0
-            ? Math.max(
-                ...offerCategories.map((item) => item.sort_order)
-              ) + 1
-            : 0;
-
-        const { error } = await supabase
-          .from("offer_categories")
-          .insert({
-            name,
-            slug: makeCategorySlug(name),
-            filter_key: "custom",
-            sort_order: nextOrder,
-            is_active: true,
-            is_system: false,
-          });
-
-        if (error) throw error;
-        showMessage("تمت إضافة التصنيف");
-      }
-
-      setCategoryName("");
-      setEditingCategoryId(null);
-      await loadData();
-    } catch (error) {
-      setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "تعذر حفظ التصنيف"
-      );
-    }
-  }
-
-  async function toggleOfferCategory(
-    category: OfferCategory
-  ) {
-    const { error } = await supabase
-      .from("offer_categories")
-      .update({ is_active: !category.is_active })
-      .eq("id", category.id);
-
-    if (error) {
-      setErrorMessage(error.message);
+    if (!selectedOffer) {
+      setTimeStartsAt("");
+      setTimeEndsAt("");
       return;
     }
 
-    await loadData();
+    setTimeStartsAt(
+      toDateTimeLocal(selectedOffer.starts_at)
+    );
+    setTimeEndsAt(
+      toDateTimeLocal(selectedOffer.ends_at)
+    );
   }
 
-  async function moveOfferCategory(
-    category: OfferCategory,
-    direction: "up" | "down"
-  ) {
-    const sorted = [...offerCategories].sort(
-      (a, b) => a.sort_order - b.sort_order
-    );
-    const index = sorted.findIndex(
-      (item) => item.id === category.id
-    );
-    const targetIndex =
-      direction === "up" ? index - 1 : index + 1;
+  async function saveOfferTime() {
+    setErrorMessage("");
+
+    if (!timeOfferId) {
+      setErrorMessage("اختر اللعبة التي تريد تعديل وقتها");
+      return;
+    }
+
+    if (!timeStartsAt) {
+      setErrorMessage("حدد وقت بداية التخفيض");
+      return;
+    }
+
+    if (!timeEndsAt) {
+      setErrorMessage("حدد وقت نهاية التخفيض");
+      return;
+    }
+
+    const startsAt = new Date(timeStartsAt);
+    const endsAt = new Date(timeEndsAt);
 
     if (
-      index < 0 ||
-      targetIndex < 0 ||
-      targetIndex >= sorted.length
+      Number.isNaN(startsAt.getTime()) ||
+      Number.isNaN(endsAt.getTime())
     ) {
+      setErrorMessage("تأكد من كتابة وقت صحيح");
       return;
     }
 
-    const target = sorted[targetIndex];
-
-    const { error: firstError } = await supabase
-      .from("offer_categories")
-      .update({ sort_order: target.sort_order })
-      .eq("id", category.id);
-
-    if (firstError) {
-      setErrorMessage(firstError.message);
+    if (endsAt.getTime() <= startsAt.getTime()) {
+      setErrorMessage("وقت النهاية يجب أن يكون بعد وقت البداية");
       return;
     }
 
-    const { error: secondError } = await supabase
-      .from("offer_categories")
-      .update({ sort_order: category.sort_order })
-      .eq("id", target.id);
-
-    if (secondError) {
-      setErrorMessage(secondError.message);
-      return;
-    }
-
-    await loadData();
-  }
-
-  async function deleteOfferCategory(
-    category: OfferCategory
-  ) {
-    if (category.is_system) {
-      setErrorMessage(
-        "التصنيفات الأساسية لا تنحذف، لكن تقدر تغير اسمها أو تخفيها"
-      );
-      return;
-    }
-
-    if (!window.confirm(`حذف تصنيف ${category.name}؟`)) {
-      return;
-    }
-
-    const { error } = await supabase
-      .from("offer_categories")
-      .delete()
-      .eq("id", category.id);
-
-    if (error) {
-      setErrorMessage(error.message);
-      return;
-    }
-
-    showMessage("تم حذف التصنيف");
-    await loadData();
-  }
-
-  async function createDiscount() {
-    setErrorMessage("");
-
-    if (!discountProductId) {
-      setErrorMessage("اختر اللعبة");
-      return;
-    }
-
-    if (!discountValue || toNumber(discountValue) <= 0) {
-      setErrorMessage("اكتب قيمة تخفيض صحيحة");
-      return;
-    }
-
-    if (!discountEndsAt) {
-      setErrorMessage("حدد وقت انتهاء التخفيض");
-      return;
-    }
-
-    setSavingDiscount(true);
+    setSavingOfferTime(true);
 
     try {
-      const product = products.find(
-        (item) => item.id === discountProductId
-      );
-
       const { error } = await supabase
         .from("offers")
-        .insert({
-          title:
-            discountTitle.trim() ||
-            `تخفيض على ${product?.name || "اللعبة"}`,
-          product_id: discountProductId,
-          package_id: null,
-          offer_category_id: discountCategoryId || null,
-          discount_type: discountType,
-          discount_value: toNumber(discountValue),
-          starts_at: discountStartsAt
-            ? new Date(discountStartsAt).toISOString()
-            : new Date().toISOString(),
-          ends_at: new Date(discountEndsAt).toISOString(),
-          is_active: true,
-        });
+        .update({
+          starts_at: startsAt.toISOString(),
+          ends_at: endsAt.toISOString(),
+        })
+        .eq("id", timeOfferId);
 
       if (error) throw error;
 
-      setDiscountTitle("");
-      setDiscountProductId("");
-      setDiscountCategoryId("");
-      setDiscountType("percentage");
-      setDiscountValue("");
-      setDiscountStartsAt("");
-      setDiscountEndsAt("");
-
-      showMessage("تم إنشاء التخفيض");
+      showMessage("تم حفظ وقت التخفيض للعبة المختارة");
       await loadData();
     } catch (error) {
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : "تعذر إنشاء التخفيض"
+          : "تعذر حفظ وقت التخفيض"
       );
     } finally {
-      setSavingDiscount(false);
+      setSavingOfferTime(false);
     }
   }
 
@@ -1342,11 +1218,13 @@ export default function AdminPage() {
               </div>
 
               {offersInnerTab === "content" && (
-                <div className="mt-5 space-y-5">
+                <div className="mt-5 space-y-4">
                   <div className="rounded-[24px] border border-violet-400/20 bg-gradient-to-br from-violet-900/60 via-[#171128] to-fuchsia-900/30 p-5 text-center">
-                    <span className="inline-flex rounded-full border border-violet-300/20 bg-violet-500/10 px-3 py-2 text-[10px] font-black text-violet-200">
-                      {offersHero.badge_text}
-                    </span>
+                    {offersHero.badge_text && (
+                      <span className="inline-flex rounded-full border border-violet-300/20 bg-violet-500/10 px-3 py-2 text-[10px] font-black text-violet-200">
+                        {offersHero.badge_text}
+                      </span>
+                    )}
 
                     <h3 className="mx-auto mt-4 max-w-xl text-2xl font-black leading-tight sm:text-3xl">
                       {offersHero.title}
@@ -1355,200 +1233,161 @@ export default function AdminPage() {
                     <p className="mx-auto mt-3 max-w-xl text-xs leading-6 text-gray-400">
                       {offersHero.description}
                     </p>
-                  </div>
 
-                  <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
-                    <h3 className="text-sm font-black">
-                      تعديل كتابة صفحة العروض
-                    </h3>
+                    <div className="mt-5 flex flex-wrap justify-center gap-2">
+                      <span className="rounded-2xl bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-3 text-xs font-black">
+                        {offersHero.primary_button_text}
+                      </span>
 
-                    <p className="mt-1 text-[10px] leading-5 text-gray-500">
-                      نفس التصميم يبقى كما هو، وأنت تعدل الكتابة فقط.
-                    </p>
-
-                    <div className="mt-4 space-y-4">
-                      <AdminField label="العبارة الصغيرة">
-                        <input
-                          value={offersHero.badge_text}
-                          onChange={(event) =>
-                            setOffersHero((current) => ({
-                              ...current,
-                              badge_text: event.target.value,
-                            }))
-                          }
-                          placeholder="عروض محدودة 🔥"
-                          className={adminInputClass}
-                        />
-                      </AdminField>
-
-                      <AdminField label="العنوان الكبير">
-                        <input
-                          value={offersHero.title}
-                          onChange={(event) =>
-                            setOffersHero((current) => ({
-                              ...current,
-                              title: event.target.value,
-                            }))
-                          }
-                          placeholder="وفر أكثر على ألعابك المفضلة"
-                          className={adminInputClass}
-                        />
-                      </AdminField>
-
-                      <AdminField label="الوصف">
-                        <textarea
-                          value={offersHero.description}
-                          onChange={(event) =>
-                            setOffersHero((current) => ({
-                              ...current,
-                              description: event.target.value,
-                            }))
-                          }
-                          rows={4}
-                          className={`${adminInputClass} resize-none leading-7`}
-                        />
-                      </AdminField>
-
-                      <button
-                        type="button"
-                        onClick={saveOffersHero}
-                        disabled={savingOffersHero}
-                        className="w-full rounded-[20px] bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-4 text-sm font-black disabled:opacity-50"
-                      >
-                        {savingOffersHero
-                          ? "جاري الحفظ..."
-                          : "حفظ الكتابة"}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className="text-sm font-black">
-                          تصنيفات صفحة العروض
-                        </h3>
-                        <p className="mt-1 text-[10px] leading-5 text-gray-500">
-                          عدّل الموجود أو أضف تصنيفًا جديدًا، ورتّبه أو أخفه.
-                        </p>
-                      </div>
-
-                      <span className="rounded-xl bg-violet-500/10 px-3 py-2 text-[10px] font-black text-violet-200">
-                        {offerCategories.length} تصنيف
+                      <span className="rounded-2xl border border-white/10 bg-white/5 px-5 py-3 text-xs font-black">
+                        {offersHero.secondary_button_text}
                       </span>
                     </div>
+                  </div>
 
-                    <div className="mt-4 flex gap-2">
+                  <AdminField label="العبارة الصغيرة">
+                    <input
+                      value={offersHero.badge_text}
+                      onChange={(event) =>
+                        setOffersHero((current) => ({
+                          ...current,
+                          badge_text: event.target.value,
+                        }))
+                      }
+                      placeholder="عروض محدودة 🔥"
+                      className={adminInputClass}
+                    />
+                  </AdminField>
+
+                  <AdminField label="العنوان الكبير">
+                    <input
+                      value={offersHero.title}
+                      onChange={(event) =>
+                        setOffersHero((current) => ({
+                          ...current,
+                          title: event.target.value,
+                        }))
+                      }
+                      placeholder="وفّر أكثر على ألعابك المفضلة"
+                      className={adminInputClass}
+                    />
+                  </AdminField>
+
+                  <AdminField label="الوصف">
+                    <textarea
+                      value={offersHero.description}
+                      onChange={(event) =>
+                        setOffersHero((current) => ({
+                          ...current,
+                          description: event.target.value,
+                        }))
+                      }
+                      rows={4}
+                      placeholder="مثال: اشترِ لعبتين واحصل على الثالثة مجانًا"
+                      className={`${adminInputClass} resize-none leading-7`}
+                    />
+                  </AdminField>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <AdminField label="نص زر تسوق الآن">
                       <input
-                        value={categoryName}
+                        value={offersHero.primary_button_text}
                         onChange={(event) =>
-                          setCategoryName(event.target.value)
+                          setOffersHero((current) => ({
+                            ...current,
+                            primary_button_text: event.target.value,
+                          }))
                         }
-                        placeholder="اسم التصنيف"
                         className={adminInputClass}
                       />
+                    </AdminField>
 
-                      <button
-                        type="button"
-                        onClick={saveOfferCategory}
-                        className="shrink-0 rounded-[18px] bg-violet-600 px-4 text-xs font-black"
-                      >
-                        {editingCategoryId ? "حفظ" : "إضافة"}
-                      </button>
-                    </div>
+                    <AdminField label="رابط زر تسوق الآن">
+                      <input
+                        dir="ltr"
+                        value={offersHero.primary_button_link}
+                        onChange={(event) =>
+                          setOffersHero((current) => ({
+                            ...current,
+                            primary_button_link: event.target.value,
+                          }))
+                        }
+                        className={`${adminInputClass} text-left`}
+                      />
+                    </AdminField>
 
-                    {editingCategoryId && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setEditingCategoryId(null);
-                          setCategoryName("");
-                        }}
-                        className="mt-2 text-[10px] font-black text-gray-500"
-                      >
-                        إلغاء التعديل
-                      </button>
-                    )}
+                    <AdminField label="نص زر اكتشف العروض">
+                      <input
+                        value={offersHero.secondary_button_text}
+                        onChange={(event) =>
+                          setOffersHero((current) => ({
+                            ...current,
+                            secondary_button_text: event.target.value,
+                          }))
+                        }
+                        className={adminInputClass}
+                      />
+                    </AdminField>
 
-                    <div className="mt-4 space-y-2">
-                      {offerCategories.map((category, index) => (
-                        <div
-                          key={category.id}
-                          className="flex flex-wrap items-center gap-2 rounded-[18px] border border-white/10 bg-black/20 p-3"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-black">
-                              {category.name}
-                            </p>
-                            <p className="mt-1 text-[8px] text-gray-500">
-                              {category.is_system
-                                ? "تصنيف أساسي"
-                                : "تصنيف مضاف"}
-                            </p>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEditingCategoryId(category.id);
-                              setCategoryName(category.name);
-                            }}
-                            className="rounded-xl border border-violet-400/15 bg-violet-500/10 px-3 py-2 text-[9px] font-black text-violet-200"
-                          >
-                            تعديل
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              toggleOfferCategory(category)
-                            }
-                            className={`rounded-xl px-3 py-2 text-[9px] font-black ${
-                              category.is_active
-                                ? "bg-emerald-500/10 text-emerald-300"
-                                : "bg-red-500/10 text-red-300"
-                            }`}
-                          >
-                            {category.is_active ? "ظاهر" : "مخفي"}
-                          </button>
-
-                          <button
-                            type="button"
-                            disabled={index === 0}
-                            onClick={() =>
-                              moveOfferCategory(category, "up")
-                            }
-                            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[9px] disabled:opacity-30"
-                          >
-                            ↑
-                          </button>
-
-                          <button
-                            type="button"
-                            disabled={
-                              index === offerCategories.length - 1
-                            }
-                            onClick={() =>
-                              moveOfferCategory(category, "down")
-                            }
-                            className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[9px] disabled:opacity-30"
-                          >
-                            ↓
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              deleteOfferCategory(category)
-                            }
-                            className="rounded-xl border border-red-400/15 bg-red-500/10 px-3 py-2 text-[9px] font-black text-red-300"
-                          >
-                            حذف
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+                    <AdminField label="رابط زر اكتشف العروض">
+                      <input
+                        dir="ltr"
+                        value={offersHero.secondary_button_link}
+                        onChange={(event) =>
+                          setOffersHero((current) => ({
+                            ...current,
+                            secondary_button_link: event.target.value,
+                          }))
+                        }
+                        className={`${adminInputClass} text-left`}
+                      />
+                    </AdminField>
                   </div>
+
+                  <label className="flex items-center justify-between rounded-[20px] border border-white/10 bg-white/[0.04] px-4 py-4">
+                    <div>
+                      <p className="text-sm font-black">
+                        إظهار واجهة العروض
+                      </p>
+                      <p className="mt-1 text-[10px] text-gray-500">
+                        يمكنك إخفاء الجزء كاملًا من المتجر.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setOffersHero((current) => ({
+                          ...current,
+                          is_visible: !current.is_visible,
+                        }))
+                      }
+                      className={`relative h-8 w-14 rounded-full transition ${
+                        offersHero.is_visible
+                          ? "bg-gradient-to-l from-violet-500 to-fuchsia-500"
+                          : "bg-white/10"
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-1 h-6 w-6 rounded-full bg-white transition ${
+                          offersHero.is_visible
+                            ? "right-1"
+                            : "right-7"
+                        }`}
+                      />
+                    </button>
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={saveOffersHero}
+                    disabled={savingOffersHero}
+                    className="w-full rounded-[20px] bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-4 text-sm font-black disabled:opacity-50"
+                  >
+                    {savingOffersHero
+                      ? "جاري الحفظ..."
+                      : "حفظ واجهة العروض"}
+                  </button>
                 </div>
               )}
 
@@ -1556,140 +1395,107 @@ export default function AdminPage() {
                 <div className="mt-5 space-y-5">
                   <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
                     <h3 className="text-sm font-black">
-                      إنشاء تخفيض جديد
+                      تعديل وقت تخفيض لعبة
                     </h3>
 
-                    <div className="mt-4 space-y-4">
-                      <AdminField label="اسم التخفيض">
-                        <input
-                          value={discountTitle}
-                          onChange={(event) =>
-                            setDiscountTitle(event.target.value)
-                          }
-                          placeholder="مثال: عرض نهاية الأسبوع"
-                          className={adminInputClass}
-                        />
-                      </AdminField>
+                    <p className="mt-2 text-[10px] leading-5 text-gray-500">
+                      اختر العرض الموجود ثم عدّل وقت البداية والنهاية فقط. لن تتغير نسبة الخصم أو اسم العرض.
+                    </p>
 
+                    <div className="mt-4 space-y-4">
                       <AdminField label="اختر اللعبة">
                         <select
-                          value={discountProductId}
+                          value={timeOfferId}
                           onChange={(event) =>
-                            setDiscountProductId(event.target.value)
+                            chooseOfferTime(event.target.value)
                           }
                           className={adminInputClass}
                         >
                           <option value="">اختر لعبة</option>
-                          {products.map((product) => (
-                            <option
-                              key={product.id}
-                              value={product.id}
-                            >
-                              {product.name} — {formatMoney(product.price)}
-                            </option>
-                          ))}
-                        </select>
-                      </AdminField>
+                          {offers.map((offer) => {
+                            const product = products.find(
+                              (item) => item.id === offer.product_id
+                            );
 
-                      <AdminField label="التصنيف الذي يظهر فيه العرض">
-                        <select
-                          value={discountCategoryId}
-                          onChange={(event) =>
-                            setDiscountCategoryId(event.target.value)
-                          }
-                          className={adminInputClass}
-                        >
-                          <option value="">
-                            تلقائي حسب نوع اللعبة
-                          </option>
-                          {offerCategories
-                            .filter((category) => category.is_active)
-                            .map((category) => (
-                              <option
-                                key={category.id}
-                                value={category.id}
-                              >
-                                {category.name}
+                            return (
+                              <option key={offer.id} value={offer.id}>
+                                {product?.name || "لعبة محذوفة"} — {offer.title}
                               </option>
-                            ))}
+                            );
+                          })}
                         </select>
                       </AdminField>
 
-                      <div className="grid grid-cols-2 gap-3">
-                        <AdminField label="نوع التخفيض">
-                          <select
-                            value={discountType}
-                            onChange={(event) =>
-                              setDiscountType(
-                                event.target.value as
-                                  | "percentage"
-                                  | "fixed"
-                              )
-                            }
-                            className={adminInputClass}
-                          >
-                            <option value="percentage">
-                              نسبة مئوية
-                            </option>
-                            <option value="fixed">
-                              مبلغ ثابت
-                            </option>
-                          </select>
-                        </AdminField>
+                      {timeOfferId && (
+                        <div className="rounded-[18px] border border-violet-400/15 bg-violet-500/[0.07] px-4 py-3">
+                          {(() => {
+                            const selectedOffer = offers.find(
+                              (offer) => offer.id === timeOfferId
+                            );
+                            const product = products.find(
+                              (item) =>
+                                item.id === selectedOffer?.product_id
+                            );
 
-                        <AdminField
-                          label={
-                            discountType === "percentage"
-                              ? "نسبة الخصم %"
-                              : "مبلغ الخصم"
-                          }
-                        >
-                          <input
-                            type="number"
-                            min="0.01"
-                            step="0.01"
-                            value={discountValue}
-                            onChange={(event) =>
-                              setDiscountValue(event.target.value)
-                            }
-                            className={adminInputClass}
-                          />
-                        </AdminField>
-                      </div>
+                            if (!selectedOffer) return null;
+
+                            return (
+                              <>
+                                <p className="text-xs font-black text-violet-200">
+                                  {product?.name || "لعبة محذوفة"}
+                                </p>
+                                <p className="mt-1 text-[9px] text-gray-500">
+                                  {selectedOffer.discount_type === "percentage"
+                                    ? `خصم ${selectedOffer.discount_value}%`
+                                    : `خصم ${formatMoney(
+                                        selectedOffer.discount_value
+                                      )}`}
+                                  {" • "}
+                                  {selectedOffer.is_active
+                                    ? "مفعّل"
+                                    : "متوقف"}
+                                </p>
+                              </>
+                            );
+                          })()}
+                        </div>
+                      )}
 
                       <div className="grid grid-cols-2 gap-3">
                         <AdminField label="بداية التخفيض">
                           <input
                             type="datetime-local"
-                            value={discountStartsAt}
+                            value={timeStartsAt}
                             onChange={(event) =>
-                              setDiscountStartsAt(event.target.value)
+                              setTimeStartsAt(event.target.value)
                             }
-                            className={adminInputClass}
+                            disabled={!timeOfferId}
+                            className={`${adminInputClass} disabled:cursor-not-allowed disabled:opacity-40`}
                           />
                         </AdminField>
 
                         <AdminField label="نهاية التخفيض">
                           <input
                             type="datetime-local"
-                            value={discountEndsAt}
+                            value={timeEndsAt}
                             onChange={(event) =>
-                              setDiscountEndsAt(event.target.value)
+                              setTimeEndsAt(event.target.value)
                             }
-                            className={adminInputClass}
+                            disabled={!timeOfferId}
+                            className={`${adminInputClass} disabled:cursor-not-allowed disabled:opacity-40`}
                           />
                         </AdminField>
                       </div>
 
                       <button
                         type="button"
-                        onClick={createDiscount}
-                        disabled={savingDiscount}
-                        className="w-full rounded-[20px] bg-gradient-to-l from-amber-500 to-orange-600 px-5 py-4 text-sm font-black disabled:opacity-50"
+                        onClick={saveOfferTime}
+                        disabled={!timeOfferId || savingOfferTime}
+                        className="w-full rounded-[20px] bg-gradient-to-l from-amber-500 to-orange-600 px-5 py-4 text-sm font-black disabled:cursor-not-allowed disabled:opacity-50"
                       >
-                        {savingDiscount
-                          ? "جاري إنشاء التخفيض..."
-                          : "إنشاء التخفيض"}
+                        {savingOfferTime
+                          ? "جاري حفظ الوقت..."
+                          : "حفظ وقت التخفيض"}
                       </button>
                     </div>
                   </div>
