@@ -40,10 +40,28 @@ type HomeCategory = {
   id: string;
   name: string;
   icon: string;
+  slug: string | null;
   link_url: string | null;
+  page_badge: string;
+  page_title: string;
+  page_description: string;
+  games_badge: string;
+  games_title: string;
+  empty_title: string;
+  empty_description: string;
+  use_custom_items: boolean;
   sort_order: number;
   is_active: boolean;
   is_system: boolean;
+};
+
+type HomeCategoryItem = {
+  id: string;
+  category_id: string;
+  product_id: string | null;
+  package_id: string | null;
+  sort_order: number;
+  is_active: boolean;
 };
 
 type HomePageItem = {
@@ -278,6 +296,8 @@ export default function AdminPage() {
   const [packages, setPackages] = useState<PackageOption[]>([]);
   const [homeCategories, setHomeCategories] =
     useState<HomeCategory[]>([]);
+  const [homeCategoryItems, setHomeCategoryItems] =
+    useState<HomeCategoryItem[]>([]);
   const [homePageItems, setHomePageItems] =
     useState<HomePageItem[]>([]);
   const [offers, setOffers] = useState<OfferRow[]>([]);
@@ -291,10 +311,31 @@ export default function AdminPage() {
 
   const [homeCategoryName, setHomeCategoryName] = useState("");
   const [homeCategoryIcon, setHomeCategoryIcon] = useState("🎮");
-  const [homeCategoryLink, setHomeCategoryLink] = useState("");
+  const [homeCategorySlug, setHomeCategorySlug] = useState("");
   const [editingHomeCategoryId, setEditingHomeCategoryId] =
     useState<string | null>(null);
   const [savingHomeCategory, setSavingHomeCategory] = useState(false);
+
+  const [selectedHomeCategoryId, setSelectedHomeCategoryId] =
+    useState("");
+  const [homePageBadge, setHomePageBadge] =
+    useState("التصنيف المختار");
+  const [homePageTitle, setHomePageTitle] = useState("");
+  const [homePageDescription, setHomePageDescription] = useState("");
+  const [homeGamesBadge, setHomeGamesBadge] = useState("الألعاب");
+  const [homeGamesTitle, setHomeGamesTitle] = useState("");
+  const [homeEmptyTitle, setHomeEmptyTitle] =
+    useState("لا توجد ألعاب حاليًا");
+  const [homeEmptyDescription, setHomeEmptyDescription] =
+    useState("سيتم إضافة ألعاب جديدة قريبًا");
+  const [savingHomeCategoryPage, setSavingHomeCategoryPage] =
+    useState(false);
+  const [homeCategorySourceType, setHomeCategorySourceType] =
+    useState<"product" | "package">("product");
+  const [homeCategorySourceId, setHomeCategorySourceId] =
+    useState("");
+  const [savingHomeCategoryItem, setSavingHomeCategoryItem] =
+    useState(false);
 
   const [homeSectionKey, setHomeSectionKey] =
     useState<HomeSectionKey>("featured");
@@ -385,6 +426,47 @@ export default function AdminPage() {
   const homeSourceOptions = useMemo(() => {
     return homeSectionKey === "packages" ? packages : products;
   }, [homeSectionKey, packages, products]);
+
+  const homeCategorySourceOptions = useMemo(() => {
+    return homeCategorySourceType === "package" ? packages : products;
+  }, [homeCategorySourceType, packages, products]);
+
+  const selectedHomeCategoryItems = useMemo(() => {
+    return homeCategoryItems
+      .filter((item) => item.category_id === selectedHomeCategoryId)
+      .sort((a, b) => a.sort_order - b.sort_order);
+  }, [homeCategoryItems, selectedHomeCategoryId]);
+
+  useEffect(() => {
+    const category = homeCategories.find(
+      (item) => item.id === selectedHomeCategoryId
+    );
+
+    if (!category) {
+      setHomePageBadge("التصنيف المختار");
+      setHomePageTitle("");
+      setHomePageDescription("");
+      setHomeGamesBadge("الألعاب");
+      setHomeGamesTitle("");
+      setHomeEmptyTitle("لا توجد ألعاب حاليًا");
+      setHomeEmptyDescription("سيتم إضافة ألعاب جديدة قريبًا");
+      return;
+    }
+
+    setHomePageBadge(category.page_badge || "التصنيف المختار");
+    setHomePageTitle(category.page_title || category.name);
+    setHomePageDescription(
+      category.page_description || "الألعاب الموجودة في هذا التصنيف"
+    );
+    setHomeGamesBadge(category.games_badge || "الألعاب");
+    setHomeGamesTitle(
+      category.games_title || category.page_title || category.name
+    );
+    setHomeEmptyTitle(category.empty_title || "لا توجد ألعاب حاليًا");
+    setHomeEmptyDescription(
+      category.empty_description || "سيتم إضافة ألعاب جديدة قريبًا"
+    );
+  }, [homeCategories, selectedHomeCategoryId]);
 
   useEffect(() => {
     let mounted = true;
@@ -480,6 +562,7 @@ export default function AdminPage() {
         offersHeroResult,
         offerCategoriesResult,
         homeCategoriesResult,
+        homeCategoryItemsResult,
         homePageItemsResult,
       ] = await Promise.all([
         supabase
@@ -533,8 +616,16 @@ export default function AdminPage() {
         supabase
           .from("home_categories")
           .select(
-            "id, name, icon, link_url, sort_order, is_active, is_system"
+            "id, name, icon, slug, link_url, page_badge, page_title, page_description, games_badge, games_title, empty_title, empty_description, use_custom_items, sort_order, is_active, is_system"
           )
+          .order("sort_order", { ascending: true }),
+
+        supabase
+          .from("home_category_items")
+          .select(
+            "id, category_id, product_id, package_id, sort_order, is_active"
+          )
+          .order("category_id", { ascending: true })
           .order("sort_order", { ascending: true }),
 
         supabase
@@ -555,6 +646,7 @@ export default function AdminPage() {
       if (offersHeroResult.error) throw offersHeroResult.error;
       if (offerCategoriesResult.error) throw offerCategoriesResult.error;
       if (homeCategoriesResult.error) throw homeCategoriesResult.error;
+      if (homeCategoryItemsResult.error) throw homeCategoryItemsResult.error;
       if (homePageItemsResult.error) throw homePageItemsResult.error;
 
       setProfiles((profilesResult.data ?? []) as Profile[]);
@@ -590,8 +682,50 @@ export default function AdminPage() {
         }))
       );
 
-      setHomeCategories(
-        (homeCategoriesResult.data ?? []) as HomeCategory[]
+      const loadedHomeCategories =
+        (homeCategoriesResult.data ?? []).map((category) => ({
+          id: category.id,
+          name: category.name,
+          icon: category.icon || "🎮",
+          slug: category.slug ?? null,
+          link_url: category.link_url ?? null,
+          page_badge: category.page_badge || "التصنيف المختار",
+          page_title: category.page_title || category.name,
+          page_description:
+            category.page_description ||
+            "الألعاب الموجودة في هذا التصنيف",
+          games_badge: category.games_badge || "الألعاب",
+          games_title: category.games_title || category.page_title || category.name,
+          empty_title: category.empty_title || "لا توجد ألعاب حاليًا",
+          empty_description:
+            category.empty_description ||
+            "سيتم إضافة ألعاب جديدة قريبًا",
+          use_custom_items: Boolean(category.use_custom_items),
+          sort_order: Number(category.sort_order ?? 0),
+          is_active: Boolean(category.is_active),
+          is_system: Boolean(category.is_system),
+        })) as HomeCategory[];
+
+      setHomeCategories(loadedHomeCategories);
+      setSelectedHomeCategoryId((current) => {
+        const validCurrent = loadedHomeCategories.some(
+          (category) => category.id === current && category.slug
+        );
+
+        return validCurrent
+          ? current
+          : loadedHomeCategories.find((category) => category.slug)?.id || "";
+      });
+
+      setHomeCategoryItems(
+        (homeCategoryItemsResult.data ?? []).map((item) => ({
+          id: item.id,
+          category_id: item.category_id,
+          product_id: item.product_id ?? null,
+          package_id: item.package_id ?? null,
+          sort_order: Number(item.sort_order ?? 0),
+          is_active: Boolean(item.is_active),
+        }))
       );
 
       setHomePageItems(
@@ -700,22 +834,49 @@ export default function AdminPage() {
     }
   }
 
+  function normalizeHomeCategorySlug(value: string) {
+    return value
+      .trim()
+      .toLowerCase()
+      .replace(/[\u064B-\u065F]/g, "")
+      .replace(/[^a-z0-9\u0600-\u06ff]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  }
+
+  function makeHomeCategorySlug(value: string) {
+    const base = normalizeHomeCategorySlug(value) || "category";
+    return `${base}-${Date.now().toString(36)}`;
+  }
+
   function resetHomeCategoryForm() {
     setEditingHomeCategoryId(null);
     setHomeCategoryName("");
     setHomeCategoryIcon("🎮");
-    setHomeCategoryLink("");
+    setHomeCategorySlug("");
   }
 
   async function saveHomeCategory() {
     const name = homeCategoryName.trim();
     const icon = homeCategoryIcon.trim() || "🎮";
-    const linkUrl = homeCategoryLink.trim() || null;
 
     if (!name) {
       setErrorMessage("اكتب اسم تصنيف الصفحة الرئيسية");
       return;
     }
+
+    const currentCategory = homeCategories.find(
+      (category) => category.id === editingHomeCategoryId
+    );
+    const isAllCategory = Boolean(
+      currentCategory?.is_system &&
+        !currentCategory.slug &&
+        !currentCategory.link_url
+    );
+    const slug = isAllCategory
+      ? null
+      : normalizeHomeCategorySlug(homeCategorySlug) ||
+        makeHomeCategorySlug(name);
+    const linkUrl = slug ? `/categories/${slug}` : null;
 
     setSavingHomeCategory(true);
     setErrorMessage("");
@@ -727,13 +888,21 @@ export default function AdminPage() {
           .update({
             name,
             icon,
+            slug,
             link_url: linkUrl,
+            page_title:
+              currentCategory?.page_title?.trim() ||
+              name,
+            games_title:
+              currentCategory?.games_title?.trim() ||
+              currentCategory?.page_title?.trim() ||
+              name,
             updated_at: new Date().toISOString(),
           })
           .eq("id", editingHomeCategoryId);
 
         if (error) throw error;
-        showMessage("تم تعديل تصنيف الصفحة الرئيسية");
+        showMessage("تم تعديل التصنيف ورابط صفحته");
       } else {
         const nextOrder =
           homeCategories.length > 0
@@ -744,19 +913,37 @@ export default function AdminPage() {
               ) + 1
             : 0;
 
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from("home_categories")
           .insert({
             name,
             icon,
+            slug,
             link_url: linkUrl,
+            page_badge: "التصنيف المختار",
+            page_title: name,
+            page_description:
+              "الألعاب الموجودة في هذا التصنيف",
+            games_badge: "الألعاب",
+            games_title: name,
+            empty_title: "لا توجد ألعاب حاليًا",
+            empty_description:
+              "سيتم إضافة ألعاب جديدة قريبًا",
+            use_custom_items: true,
             sort_order: nextOrder,
             is_active: true,
             is_system: false,
-          });
+          })
+          .select("id")
+          .single();
 
         if (error) throw error;
-        showMessage("تمت إضافة التصنيف للصفحة الرئيسية");
+
+        if (data?.id) {
+          setSelectedHomeCategoryId(data.id);
+        }
+
+        showMessage("تمت إضافة التصنيف وإنشاء صفحته");
       }
 
       resetHomeCategoryForm();
@@ -851,7 +1038,7 @@ export default function AdminPage() {
       return;
     }
 
-    if (!window.confirm(`حذف تصنيف ${category.name}؟`)) {
+    if (!window.confirm(`حذف تصنيف ${category.name} وصفحته؟`)) {
       return;
     }
 
@@ -865,7 +1052,230 @@ export default function AdminPage() {
       return;
     }
 
-    showMessage("تم حذف تصنيف الصفحة الرئيسية");
+    if (selectedHomeCategoryId === category.id) {
+      setSelectedHomeCategoryId("");
+    }
+
+    showMessage("تم حذف التصنيف وصفحته");
+    await loadData();
+  }
+
+  async function saveHomeCategoryPage() {
+    if (!selectedHomeCategoryId) {
+      setErrorMessage("اختر التصنيف الذي تريد تعديل صفحته");
+      return;
+    }
+
+    const category = homeCategories.find(
+      (item) => item.id === selectedHomeCategoryId
+    );
+
+    if (!category?.slug) {
+      setErrorMessage("تصنيف الكل لا يملك صفحة مستقلة");
+      return;
+    }
+
+    if (!homePageTitle.trim()) {
+      setErrorMessage("اكتب عنوان صفحة التصنيف");
+      return;
+    }
+
+    setSavingHomeCategoryPage(true);
+    setErrorMessage("");
+
+    try {
+      const { error } = await supabase
+        .from("home_categories")
+        .update({
+          page_badge:
+            homePageBadge.trim() || "التصنيف المختار",
+          page_title: homePageTitle.trim(),
+          page_description:
+            homePageDescription.trim() ||
+            "الألعاب الموجودة في هذا التصنيف",
+          games_badge:
+            homeGamesBadge.trim() || "الألعاب",
+          games_title:
+            homeGamesTitle.trim() ||
+            homePageTitle.trim(),
+          empty_title:
+            homeEmptyTitle.trim() ||
+            "لا توجد ألعاب حاليًا",
+          empty_description:
+            homeEmptyDescription.trim() ||
+            "سيتم إضافة ألعاب جديدة قريبًا",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", selectedHomeCategoryId);
+
+      if (error) throw error;
+
+      showMessage("تم حفظ صفحة التصنيف كاملة");
+      await loadData();
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "تعذر حفظ صفحة التصنيف"
+      );
+    } finally {
+      setSavingHomeCategoryPage(false);
+    }
+  }
+
+  async function addHomeCategoryItem() {
+    if (!selectedHomeCategoryId) {
+      setErrorMessage("اختر صفحة التصنيف أولًا");
+      return;
+    }
+
+    if (!homeCategorySourceId) {
+      setErrorMessage(
+        homeCategorySourceType === "package"
+          ? "اختر البكج"
+          : "اختر اللعبة"
+      );
+      return;
+    }
+
+    const duplicate = homeCategoryItems.some(
+      (item) =>
+        item.category_id === selectedHomeCategoryId &&
+        (homeCategorySourceType === "package"
+          ? item.package_id === homeCategorySourceId
+          : item.product_id === homeCategorySourceId)
+    );
+
+    if (duplicate) {
+      setErrorMessage("هذا العنصر موجود داخل التصنيف مسبقًا");
+      return;
+    }
+
+    setSavingHomeCategoryItem(true);
+    setErrorMessage("");
+
+    try {
+      const nextOrder =
+        selectedHomeCategoryItems.length > 0
+          ? Math.max(
+              ...selectedHomeCategoryItems.map(
+                (item) => item.sort_order
+              )
+            ) + 1
+          : 0;
+
+      const { error } = await supabase
+        .from("home_category_items")
+        .insert({
+          category_id: selectedHomeCategoryId,
+          product_id:
+            homeCategorySourceType === "product"
+              ? homeCategorySourceId
+              : null,
+          package_id:
+            homeCategorySourceType === "package"
+              ? homeCategorySourceId
+              : null,
+          sort_order: nextOrder,
+          is_active: true,
+        });
+
+      if (error) throw error;
+
+      const { error: categoryError } = await supabase
+        .from("home_categories")
+        .update({
+          use_custom_items: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", selectedHomeCategoryId);
+
+      if (categoryError) throw categoryError;
+
+      setHomeCategorySourceId("");
+      showMessage("تمت إضافة العنصر لصفحة التصنيف");
+      await loadData();
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "تعذر إضافة العنصر لصفحة التصنيف"
+      );
+    } finally {
+      setSavingHomeCategoryItem(false);
+    }
+  }
+
+  async function moveHomeCategoryItem(
+    item: HomeCategoryItem,
+    direction: "up" | "down"
+  ) {
+    const items = homeCategoryItems
+      .filter(
+        (current) => current.category_id === item.category_id
+      )
+      .sort((a, b) => a.sort_order - b.sort_order);
+    const index = items.findIndex(
+      (current) => current.id === item.id
+    );
+    const targetIndex =
+      direction === "up" ? index - 1 : index + 1;
+
+    if (
+      index < 0 ||
+      targetIndex < 0 ||
+      targetIndex >= items.length
+    ) {
+      return;
+    }
+
+    const target = items[targetIndex];
+
+    const { error: firstError } = await supabase
+      .from("home_category_items")
+      .update({
+        sort_order: target.sort_order,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", item.id);
+
+    if (firstError) {
+      setErrorMessage(firstError.message);
+      return;
+    }
+
+    const { error: secondError } = await supabase
+      .from("home_category_items")
+      .update({
+        sort_order: item.sort_order,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", target.id);
+
+    if (secondError) {
+      setErrorMessage(secondError.message);
+      return;
+    }
+
+    await loadData();
+  }
+
+  async function deleteHomeCategoryItem(item: HomeCategoryItem) {
+    if (!window.confirm("إزالة هذا العنصر من صفحة التصنيف؟")) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("home_category_items")
+      .delete()
+      .eq("id", item.id);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
+    showMessage("تمت إزالة العنصر من صفحة التصنيف");
     await loadData();
   }
 
@@ -1846,16 +2256,28 @@ export default function AdminPage() {
                   </div>
 
                   <div className="mt-3">
-                    <AdminField label="الرابط عند الضغط — اختياري">
-                      <input
+                    <AdminField label="رابط الصفحة — اكتب الجزء الأخير فقط">
+                      <div
                         dir="ltr"
-                        value={homeCategoryLink}
-                        onChange={(event) =>
-                          setHomeCategoryLink(event.target.value)
-                        }
-                        placeholder="/categories/racing"
-                        className={`${adminInputClass} text-left`}
-                      />
+                        className="flex items-center overflow-hidden rounded-[20px] border border-white/10 bg-white/[0.04] text-sm"
+                      >
+                        <span className="shrink-0 border-r border-white/10 px-3 text-[10px] text-gray-500">
+                          /categories/
+                        </span>
+                        <input
+                          dir="ltr"
+                          value={homeCategorySlug}
+                          onChange={(event) =>
+                            setHomeCategorySlug(
+                              normalizeHomeCategorySlug(
+                                event.target.value
+                              )
+                            )
+                          }
+                          placeholder="racing"
+                          className="min-w-0 flex-1 bg-transparent px-3 py-4 text-left text-white outline-none placeholder:text-gray-600"
+                        />
+                      </div>
                     </AdminField>
                   </div>
 
@@ -1900,7 +2322,9 @@ export default function AdminPage() {
                             dir="ltr"
                             className="mt-1 truncate text-left text-[8px] text-gray-500"
                           >
-                            {category.link_url || "بدون رابط"}
+                            {category.slug
+                              ? `/categories/${category.slug}`
+                              : "بدون صفحة مستقلة"}
                           </p>
                         </div>
 
@@ -1912,14 +2336,24 @@ export default function AdminPage() {
                             setHomeCategoryIcon(
                               category.icon || "🎮"
                             );
-                            setHomeCategoryLink(
-                              category.link_url || ""
+                            setHomeCategorySlug(
+                              category.slug || ""
                             );
                           }}
                           className="rounded-xl border border-violet-400/15 bg-violet-500/10 px-3 py-2 text-[9px] font-black text-violet-200"
                         >
-                          تعديل
+                          تعديل التصنيف
                         </button>
+
+                        {category.slug && (
+                          <Link
+                            href={`/categories/${category.slug}`}
+                            target="_blank"
+                            className="rounded-xl border border-fuchsia-400/15 bg-fuchsia-500/10 px-3 py-2 text-[9px] font-black text-fuchsia-200"
+                          >
+                            فتح الصفحة
+                          </Link>
+                        )}
 
                         <button
                           type="button"
@@ -1974,6 +2408,352 @@ export default function AdminPage() {
                     {!homeCategories.length && (
                       <div className="rounded-[18px] border border-dashed border-white/10 px-4 py-8 text-center text-xs text-gray-500">
                         لا توجد تصنيفات حتى الآن.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-[24px] border border-violet-400/15 bg-violet-500/[0.04] p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-black">
+                        تعديل صفحة التصنيف
+                      </h3>
+                      <p className="mt-1 text-[10px] leading-5 text-gray-500">
+                        اختر التصنيف وعدّل جميع النصوص التي تظهر داخل صفحته.
+                      </p>
+                    </div>
+
+                    {homeCategories.find(
+                      (category) =>
+                        category.id === selectedHomeCategoryId
+                    )?.slug && (
+                      <Link
+                        href={`/categories/${
+                          homeCategories.find(
+                            (category) =>
+                              category.id === selectedHomeCategoryId
+                          )?.slug
+                        }`}
+                        target="_blank"
+                        className="shrink-0 rounded-xl border border-violet-400/15 bg-violet-500/10 px-3 py-2 text-[9px] font-black text-violet-200"
+                      >
+                        معاينة
+                      </Link>
+                    )}
+                  </div>
+
+                  <div className="mt-4">
+                    <AdminField label="اختر صفحة التصنيف">
+                      <select
+                        value={selectedHomeCategoryId}
+                        onChange={(event) =>
+                          setSelectedHomeCategoryId(
+                            event.target.value
+                          )
+                        }
+                        className={adminInputClass}
+                      >
+                        <option value="">اختر تصنيفًا</option>
+                        {homeCategories
+                          .filter((category) => category.slug)
+                          .map((category) => (
+                            <option
+                              key={category.id}
+                              value={category.id}
+                            >
+                              {category.icon} {category.name}
+                            </option>
+                          ))}
+                      </select>
+                    </AdminField>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <AdminField label="العبارة الصغيرة أعلى الصفحة">
+                      <input
+                        value={homePageBadge}
+                        onChange={(event) =>
+                          setHomePageBadge(event.target.value)
+                        }
+                        disabled={!selectedHomeCategoryId}
+                        className={`${adminInputClass} disabled:opacity-40`}
+                      />
+                    </AdminField>
+
+                    <AdminField label="عنوان الصفحة">
+                      <input
+                        value={homePageTitle}
+                        onChange={(event) =>
+                          setHomePageTitle(event.target.value)
+                        }
+                        disabled={!selectedHomeCategoryId}
+                        className={`${adminInputClass} disabled:opacity-40`}
+                      />
+                    </AdminField>
+                  </div>
+
+                  <div className="mt-3">
+                    <AdminField label="وصف الصفحة">
+                      <textarea
+                        value={homePageDescription}
+                        onChange={(event) =>
+                          setHomePageDescription(
+                            event.target.value
+                          )
+                        }
+                        rows={3}
+                        disabled={!selectedHomeCategoryId}
+                        className={`${adminInputClass} resize-none leading-6 disabled:opacity-40`}
+                      />
+                    </AdminField>
+                  </div>
+
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <AdminField label="العبارة الصغيرة فوق الألعاب">
+                      <input
+                        value={homeGamesBadge}
+                        onChange={(event) =>
+                          setHomeGamesBadge(event.target.value)
+                        }
+                        disabled={!selectedHomeCategoryId}
+                        className={`${adminInputClass} disabled:opacity-40`}
+                      />
+                    </AdminField>
+
+                    <AdminField label="عنوان قسم الألعاب">
+                      <input
+                        value={homeGamesTitle}
+                        onChange={(event) =>
+                          setHomeGamesTitle(event.target.value)
+                        }
+                        disabled={!selectedHomeCategoryId}
+                        className={`${adminInputClass} disabled:opacity-40`}
+                      />
+                    </AdminField>
+                  </div>
+
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <AdminField label="عنوان الصفحة الفارغة">
+                      <input
+                        value={homeEmptyTitle}
+                        onChange={(event) =>
+                          setHomeEmptyTitle(event.target.value)
+                        }
+                        disabled={!selectedHomeCategoryId}
+                        className={`${adminInputClass} disabled:opacity-40`}
+                      />
+                    </AdminField>
+
+                    <AdminField label="وصف الصفحة الفارغة">
+                      <input
+                        value={homeEmptyDescription}
+                        onChange={(event) =>
+                          setHomeEmptyDescription(
+                            event.target.value
+                          )
+                        }
+                        disabled={!selectedHomeCategoryId}
+                        className={`${adminInputClass} disabled:opacity-40`}
+                      />
+                    </AdminField>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={saveHomeCategoryPage}
+                    disabled={
+                      savingHomeCategoryPage ||
+                      !selectedHomeCategoryId
+                    }
+                    className="mt-4 w-full rounded-[20px] bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-4 text-sm font-black disabled:opacity-50"
+                  >
+                    {savingHomeCategoryPage
+                      ? "جاري حفظ الصفحة..."
+                      : "حفظ صفحة التصنيف"}
+                  </button>
+                </div>
+
+                <div className="rounded-[24px] border border-fuchsia-400/15 bg-fuchsia-500/[0.03] p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-black">
+                        محتوى صفحة التصنيف
+                      </h3>
+                      <p className="mt-1 text-[10px] leading-5 text-gray-500">
+                        أضف الألعاب أو البكجات ورتّبها داخل التصنيف المختار.
+                      </p>
+                    </div>
+
+                    <span className="rounded-xl bg-fuchsia-500/10 px-3 py-2 text-[10px] font-black text-fuchsia-200">
+                      {selectedHomeCategoryItems.length} عنصر
+                    </span>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <AdminField label="نوع العنصر">
+                      <select
+                        value={homeCategorySourceType}
+                        onChange={(event) => {
+                          setHomeCategorySourceType(
+                            event.target.value as
+                              | "product"
+                              | "package"
+                          );
+                          setHomeCategorySourceId("");
+                        }}
+                        disabled={!selectedHomeCategoryId}
+                        className={`${adminInputClass} disabled:opacity-40`}
+                      >
+                        <option value="product">لعبة</option>
+                        <option value="package">بكج ألعاب</option>
+                      </select>
+                    </AdminField>
+
+                    <AdminField
+                      label={
+                        homeCategorySourceType === "package"
+                          ? "اختر البكج"
+                          : "اختر اللعبة"
+                      }
+                    >
+                      <select
+                        value={homeCategorySourceId}
+                        onChange={(event) =>
+                          setHomeCategorySourceId(
+                            event.target.value
+                          )
+                        }
+                        disabled={!selectedHomeCategoryId}
+                        className={`${adminInputClass} disabled:opacity-40`}
+                      >
+                        <option value="">
+                          {homeCategorySourceType === "package"
+                            ? "اختر بكج"
+                            : "اختر لعبة"}
+                        </option>
+                        {homeCategorySourceOptions.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name} — {formatMoney(item.price)}
+                          </option>
+                        ))}
+                      </select>
+                    </AdminField>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={addHomeCategoryItem}
+                    disabled={
+                      savingHomeCategoryItem ||
+                      !selectedHomeCategoryId
+                    }
+                    className="mt-3 w-full rounded-[20px] bg-gradient-to-l from-fuchsia-600 to-violet-600 px-5 py-4 text-sm font-black disabled:opacity-50"
+                  >
+                    {savingHomeCategoryItem
+                      ? "جاري الإضافة..."
+                      : "إضافة إلى صفحة التصنيف"}
+                  </button>
+
+                  <div className="mt-5 space-y-3">
+                    {selectedHomeCategoryItems.map(
+                      (item, index) => {
+                        const product = products.find(
+                          (current) =>
+                            current.id === item.product_id
+                        );
+                        const pkg = packages.find(
+                          (current) =>
+                            current.id === item.package_id
+                        );
+                        const source = product || pkg;
+
+                        return (
+                          <div
+                            key={item.id}
+                            className="flex items-center gap-3 rounded-[18px] border border-white/10 bg-black/20 p-3"
+                          >
+                            <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/5 text-xl">
+                              {(
+                                product?.cover_url ||
+                                pkg?.image_url
+                              ) ? (
+                                <img
+                                  src={
+                                    product?.cover_url ||
+                                    pkg?.image_url ||
+                                    ""
+                                  }
+                                  alt={source?.name || "عنصر"}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : item.package_id ? (
+                                "🎁"
+                              ) : (
+                                "🎮"
+                              )}
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-black">
+                                {source?.name || "عنصر محذوف"}
+                              </p>
+                              <p className="mt-1 text-[8px] text-gray-500">
+                                {item.package_id
+                                  ? "بكج ألعاب"
+                                  : "لعبة"}
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              disabled={index === 0}
+                              onClick={() =>
+                                moveHomeCategoryItem(item, "up")
+                              }
+                              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[9px] disabled:opacity-30"
+                            >
+                              ↑
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={
+                                index ===
+                                selectedHomeCategoryItems.length - 1
+                              }
+                              onClick={() =>
+                                moveHomeCategoryItem(item, "down")
+                              }
+                              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[9px] disabled:opacity-30"
+                            >
+                              ↓
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                deleteHomeCategoryItem(item)
+                              }
+                              className="rounded-xl border border-red-400/15 bg-red-500/10 px-3 py-2 text-[9px] font-black text-red-300"
+                            >
+                              حذف
+                            </button>
+                          </div>
+                        );
+                      }
+                    )}
+
+                    {selectedHomeCategoryId &&
+                      !selectedHomeCategoryItems.length && (
+                        <div className="rounded-[18px] border border-dashed border-white/10 px-4 py-8 text-center text-xs text-gray-500">
+                          لا توجد ألعاب داخل هذا التصنيف حتى الآن.
+                        </div>
+                      )}
+
+                    {!selectedHomeCategoryId && (
+                      <div className="rounded-[18px] border border-dashed border-white/10 px-4 py-8 text-center text-xs text-gray-500">
+                        اختر صفحة تصنيف من الأعلى أولًا.
                       </div>
                     )}
                   </div>

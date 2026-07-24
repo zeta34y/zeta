@@ -2,58 +2,132 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import BottomNav from "@/components/BottomNav";
+import { supabase } from "@/lib/supabase";
 
 type CategoryInfo = {
+  id: string | null;
   name: string;
   icon: string;
+  badge: string;
   description: string;
+  gamesBadge: string;
+  gamesTitle: string;
+  emptyTitle: string;
+  emptyDescription: string;
 };
 
 type Game = {
   id: string;
   name: string;
   type: string;
-  category: string;
   price: number;
   oldPrice: number;
+  image: string;
+  detailsHref: string;
+  isPackage: boolean;
 };
 
-const categoryInfo: Record<string, CategoryInfo> = {
+type ProductRelation = {
+  id: string;
+  name: string;
+  short_description: string | null;
+  platform: string | null;
+  price: number;
+  old_price: number | null;
+  cover_url: string | null;
+  is_shared: boolean;
+};
+
+type PackageRelation = {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  old_price: number | null;
+  image_url: string | null;
+};
+
+type CategoryItemRow = {
+  id: string;
+  product_id: string | null;
+  package_id: string | null;
+  sort_order: number;
+  products: ProductRelation | ProductRelation[] | null;
+  packages: PackageRelation | PackageRelation[] | null;
+};
+
+const fallbackCategoryInfo: Record<string, CategoryInfo> = {
   simulation: {
+    id: null,
     name: "ألعاب المحاكاة",
     icon: "🕹️",
+    badge: "التصنيف المختار",
     description: "قيادة، حياة، بناء وإدارة",
+    gamesBadge: "الألعاب",
+    gamesTitle: "ألعاب المحاكاة",
+    emptyTitle: "لا توجد ألعاب حاليًا",
+    emptyDescription: "سيتم إضافة ألعاب جديدة قريبًا",
   },
   sports: {
+    id: null,
     name: "ألعاب الرياضة",
     icon: "⚽",
+    badge: "التصنيف المختار",
     description: "كرة قدم ورياضات متنوعة",
+    gamesBadge: "الألعاب",
+    gamesTitle: "ألعاب الرياضة",
+    emptyTitle: "لا توجد ألعاب حاليًا",
+    emptyDescription: "سيتم إضافة ألعاب جديدة قريبًا",
   },
   action: {
+    id: null,
     name: "ألعاب الأكشن",
     icon: "🔥",
+    badge: "التصنيف المختار",
     description: "قتال، إطلاق نار وحماس",
+    gamesBadge: "الألعاب",
+    gamesTitle: "ألعاب الأكشن",
+    emptyTitle: "لا توجد ألعاب حاليًا",
+    emptyDescription: "سيتم إضافة ألعاب جديدة قريبًا",
   },
   "2d": {
+    id: null,
     name: "ألعاب 2D",
     icon: "👾",
+    badge: "التصنيف المختار",
     description: "ألعاب ثنائية الأبعاد",
+    gamesBadge: "الألعاب",
+    gamesTitle: "ألعاب 2D",
+    emptyTitle: "لا توجد ألعاب حاليًا",
+    emptyDescription: "سيتم إضافة ألعاب جديدة قريبًا",
   },
   adventure: {
+    id: null,
     name: "ألعاب المغامرات",
     icon: "🗺️",
+    badge: "التصنيف المختار",
     description: "استكشاف وقصص وعوالم",
+    gamesBadge: "الألعاب",
+    gamesTitle: "ألعاب المغامرات",
+    emptyTitle: "لا توجد ألعاب حاليًا",
+    emptyDescription: "سيتم إضافة ألعاب جديدة قريبًا",
   },
   horror: {
+    id: null,
     name: "ألعاب الرعب",
     icon: "👻",
+    badge: "التصنيف المختار",
     description: "رعب وتشويق وبقاء",
+    gamesBadge: "الألعاب",
+    gamesTitle: "ألعاب الرعب",
+    emptyTitle: "لا توجد ألعاب حاليًا",
+    emptyDescription: "سيتم إضافة ألعاب جديدة قريبًا",
   },
 };
 
-const allGames: Game[] = [
+const fallbackGames: Array<Game & { category: string }> = [
   {
     id: "featured-1",
     name: "EA SPORTS FC 26",
@@ -61,6 +135,9 @@ const allGames: Game[] = [
     category: "sports",
     price: 189,
     oldPrice: 249,
+    image: "",
+    detailsHref: "/game/featured-1",
+    isPackage: false,
   },
   {
     id: "shared-1",
@@ -69,6 +146,9 @@ const allGames: Game[] = [
     category: "sports",
     price: 29,
     oldPrice: 49,
+    image: "",
+    detailsHref: "/game/shared-1",
+    isPackage: false,
   },
   {
     id: "featured-2",
@@ -77,6 +157,9 @@ const allGames: Game[] = [
     category: "action",
     price: 159,
     oldPrice: 219,
+    image: "",
+    detailsHref: "/game/featured-2",
+    isPackage: false,
   },
   {
     id: "private-1",
@@ -85,6 +168,9 @@ const allGames: Game[] = [
     category: "action",
     price: 149,
     oldPrice: 199,
+    image: "",
+    detailsHref: "/game/private-1",
+    isPackage: false,
   },
   {
     id: "featured-3",
@@ -93,6 +179,9 @@ const allGames: Game[] = [
     category: "simulation",
     price: 79,
     oldPrice: 129,
+    image: "",
+    detailsHref: "/game/featured-3",
+    isPackage: false,
   },
   {
     id: "shared-2",
@@ -101,6 +190,9 @@ const allGames: Game[] = [
     category: "simulation",
     price: 19,
     oldPrice: 39,
+    image: "",
+    detailsHref: "/game/shared-2",
+    isPackage: false,
   },
   {
     id: "featured-4",
@@ -109,6 +201,9 @@ const allGames: Game[] = [
     category: "simulation",
     price: 139,
     oldPrice: 199,
+    image: "",
+    detailsHref: "/game/featured-4",
+    isPackage: false,
   },
   {
     id: "shared-3",
@@ -117,6 +212,9 @@ const allGames: Game[] = [
     category: "simulation",
     price: 35,
     oldPrice: 59,
+    image: "",
+    detailsHref: "/game/shared-3",
+    isPackage: false,
   },
   {
     id: "private-2",
@@ -125,50 +223,272 @@ const allGames: Game[] = [
     category: "adventure",
     price: 119,
     oldPrice: 169,
+    image: "",
+    detailsHref: "/game/private-2",
+    isPackage: false,
   },
   {
-    id: "private-3",
+    id: "private-3-adventure",
     name: "Cyber Adventure",
     type: "حساب PC خاص",
     category: "adventure",
     price: 89,
     oldPrice: 129,
+    image: "",
+    detailsHref: "/game/private-3",
+    isPackage: false,
   },
   {
-    id: "featured-2",
+    id: "featured-2-horror",
     name: "Call of Duty",
     type: "نسخة رقمية",
     category: "horror",
     price: 159,
     oldPrice: 219,
+    image: "",
+    detailsHref: "/game/featured-2",
+    isPackage: false,
   },
   {
-    id: "private-3",
+    id: "private-3-2d",
     name: "Cyber Adventure",
     type: "حساب PC خاص",
     category: "2d",
     price: 89,
     oldPrice: 129,
+    image: "",
+    detailsHref: "/game/private-3",
+    isPackage: false,
   },
 ];
 
+function toNumber(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function relationOne<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
+
 export default function CategoryDetailsPage() {
   const params = useParams<{ slug: string }>();
-  const slug = params.slug;
-
-  const [favorites, setFavorites] = useState<string[]>([]);
-  const [message, setMessage] = useState("");
-
-  const current = categoryInfo[slug] ?? {
+  const slug = decodeURIComponent(params.slug || "");
+  const fallbackCurrent = fallbackCategoryInfo[slug] ?? {
+    id: null,
     name: "التصنيف",
     icon: "🎮",
+    badge: "التصنيف المختار",
     description: "الألعاب الموجودة في هذا التصنيف",
+    gamesBadge: "الألعاب",
+    gamesTitle: "الألعاب المتوفرة",
+    emptyTitle: "لا توجد ألعاب حاليًا",
+    emptyDescription: "سيتم إضافة ألعاب جديدة قريبًا",
   };
 
-  const games = useMemo(
-    () => allGames.filter((game) => game.category === slug),
-    [slug]
+  const [current, setCurrent] = useState<CategoryInfo>(fallbackCurrent);
+  const [games, setGames] = useState<Game[]>(
+    fallbackGames.filter((game) => game.category === slug)
   );
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [message, setMessage] = useState("");
+  const [loadingContent, setLoadingContent] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadCategory() {
+      setLoadingContent(true);
+
+      try {
+        const { data: category, error: categoryError } = await supabase
+          .from("home_categories")
+          .select(
+            "id, name, icon, slug, page_badge, page_title, page_description, games_badge, games_title, empty_title, empty_description, use_custom_items, is_active"
+          )
+          .eq("slug", slug)
+          .eq("is_active", true)
+          .maybeSingle();
+
+        if (!mounted) return;
+
+        if (categoryError) throw categoryError;
+
+        if (!category) {
+          setCurrent({
+            id: null,
+            name: "التصنيف غير متوفر",
+            icon: "🎮",
+            badge: "صفحة التصنيف",
+            description:
+              "هذا التصنيف غير موجود أو تم إخفاؤه من المتجر.",
+            gamesBadge: "الألعاب",
+            gamesTitle: "لا توجد محتويات",
+            emptyTitle: "التصنيف غير متوفر",
+            emptyDescription:
+              "ارجع إلى الصفحة الرئيسية واختر تصنيفًا ظاهرًا.",
+          });
+          setGames([]);
+          return;
+        }
+
+        const loadedInfo: CategoryInfo = {
+          id: category.id,
+          name: category.page_title || category.name,
+          icon: category.icon || "🎮",
+          badge: category.page_badge || "التصنيف المختار",
+          description:
+            category.page_description ||
+            "الألعاب الموجودة في هذا التصنيف",
+          gamesBadge: category.games_badge || "الألعاب",
+          gamesTitle:
+            category.games_title ||
+            category.page_title ||
+            category.name,
+          emptyTitle:
+            category.empty_title || "لا توجد ألعاب حاليًا",
+          emptyDescription:
+            category.empty_description ||
+            "سيتم إضافة ألعاب جديدة قريبًا",
+        };
+
+        setCurrent(loadedInfo);
+
+        const { data: itemRows, error: itemsError } = await supabase
+          .from("home_category_items")
+          .select(
+            `
+              id,
+              product_id,
+              package_id,
+              sort_order,
+              products (
+                id,
+                name,
+                short_description,
+                platform,
+                price,
+                old_price,
+                cover_url,
+                is_shared
+              ),
+              packages (
+                id,
+                name,
+                description,
+                price,
+                old_price,
+                image_url
+              )
+            `
+          )
+          .eq("category_id", category.id)
+          .eq("is_active", true)
+          .order("sort_order", { ascending: true });
+
+        if (!mounted) return;
+        if (itemsError) throw itemsError;
+
+        const rows = (itemRows ?? []) as unknown as CategoryItemRow[];
+
+        if (
+          rows.length === 0 &&
+          !Boolean(category.use_custom_items) &&
+          fallbackCategoryInfo[slug]
+        ) {
+          setGames(
+            fallbackGames.filter((game) => game.category === slug)
+          );
+          return;
+        }
+
+        const mapped = rows
+          .map((row): Game | null => {
+            const product = relationOne(row.products);
+            const pkg = relationOne(row.packages);
+
+            if (product) {
+              return {
+                id: `product-${product.id}`,
+                name: product.name,
+                type:
+                  product.short_description ||
+                  product.platform ||
+                  (product.is_shared
+                    ? "حساب PC مشترك"
+                    : "حساب PC خاص"),
+                price: toNumber(product.price),
+                oldPrice: toNumber(
+                  product.old_price ?? product.price
+                ),
+                image: product.cover_url ?? "",
+                detailsHref: `/game/${product.id}`,
+                isPackage: false,
+              };
+            }
+
+            if (pkg) {
+              return {
+                id: `package-${pkg.id}`,
+                name: pkg.name,
+                type: pkg.description || "بكج ألعاب",
+                price: toNumber(pkg.price),
+                oldPrice: toNumber(pkg.old_price ?? pkg.price),
+                image: pkg.image_url ?? "",
+                detailsHref: `/packages/${pkg.id}`,
+                isPackage: true,
+              };
+            }
+
+            return null;
+          })
+          .filter((item): item is Game => item !== null);
+
+        setGames(mapped);
+      } catch (error) {
+        console.error("تعذر تحميل صفحة التصنيف:", error);
+      } finally {
+        if (mounted) setLoadingContent(false);
+      }
+    }
+
+    loadCategory();
+
+    function refreshCategory() {
+      loadCategory();
+    }
+
+    window.addEventListener("focus", refreshCategory);
+
+    const channel = supabase
+      .channel(`zeta-category-${slug}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "home_categories",
+        },
+        refreshCategory
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "home_category_items",
+        },
+        refreshCategory
+      )
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      window.removeEventListener("focus", refreshCategory);
+      supabase.removeChannel(channel);
+    };
+  }, [slug]);
 
   useEffect(() => {
     try {
@@ -232,7 +552,7 @@ export default function CategoryDetailsPage() {
               price: game.price,
               oldPrice: game.oldPrice,
               quantity: 1,
-              image: "",
+              image: game.image,
             },
           ];
 
@@ -293,7 +613,7 @@ export default function CategoryDetailsPage() {
 
             <div>
               <p className="text-[9px] font-bold text-violet-300 sm:text-[10px]">
-                التصنيف المختار
+                {current.badge}
               </p>
 
               <h1 className="mt-1 text-xl font-black sm:text-3xl">
@@ -310,44 +630,59 @@ export default function CategoryDetailsPage() {
         <div className="mt-6 flex items-center justify-between sm:mt-7">
           <div>
             <p className="text-[9px] font-bold text-violet-400 sm:text-[10px]">
-              الألعاب
+              {current.gamesBadge}
             </p>
             <h2 className="mt-1 text-lg font-black sm:text-xl">
-              {current.name}
+              {current.gamesTitle}
             </h2>
           </div>
 
           <span className="rounded-full bg-white/5 px-3 py-1.5 text-[9px] text-gray-400 sm:text-[10px]">
-            {games.length} ألعاب
+            {loadingContent ? "…" : games.length} ألعاب
           </span>
         </div>
 
         {games.length > 0 ? (
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {games.map((game) => {
-              const discount = Math.round(
-                ((game.oldPrice - game.price) / game.oldPrice) * 100
-              );
+              const discount =
+                game.oldPrice > game.price && game.oldPrice > 0
+                  ? Math.round(
+                      ((game.oldPrice - game.price) /
+                        game.oldPrice) *
+                        100
+                    )
+                  : 0;
 
               return (
                 <article
-                  key={`${game.id}-${game.category}`}
+                  key={game.id}
                   className="group overflow-hidden rounded-[20px] border border-white/[0.07] bg-[#121019] transition duration-300 hover:-translate-y-1 hover:border-violet-400/40 hover:shadow-2xl hover:shadow-violet-950/30 sm:rounded-[22px]"
                 >
                   <div className="relative aspect-[4/5] overflow-hidden">
                     <Link
-                      href={`/game/${game.id}`}
+                      href={game.detailsHref}
                       aria-label={`عرض تفاصيل ${game.name}`}
                       className="absolute inset-0 z-10"
                     />
 
-                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-700/20 to-fuchsia-700/20 text-4xl transition duration-300 group-hover:scale-105 sm:text-5xl">
-                      🎮
-                    </div>
+                    {game.image ? (
+                      <img
+                        src={game.image}
+                        alt={game.name}
+                        className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-700/20 to-fuchsia-700/20 text-4xl transition duration-300 group-hover:scale-105 sm:text-5xl">
+                        {game.isPackage ? "🎁" : "🎮"}
+                      </div>
+                    )}
 
-                    <span className="pointer-events-none absolute right-2 top-2 z-20 rounded-lg bg-red-500 px-2 py-1 text-[8px] font-black sm:text-[9px]">
-                      -{discount}%
-                    </span>
+                    {discount > 0 && (
+                      <span className="pointer-events-none absolute right-2 top-2 z-20 rounded-lg bg-red-500 px-2 py-1 text-[8px] font-black sm:text-[9px]">
+                        -{discount}%
+                      </span>
+                    )}
 
                     <button
                       type="button"
@@ -369,7 +704,7 @@ export default function CategoryDetailsPage() {
                     </p>
 
                     <Link
-                      href={`/game/${game.id}`}
+                      href={game.detailsHref}
                       className="mt-1 block truncate text-xs font-black transition hover:text-violet-300 sm:text-sm"
                     >
                       {game.name}
@@ -384,9 +719,11 @@ export default function CategoryDetailsPage() {
                           </span>
                         </p>
 
-                        <p className="text-[8px] text-gray-600 line-through sm:text-[9px]">
-                          {game.oldPrice} ر.س
-                        </p>
+                        {game.oldPrice > game.price && (
+                          <p className="text-[8px] text-gray-600 line-through sm:text-[9px]">
+                            {game.oldPrice} ر.س
+                          </p>
+                        )}
                       </div>
 
                       <button
@@ -410,11 +747,13 @@ export default function CategoryDetailsPage() {
             </div>
 
             <h3 className="mt-4 text-lg font-black">
-              لا توجد ألعاب حاليًا
+              {loadingContent ? "جاري تحميل الألعاب..." : current.emptyTitle}
             </h3>
 
             <p className="mt-2 text-xs text-gray-500">
-              سيتم إضافة ألعاب جديدة قريبًا
+              {loadingContent
+                ? "لحظات وتظهر محتويات التصنيف"
+                : current.emptyDescription}
             </p>
           </div>
         )}
