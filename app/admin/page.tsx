@@ -2354,6 +2354,18 @@ export default function AdminPage() {
       return;
     }
 
+    if (
+      category.filter_key === "all" ||
+      category.filter_key === "best_seller"
+    ) {
+      setErrorMessage(
+        category.filter_key === "all"
+          ? "قسم الكل يعرض جميع الألعاب تلقائيًا"
+          : "قسم الأكثر مبيعًا يعتمد على عدد المبيعات تلقائيًا"
+      );
+      return;
+    }
+
     const existingOffer = offers.find(
       (offer) => offer.product_id === product.id
     );
@@ -3832,7 +3844,12 @@ export default function AdminPage() {
                           >
                             <option value="">اختر قسمًا</option>
                             {offerCategories
-                              .filter((category) => category.is_active)
+                              .filter(
+                                (category) =>
+                                  category.is_active &&
+                                  category.filter_key !== "all" &&
+                                  category.filter_key !== "best_seller"
+                              )
                               .map((category) => (
                                 <option
                                   key={category.id}

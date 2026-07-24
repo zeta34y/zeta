@@ -65,6 +65,7 @@ type DisplayOffer = {
   oldPrice: number;
   image: string;
   bestSeller: boolean;
+  soldCount: number;
   isPackage: boolean;
   isShared: boolean;
   offerCategoryId: string | null;
@@ -254,10 +255,9 @@ export default function OffersPage() {
               product?.cover_url ??
               pkg?.image_url ??
               "",
-            bestSeller: Boolean(
-              product?.is_best_seller_manual ||
-                toNumber(product?.sold_count) > 0 ||
-                toNumber(pkg?.sold_count) > 0
+            bestSeller: false,
+            soldCount: toNumber(
+              product?.sold_count ?? pkg?.sold_count
             ),
             isPackage: Boolean(pkg),
             isShared: Boolean(product?.is_shared),
@@ -269,7 +269,28 @@ export default function OffersPage() {
             item !== null
         );
 
-      setOffers(mapped);
+      const bestSellerIds = new Set(
+        [...mapped]
+          .filter(
+            (item) =>
+              !item.isPackage && item.soldCount > 0
+          )
+          .sort(
+            (first, second) =>
+              second.soldCount - first.soldCount
+          )
+          .slice(0, 8)
+          .map((item) => item.sourceId)
+      );
+
+      setOffers(
+        mapped.map((item) => ({
+          ...item,
+          bestSeller: bestSellerIds.has(
+            item.sourceId
+          ),
+        }))
+      );
     } catch (error) {
       console.error("تعذر تحميل صفحة العروض:", error);
     } finally {
@@ -291,24 +312,20 @@ export default function OffersPage() {
     switch (activeCategory.filter_key) {
       case "all":
         return offers;
-      case "shared":
-        return offers.filter(
-          (game) =>
-            game.isShared && !game.isPackage
-        );
-      case "private":
-        return offers.filter(
-          (game) =>
-            !game.isShared && !game.isPackage
-        );
+
       case "best_seller":
-        return offers.filter(
-          (game) => game.bestSeller
-        );
-      case "packages":
-        return offers.filter(
-          (game) => game.isPackage
-        );
+        return [...offers]
+          .filter(
+            (game) =>
+              game.bestSeller &&
+              !game.isPackage
+          )
+          .sort(
+            (first, second) =>
+              second.soldCount -
+              first.soldCount
+          );
+
       default:
         return offers.filter(
           (game) =>
