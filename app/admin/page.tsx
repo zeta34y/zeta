@@ -899,12 +899,12 @@ export default function AdminPage() {
   useEffect(() => {
     if (
       authorized &&
-      activeTab === "offers" &&
+      tab === "offers" &&
       offersInnerTab === "discounts"
     ) {
       void loadData();
     }
-  }, [authorized, activeTab, offersInnerTab]);
+  }, [authorized, tab, offersInnerTab]);
 
   useEffect(() => {
     const previewUrls = productNewImages.map((file) =>
