@@ -192,6 +192,13 @@ export default function HomePage() {
   const [authLoaded, setAuthLoaded] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
+  const [announcement, setAnnouncement] = useState({
+    text: "",
+    emoji: "",
+    link_url: "",
+    is_visible: false,
+  });
+
   const [showSplash, setShowSplash] = useState(true);
   const [splashClosing, setSplashClosing] = useState(false);
   const [activeCategory, setActiveCategory] = useState("الكل");
@@ -283,6 +290,64 @@ export default function HomePage() {
         "zeta-auth-updated",
         handleAuthUpdated
       );
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadAnnouncement() {
+      const { data, error } = await supabase
+        .from("announcement_bar")
+        .select("text, emoji, link_url, is_visible")
+        .eq("id", 1)
+        .maybeSingle();
+
+      if (!mounted) return;
+
+      if (error) {
+        console.error("تعذر تحميل الشريط العلوي:", error);
+        return;
+      }
+
+      if (data) {
+        setAnnouncement({
+          text: data.text ?? "",
+          emoji: data.emoji ?? "",
+          link_url: data.link_url ?? "",
+          is_visible: Boolean(data.is_visible),
+        });
+      }
+    }
+
+    loadAnnouncement();
+
+    function handleWindowFocus() {
+      loadAnnouncement();
+    }
+
+    window.addEventListener("focus", handleWindowFocus);
+
+    const channel = supabase
+      .channel("zeta-announcement-bar")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "announcement_bar",
+          filter: "id=eq.1",
+        },
+        () => {
+          loadAnnouncement();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      window.removeEventListener("focus", handleWindowFocus);
+      supabase.removeChannel(channel);
     };
   }, []);
 
@@ -803,26 +868,55 @@ export default function HomePage() {
       className="min-h-screen overflow-x-hidden bg-[#08070d] pb-28 text-white"
     >
 
-      {/* شريط عرض افتتاح المتجر */}
-      <div className="relative z-[60] overflow-hidden border-0 bg-gradient-to-l from-violet-700 via-fuchsia-600 to-violet-700 py-2 text-white">
-        <div className="discount-track flex min-w-max items-center gap-8 whitespace-nowrap text-[11px] font-black sm:text-xs">
-          {Array.from({ length: 6 }).map((_, index) => (
-            <div key={index} className="flex items-center gap-3">
-              <span>🎉 افتتاح متجر ZETA</span>
-              <span className="rounded-full bg-white/15 px-3 py-1">
-                خصم 10%
-              </span>
-              <span>
-                استخدم الكود:
-                <strong className="mr-1 tracking-wider text-yellow-300">
-                  ZETA10
-                </strong>
-              </span>
-              <span className="text-white/50">✦</span>
-            </div>
-          ))}
+      {/* الشريط العلوي المتحكم به من لوحة الإدارة */}
+      {announcement.is_visible && announcement.text.trim() && (
+        <div
+          role={announcement.link_url ? "link" : undefined}
+          tabIndex={announcement.link_url ? 0 : undefined}
+          onClick={() => {
+            const link = announcement.link_url.trim();
+
+            if (!link) return;
+
+            if (/^https?:\/\//i.test(link)) {
+              window.location.href = link;
+              return;
+            }
+
+            router.push(link.startsWith("/") ? link : `/${link}`);
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || !announcement.link_url.trim()) {
+              return;
+            }
+
+            const link = announcement.link_url.trim();
+
+            if (/^https?:\/\//i.test(link)) {
+              window.location.href = link;
+              return;
+            }
+
+            router.push(link.startsWith("/") ? link : `/${link}`);
+          }}
+          className={`relative z-[60] overflow-hidden border-0 bg-gradient-to-l from-violet-700 via-fuchsia-600 to-violet-700 py-2 text-white ${
+            announcement.link_url ? "cursor-pointer" : ""
+          }`}
+        >
+          <div className="discount-track flex min-w-max items-center gap-8 whitespace-nowrap text-[11px] font-black sm:text-xs">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <div key={index} className="flex items-center gap-3">
+                {announcement.emoji && (
+                  <span aria-hidden="true">{announcement.emoji}</span>
+                )}
+
+                <span>{announcement.text}</span>
+                <span className="text-white/50">✦</span>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <header className="sticky top-0 z-50 border-0 bg-[#08070d]/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
