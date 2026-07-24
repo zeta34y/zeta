@@ -7,162 +7,224 @@ import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
-const games = [
+type HomeCategory = {
+  id: string;
+  name: string;
+  icon: string;
+  link_url: string | null;
+  sort_order: number;
+  is_active: boolean;
+};
+
+type HomeGame = {
+  id: string;
+  name: string;
+  category: string;
+  platform: string;
+  price: number;
+  oldPrice: number;
+  image: string;
+  detailsHref: string;
+};
+
+type HomePackage = {
+  id: string;
+  name: string;
+  platform: string;
+  price: number;
+  oldPrice: number;
+  image: string;
+  detailsHref: string;
+};
+
+type HomeProductRelation = {
+  id: string;
+  name: string;
+  short_description: string | null;
+  platform: string | null;
+  price: number;
+  old_price: number | null;
+  cover_url: string | null;
+  is_shared: boolean;
+};
+
+type HomePackageRelation = {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  old_price: number | null;
+  image_url: string | null;
+};
+
+type HomePageItemRow = {
+  id: string;
+  section_key: "featured" | "shared" | "private" | "packages";
+  sort_order: number;
+  product_id: string | null;
+  package_id: string | null;
+  products: HomeProductRelation | HomeProductRelation[] | null;
+  packages: HomePackageRelation | HomePackageRelation[] | null;
+};
+
+const fallbackGames: HomeGame[] = [
   {
-    id: 1,
+    id: "1",
     name: "EA SPORTS FC 26",
     category: "رياضة",
+    platform: "PC",
     price: 189,
     oldPrice: 249,
     image: "",
+    detailsHref: "/game/featured-1",
   },
   {
-    id: 2,
+    id: "2",
     name: "Call of Duty",
     category: "أكشن",
+    platform: "PC",
     price: 159,
     oldPrice: 219,
     image: "",
+    detailsHref: "/game/featured-2",
   },
   {
-    id: 3,
+    id: "3",
     name: "Grand Theft Auto V",
     category: "عالم مفتوح",
+    platform: "PC",
     price: 79,
     oldPrice: 129,
     image: "",
+    detailsHref: "/game/featured-3",
   },
   {
-    id: 4,
+    id: "4",
     name: "Forza Horizon",
     category: "سباقات",
+    platform: "PC",
     price: 139,
     oldPrice: 199,
     image: "",
+    detailsHref: "/game/featured-4",
   },
 ];
 
-const categories = [
-  { name: "الكل", icon: "🎮" },
-  { name: "محاكي", icon: "🕹️" },
-  { name: "رياضة", icon: "⚽" },
-  { name: "أكشن", icon: "🔥" },
-  { name: "2D", icon: "👾" },
-  { name: "مغامرات", icon: "🗺️" },
-  { name: "رعب", icon: "👻" },
+const fallbackCategories: HomeCategory[] = [
+  { id: "all", name: "الكل", icon: "🎮", link_url: null, sort_order: 0, is_active: true },
+  { id: "simulation", name: "محاكي", icon: "🕹️", link_url: "/categories/simulation", sort_order: 1, is_active: true },
+  { id: "sports", name: "رياضة", icon: "⚽", link_url: "/categories/sports", sort_order: 2, is_active: true },
+  { id: "action", name: "أكشن", icon: "🔥", link_url: "/categories/action", sort_order: 3, is_active: true },
+  { id: "2d", name: "2D", icon: "👾", link_url: "/categories/2d", sort_order: 4, is_active: true },
+  { id: "adventure", name: "مغامرات", icon: "🗺️", link_url: "/categories/adventure", sort_order: 5, is_active: true },
+  { id: "horror", name: "رعب", icon: "👻", link_url: "/categories/horror", sort_order: 6, is_active: true },
 ];
 
-const sharedGames = [
+const fallbackSharedGames: HomeGame[] = [
   {
-    id: 1,
+    id: "1",
     name: "EA SPORTS FC",
+    category: "مشترك",
     platform: "Steam PC",
     price: 29,
     oldPrice: 49,
     image: "",
+    detailsHref: "/game/shared-1",
   },
   {
-    id: 2,
+    id: "2",
     name: "GTA V",
+    category: "مشترك",
     platform: "Rockstar PC",
     price: 19,
     oldPrice: 39,
     image: "",
+    detailsHref: "/game/shared-2",
   },
   {
-    id: 3,
+    id: "3",
     name: "Forza Horizon",
+    category: "مشترك",
     platform: "Xbox PC",
     price: 35,
     oldPrice: 59,
     image: "",
+    detailsHref: "/game/shared-3",
   },
 ];
 
-const privateGames = [
+const fallbackPrivateGames: HomeGame[] = [
   {
-    id: 1,
+    id: "1",
     name: "Call of Duty",
+    category: "خاص",
     platform: "حساب خاص",
     price: 149,
     oldPrice: 199,
     image: "",
+    detailsHref: "/game/private-1",
   },
   {
-    id: 2,
+    id: "2",
     name: "Red Dead Redemption",
+    category: "خاص",
     platform: "حساب خاص",
     price: 119,
     oldPrice: 169,
     image: "",
+    detailsHref: "/game/private-2",
   },
   {
-    id: 3,
+    id: "3",
     name: "Cyber Adventure",
+    category: "خاص",
     platform: "حساب خاص",
     price: 89,
     oldPrice: 129,
     image: "",
+    detailsHref: "/game/private-3",
   },
 ];
 
-const packageGames = [
+const fallbackPackageGames: HomePackage[] = [
   {
-    id: 1,
+    id: "1",
     name: "بكج الأكشن",
     platform: "3 ألعاب PC",
     price: 99,
     oldPrice: 159,
     image: "",
+    detailsHref: "/game/package-1",
   },
   {
-    id: 2,
+    id: "2",
     name: "بكج العالم المفتوح",
     platform: "3 ألعاب PC",
     price: 119,
     oldPrice: 189,
     image: "",
+    detailsHref: "/game/package-2",
   },
   {
-    id: 3,
+    id: "3",
     name: "بكج الرياضة والسباقات",
     platform: "4 ألعاب PC",
     price: 129,
     oldPrice: 209,
     image: "",
+    detailsHref: "/game/package-3",
   },
 ];
 
-const searchableGames = [
-  ...games.map((game) => ({
-    id: `featured-${game.id}`,
-    name: game.name,
-    type: "لعبة مميزة",
-    platform: "PC",
-    price: game.price,
-  })),
-  ...sharedGames.map((game) => ({
-    id: `shared-${game.id}`,
-    name: game.name,
-    type: "حساب PC مشترك",
-    platform: game.platform,
-    price: game.price,
-  })),
-  ...privateGames.map((game) => ({
-    id: `private-${game.id}`,
-    name: game.name,
-    type: "حساب PC خاص",
-    platform: game.platform,
-    price: game.price,
-  })),
-  ...packageGames.map((game) => ({
-    id: `package-${game.id}`,
-    name: game.name,
-    type: "بكج ألعاب",
-    platform: game.platform,
-    price: game.price,
-  })),
-];
+function toNumber(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function relationOne<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) return value[0] ?? null;
+  return value ?? null;
+}
 
 const reviews = [
   {
@@ -199,7 +261,17 @@ export default function HomePage() {
     is_visible: false,
   });
 
-  const [showSplash, setShowSplash] = useState(true);
+  const [categories, setCategories] =
+    useState<HomeCategory[]>(fallbackCategories);
+  const [games, setGames] = useState<HomeGame[]>(fallbackGames);
+  const [sharedGames, setSharedGames] =
+    useState<HomeGame[]>(fallbackSharedGames);
+  const [privateGames, setPrivateGames] =
+    useState<HomeGame[]>(fallbackPrivateGames);
+  const [packageGames, setPackageGames] =
+    useState<HomePackage[]>(fallbackPackageGames);
+
+  const [showSplash, setShowSplash] = useState(false);
   const [splashClosing, setSplashClosing] = useState(false);
   const [activeCategory, setActiveCategory] = useState("الكل");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -212,6 +284,44 @@ export default function HomePage() {
   const [searchFocused, setSearchFocused] = useState(false);
   const menuTouchStartX = useRef<number | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+  const searchableGames = useMemo(
+    () => [
+      ...games.map((game) => ({
+        id: `featured-${game.id}`,
+        name: game.name,
+        type: "لعبة مميزة",
+        platform: game.platform || "PC",
+        price: game.price,
+        href: game.detailsHref,
+      })),
+      ...sharedGames.map((game) => ({
+        id: `shared-${game.id}`,
+        name: game.name,
+        type: "حساب PC مشترك",
+        platform: game.platform,
+        price: game.price,
+        href: game.detailsHref,
+      })),
+      ...privateGames.map((game) => ({
+        id: `private-${game.id}`,
+        name: game.name,
+        type: "حساب PC خاص",
+        platform: game.platform,
+        price: game.price,
+        href: game.detailsHref,
+      })),
+      ...packageGames.map((game) => ({
+        id: `package-${game.id}`,
+        name: game.name,
+        type: "بكج ألعاب",
+        platform: game.platform,
+        price: game.price,
+        href: game.detailsHref,
+      })),
+    ],
+    [games, sharedGames, privateGames, packageGames]
+  );
 
   const userName = useMemo(() => {
     if (!user) return "زائر";
@@ -347,6 +457,188 @@ export default function HomePage() {
     return () => {
       mounted = false;
       window.removeEventListener("focus", handleWindowFocus);
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadHomeContent() {
+      try {
+        const [categoriesResult, itemsResult] = await Promise.all([
+          supabase
+            .from("home_categories")
+            .select(
+              "id, name, icon, link_url, sort_order, is_active"
+            )
+            .eq("is_active", true)
+            .order("sort_order", { ascending: true }),
+          supabase
+            .from("home_page_items")
+            .select(
+              `
+                id,
+                section_key,
+                sort_order,
+                product_id,
+                package_id,
+                products (
+                  id,
+                  name,
+                  short_description,
+                  platform,
+                  price,
+                  old_price,
+                  cover_url,
+                  is_shared
+                ),
+                packages (
+                  id,
+                  name,
+                  description,
+                  price,
+                  old_price,
+                  image_url
+                )
+              `
+            )
+            .eq("is_active", true)
+            .order("sort_order", { ascending: true }),
+        ]);
+
+        if (!mounted) return;
+
+        if (categoriesResult.error) {
+          throw categoriesResult.error;
+        }
+
+        if (itemsResult.error) {
+          throw itemsResult.error;
+        }
+
+        const loadedCategories =
+          (categoriesResult.data ?? []) as HomeCategory[];
+
+        if (loadedCategories.length > 0) {
+          setCategories(loadedCategories);
+        }
+
+        const rows =
+          (itemsResult.data ?? []) as unknown as HomePageItemRow[];
+
+        if (rows.length === 0) return;
+
+        const mapProduct = (
+          row: HomePageItemRow,
+          section: "featured" | "shared" | "private"
+        ): HomeGame | null => {
+          const product = relationOne(row.products);
+
+          if (!product) return null;
+
+          return {
+            id: product.id,
+            name: product.name,
+            category:
+              product.short_description ||
+              (section === "shared"
+                ? "مشترك"
+                : section === "private"
+                  ? "خاص"
+                  : product.platform || "PC"),
+            platform:
+              product.platform ||
+              (section === "shared"
+                ? "حساب PC مشترك"
+                : section === "private"
+                  ? "حساب PC خاص"
+                  : "PC"),
+            price: toNumber(product.price),
+            oldPrice: toNumber(
+              product.old_price ?? product.price
+            ),
+            image: product.cover_url ?? "",
+            detailsHref: `/game/${product.id}`,
+          };
+        };
+
+        const mappedFeatured = rows
+          .filter((row) => row.section_key === "featured")
+          .map((row) => mapProduct(row, "featured"))
+          .filter((item): item is HomeGame => item !== null);
+
+        const mappedShared = rows
+          .filter((row) => row.section_key === "shared")
+          .map((row) => mapProduct(row, "shared"))
+          .filter((item): item is HomeGame => item !== null);
+
+        const mappedPrivate = rows
+          .filter((row) => row.section_key === "private")
+          .map((row) => mapProduct(row, "private"))
+          .filter((item): item is HomeGame => item !== null);
+
+        const mappedPackages = rows
+          .filter((row) => row.section_key === "packages")
+          .map((row): HomePackage | null => {
+            const pkg = relationOne(row.packages);
+
+            if (!pkg) return null;
+
+            return {
+              id: pkg.id,
+              name: pkg.name,
+              platform: pkg.description || "بكج ألعاب PC",
+              price: toNumber(pkg.price),
+              oldPrice: toNumber(pkg.old_price ?? pkg.price),
+              image: pkg.image_url ?? "",
+              detailsHref: `/packages/${pkg.id}`,
+            };
+          })
+          .filter((item): item is HomePackage => item !== null);
+
+        setGames(mappedFeatured);
+        setSharedGames(mappedShared);
+        setPrivateGames(mappedPrivate);
+        setPackageGames(mappedPackages);
+      } catch (error) {
+        console.error("تعذر تحميل محتوى الصفحة الرئيسية:", error);
+      }
+    }
+
+    loadHomeContent();
+
+    function refreshHomeContent() {
+      loadHomeContent();
+    }
+
+    window.addEventListener("focus", refreshHomeContent);
+
+    const channel = supabase
+      .channel("zeta-home-page-content")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "home_categories",
+        },
+        refreshHomeContent
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "home_page_items",
+        },
+        refreshHomeContent
+      )
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      window.removeEventListener("focus", refreshHomeContent);
       supabase.removeChannel(channel);
     };
   }, []);
@@ -540,7 +832,7 @@ export default function HomePage() {
 
   function toggleFavorite(
     game: {
-      id: number;
+      id: string | number;
       name: string;
     },
     kind: "featured" | "shared" | "private" | "package"
@@ -679,7 +971,7 @@ export default function HomePage() {
 
   function addToCart(
     game: {
-      id: number;
+      id: string | number;
       name: string;
       price: number;
       oldPrice?: number;
@@ -1034,7 +1326,7 @@ export default function HomePage() {
                     {searchResults.map((game) => (
                       <Link
                         key={game.id}
-                        href={`/game/${game.id}`}
+                        href={game.href}
                         onClick={clearSearch}
                         className="group flex items-center gap-3 rounded-[18px] px-3 py-3 transition hover:bg-violet-500/10 active:scale-[0.99]"
                       >
@@ -1147,41 +1439,38 @@ export default function HomePage() {
          <div className="scroll-clip mt-4">
            <div className="category-scroll flex flex-nowrap gap-3 overflow-x-auto bg-transparent px-4 pb-4 md:flex-wrap md:overflow-visible">
             {categories.map((category) => {
-              const slug =
-                category.name === "محاكي"
-                  ? "simulation"
-                  : category.name === "رياضة"
-                  ? "sports"
-                  : category.name === "أكشن"
-                  ? "action"
-                  : category.name === "2D"
-                  ? "2d"
-                  : category.name === "مغامرات"
-                  ? "adventure"
-                  : category.name === "رعب"
-                  ? "horror"
-                  : "";
+              const className = `flex min-w-[108px] items-center justify-center gap-2.5 rounded-full border px-5 py-3.5 text-sm font-bold transition duration-200 hover:-translate-y-0.5 hover:border-violet-400 hover:bg-violet-500/15 hover:text-white hover:shadow-lg hover:shadow-violet-900/20 active:scale-95 sm:min-w-fit sm:px-4 sm:py-3 ${
+                activeCategory === category.name
+                  ? "border-violet-500 bg-violet-600 text-white shadow-lg shadow-violet-900/30"
+                  : "border-white/10 bg-white/[0.04] text-gray-300"
+              }`;
 
-              if (category.name === "الكل") {
+              if (!category.link_url) {
                 return (
-              <button
-                key={category.name}
-                onClick={() => setActiveCategory(category.name)}
-                className={`flex min-w-[108px] items-center justify-center gap-2.5 rounded-full border px-5 py-3.5 text-sm font-bold transition duration-200 hover:-translate-y-0.5 hover:border-violet-400 hover:bg-violet-500/15 hover:text-white hover:shadow-lg hover:shadow-violet-900/20 active:scale-95 sm:min-w-fit sm:px-4 sm:py-3 ${
-                  activeCategory === category.name
-                    ? "border-violet-500 bg-violet-600 text-white shadow-lg shadow-violet-900/30"
-                    : "border-white/10 bg-white/[0.04] text-gray-300"
-                }`}
-              >
-                <span>{category.icon}</span>
-                <span>{category.name}</span>
-              </button>
+                  <button
+                    key={category.id}
+                    type="button"
+                    onClick={() => setActiveCategory(category.name)}
+                    className={className}
+                  >
+                    <span className="text-[19px] leading-none sm:text-base">
+                      {category.icon}
+                    </span>
+                    <span>{category.name}</span>
+                  </button>
                 );
               }
 
               return (
-                <Link key={category.name} href={`/categories/${slug}`} className={`flex min-w-[108px] items-center justify-center gap-2.5 rounded-full border px-5 py-3.5 text-sm font-bold transition duration-200 hover:-translate-y-0.5 hover:border-violet-400 hover:bg-violet-500/15 hover:text-white hover:shadow-lg hover:shadow-violet-900/20 active:scale-95 sm:min-w-fit sm:px-4 sm:py-3 ${activeCategory === category.name ? "border-violet-500 bg-violet-600 text-white shadow-lg shadow-violet-900/30" : "border-white/10 bg-white/[0.04] text-gray-300"}`}>
-                  <span className="text-[19px] leading-none sm:text-base">{category.icon}</span>
+                <Link
+                  key={category.id}
+                  href={category.link_url}
+                  onClick={() => setActiveCategory(category.name)}
+                  className={className}
+                >
+                  <span className="text-[19px] leading-none sm:text-base">
+                    {category.icon}
+                  </span>
                   <span>{category.name}</span>
                 </Link>
               );
@@ -1220,14 +1509,22 @@ export default function HomePage() {
                 >
                   <div data-game-image className="relative aspect-[4/5] overflow-hidden">
                     <Link
-                      href={`/game/featured-${game.id}`}
+                      href={game.detailsHref}
                       aria-label={`عرض تفاصيل ${game.name}`}
                       className="absolute inset-0 z-10"
                     />
 
-                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-700/20 to-fuchsia-700/20 text-5xl transition duration-300 group-hover:scale-105">
-                      🎮
-                    </div>
+                    {game.image ? (
+                      <img
+                        src={game.image}
+                        alt={game.name}
+                        className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-700/20 to-fuchsia-700/20 text-5xl transition duration-300 group-hover:scale-105">
+                        🎮
+                      </div>
+                    )}
 
                     <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#111019] via-transparent to-transparent" />
 
@@ -1268,7 +1565,7 @@ export default function HomePage() {
                     </p>
 
                     <Link
-                      href={`/game/featured-${game.id}`}
+                      href={game.detailsHref}
                       className="mt-1 block line-clamp-1 text-sm font-black transition hover:text-violet-300"
                     >
                       {game.name}
@@ -1340,14 +1637,22 @@ export default function HomePage() {
             >
               <div data-game-image className="relative h-44 overflow-hidden">
                 <Link
-                  href={`/game/shared-${game.id}`}
+                  href={game.detailsHref}
                   aria-label={`عرض تفاصيل ${game.name}`}
                   className="absolute inset-0 z-10"
                 />
 
-                <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-700/20 to-fuchsia-700/20 text-5xl transition duration-300 group-hover:scale-105">
-                  🎮
-                </div>
+                {game.image ? (
+                  <img
+                    src={game.image}
+                    alt={game.name}
+                    className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-700/20 to-fuchsia-700/20 text-5xl transition duration-300 group-hover:scale-105">
+                    🎮
+                  </div>
+                )}
 
                 <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#12101a] via-transparent to-black/20" />
 
@@ -1362,7 +1667,7 @@ export default function HomePage() {
                 </p>
 
                 <Link
-                  href={`/game/shared-${game.id}`}
+                  href={game.detailsHref}
                   className="mt-1 block text-lg font-black transition hover:text-violet-300"
                 >
                   {game.name}
@@ -1436,14 +1741,22 @@ export default function HomePage() {
               >
               <div data-game-image className="relative h-44 overflow-hidden">
                 <Link
-                  href={`/game/private-${game.id}`}
+                  href={game.detailsHref}
                   aria-label={`عرض تفاصيل ${game.name}`}
                   className="absolute inset-0 z-10"
                 />
 
-                <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-700/20 to-fuchsia-700/20 text-5xl transition duration-300 group-hover:scale-105">
-                  🎮
-                </div>
+                {game.image ? (
+                  <img
+                    src={game.image}
+                    alt={game.name}
+                    className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-700/20 to-fuchsia-700/20 text-5xl transition duration-300 group-hover:scale-105">
+                    🎮
+                  </div>
+                )}
 
                 <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#121019] via-transparent to-transparent" />
 
@@ -1458,7 +1771,7 @@ export default function HomePage() {
                 </p>
 
                 <Link
-                  href={`/game/private-${game.id}`}
+                  href={game.detailsHref}
                   className="mt-1 block text-lg font-black transition hover:text-fuchsia-300"
                 >
                   {game.name}
@@ -1542,14 +1855,22 @@ export default function HomePage() {
                   className="relative h-44 overflow-hidden"
                 >
                   <Link
-                    href={`/game/package-${game.id}`}
+                    href={game.detailsHref}
                     aria-label={`عرض تفاصيل ${game.name}`}
                     className="absolute inset-0 z-10"
                   />
 
-                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-700/20 via-violet-700/15 to-fuchsia-700/20 text-5xl transition duration-300 group-hover:scale-105">
-                    🎁
-                  </div>
+                  {game.image ? (
+                    <img
+                      src={game.image}
+                      alt={game.name}
+                      className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-700/20 via-violet-700/15 to-fuchsia-700/20 text-5xl transition duration-300 group-hover:scale-105">
+                      🎁
+                    </div>
+                  )}
 
                   <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#121019] via-transparent to-transparent" />
 
@@ -1564,7 +1885,7 @@ export default function HomePage() {
                   </p>
 
                   <Link
-                    href={`/game/package-${game.id}`}
+                    href={game.detailsHref}
                     className="mt-1 block text-lg font-black transition hover:text-amber-300"
                   >
                     {game.name}

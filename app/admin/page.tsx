@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
-type AdminTab = "users" | "notifications" | "offers" | "announcement";
+type AdminTab = "users" | "home" | "notifications" | "offers" | "announcement";
 
 type AnnouncementBar = {
   id: number;
@@ -21,6 +21,38 @@ type ProductOption = {
   name: string;
   price: number;
   cover_url: string | null;
+};
+
+type PackageOption = {
+  id: string;
+  name: string;
+  price: number;
+  image_url: string | null;
+};
+
+type HomeSectionKey =
+  | "featured"
+  | "shared"
+  | "private"
+  | "packages";
+
+type HomeCategory = {
+  id: string;
+  name: string;
+  icon: string;
+  link_url: string | null;
+  sort_order: number;
+  is_active: boolean;
+  is_system: boolean;
+};
+
+type HomePageItem = {
+  id: string;
+  section_key: HomeSectionKey;
+  product_id: string | null;
+  package_id: string | null;
+  sort_order: number;
+  is_active: boolean;
 };
 
 type OfferRow = {
@@ -137,6 +169,13 @@ const defaultOffersHero: OffersHeroSettings = {
     "مجموعة من أفضل الخصومات المتاحة حاليًا داخل متجر ZETA.",
 };
 
+const homeSectionLabel: Record<HomeSectionKey, string> = {
+  featured: "ألعاب مميزة",
+  shared: "ألعاب PC مشتركة",
+  private: "ألعاب PC خاصة",
+  packages: "بكجات الألعاب",
+};
+
 const statusLabel: Record<OrderStatus, string> = {
   pending: "بانتظار الدفع",
   paid: "مدفوع",
@@ -236,6 +275,11 @@ export default function AdminPage() {
     useState<AnnouncementBar>(defaultAnnouncement);
 
   const [products, setProducts] = useState<ProductOption[]>([]);
+  const [packages, setPackages] = useState<PackageOption[]>([]);
+  const [homeCategories, setHomeCategories] =
+    useState<HomeCategory[]>([]);
+  const [homePageItems, setHomePageItems] =
+    useState<HomePageItem[]>([]);
   const [offers, setOffers] = useState<OfferRow[]>([]);
   const [offerCategories, setOfferCategories] =
     useState<OfferCategory[]>([]);
@@ -244,6 +288,18 @@ export default function AdminPage() {
   const [offersInnerTab, setOffersInnerTab] =
     useState<"content" | "discounts">("content");
   const [savingOffersHero, setSavingOffersHero] = useState(false);
+
+  const [homeCategoryName, setHomeCategoryName] = useState("");
+  const [homeCategoryIcon, setHomeCategoryIcon] = useState("🎮");
+  const [homeCategoryLink, setHomeCategoryLink] = useState("");
+  const [editingHomeCategoryId, setEditingHomeCategoryId] =
+    useState<string | null>(null);
+  const [savingHomeCategory, setSavingHomeCategory] = useState(false);
+
+  const [homeSectionKey, setHomeSectionKey] =
+    useState<HomeSectionKey>("featured");
+  const [homeSourceId, setHomeSourceId] = useState("");
+  const [savingHomeItem, setSavingHomeItem] = useState(false);
 
   const [categoryName, setCategoryName] = useState("");
   const [editingCategoryId, setEditingCategoryId] =
@@ -325,6 +381,10 @@ export default function AdminPage() {
         0
       );
   }, [selectedProfileOrders]);
+
+  const homeSourceOptions = useMemo(() => {
+    return homeSectionKey === "packages" ? packages : products;
+  }, [homeSectionKey, packages, products]);
 
   useEffect(() => {
     let mounted = true;
@@ -415,9 +475,12 @@ export default function AdminPage() {
         ordersResult,
         announcementResult,
         productsResult,
+        packagesResult,
         offersResult,
         offersHeroResult,
         offerCategoriesResult,
+        homeCategoriesResult,
+        homePageItemsResult,
       ] = await Promise.all([
         supabase
           .from("profiles")
@@ -428,16 +491,12 @@ export default function AdminPage() {
 
         supabase
           .from("orders")
-          .select(
-            "*, order_items(*), payments(*)"
-          )
+          .select("*, order_items(*), payments(*)")
           .order("created_at", { ascending: false }),
 
         supabase
           .from("announcement_bar")
-          .select(
-            "id, text, emoji, link_url, is_visible"
-          )
+          .select("id, text, emoji, link_url, is_visible")
           .eq("id", 1)
           .maybeSingle(),
 
@@ -445,6 +504,11 @@ export default function AdminPage() {
           .from("products")
           .select("id, name, price, cover_url")
           .eq("is_active", true)
+          .order("name", { ascending: true }),
+
+        supabase
+          .from("packages")
+          .select("id, name, price, image_url")
           .order("name", { ascending: true }),
 
         supabase
@@ -465,51 +529,43 @@ export default function AdminPage() {
           .from("offer_categories")
           .select("*")
           .order("sort_order", { ascending: true }),
+
+        supabase
+          .from("home_categories")
+          .select(
+            "id, name, icon, link_url, sort_order, is_active, is_system"
+          )
+          .order("sort_order", { ascending: true }),
+
+        supabase
+          .from("home_page_items")
+          .select(
+            "id, section_key, product_id, package_id, sort_order, is_active"
+          )
+          .order("section_key", { ascending: true })
+          .order("sort_order", { ascending: true }),
       ]);
 
-      if (profilesResult.error) {
-        throw profilesResult.error;
-      }
+      if (profilesResult.error) throw profilesResult.error;
+      if (ordersResult.error) throw ordersResult.error;
+      if (announcementResult.error) throw announcementResult.error;
+      if (productsResult.error) throw productsResult.error;
+      if (packagesResult.error) throw packagesResult.error;
+      if (offersResult.error) throw offersResult.error;
+      if (offersHeroResult.error) throw offersHeroResult.error;
+      if (offerCategoriesResult.error) throw offerCategoriesResult.error;
+      if (homeCategoriesResult.error) throw homeCategoriesResult.error;
+      if (homePageItemsResult.error) throw homePageItemsResult.error;
 
-      if (ordersResult.error) {
-        throw ordersResult.error;
-      }
-
-      if (announcementResult.error) {
-        throw announcementResult.error;
-      }
-
-      if (productsResult.error) {
-        throw productsResult.error;
-      }
-
-      if (offersResult.error) {
-        throw offersResult.error;
-      }
-
-      if (offersHeroResult.error) {
-        throw offersHeroResult.error;
-      }
-
-      if (offerCategoriesResult.error) {
-        throw offerCategoriesResult.error;
-      }
-
-      setProfiles(
-        (profilesResult.data ?? []) as Profile[]
-      );
-
-      setOrders(
-        (ordersResult.data ?? []) as UserOrder[]
-      );
+      setProfiles((profilesResult.data ?? []) as Profile[]);
+      setOrders((ordersResult.data ?? []) as UserOrder[]);
 
       if (announcementResult.data) {
         setAnnouncement({
           id: 1,
           text: announcementResult.data.text ?? "",
           emoji: announcementResult.data.emoji ?? "",
-          link_url:
-            announcementResult.data.link_url ?? "",
+          link_url: announcementResult.data.link_url ?? "",
           is_visible: Boolean(
             announcementResult.data.is_visible
           ),
@@ -522,6 +578,30 @@ export default function AdminPage() {
           name: product.name,
           price: toNumber(product.price),
           cover_url: product.cover_url ?? null,
+        }))
+      );
+
+      setPackages(
+        (packagesResult.data ?? []).map((pkg) => ({
+          id: pkg.id,
+          name: pkg.name,
+          price: toNumber(pkg.price),
+          image_url: pkg.image_url ?? null,
+        }))
+      );
+
+      setHomeCategories(
+        (homeCategoriesResult.data ?? []) as HomeCategory[]
+      );
+
+      setHomePageItems(
+        (homePageItemsResult.data ?? []).map((item) => ({
+          id: item.id,
+          section_key: item.section_key as HomeSectionKey,
+          product_id: item.product_id ?? null,
+          package_id: item.package_id ?? null,
+          sort_order: Number(item.sort_order ?? 0),
+          is_active: Boolean(item.is_active),
         }))
       );
 
@@ -618,6 +698,376 @@ export default function AdminPage() {
     } finally {
       setSavingAnnouncement(false);
     }
+  }
+
+  function resetHomeCategoryForm() {
+    setEditingHomeCategoryId(null);
+    setHomeCategoryName("");
+    setHomeCategoryIcon("🎮");
+    setHomeCategoryLink("");
+  }
+
+  async function saveHomeCategory() {
+    const name = homeCategoryName.trim();
+    const icon = homeCategoryIcon.trim() || "🎮";
+    const linkUrl = homeCategoryLink.trim() || null;
+
+    if (!name) {
+      setErrorMessage("اكتب اسم تصنيف الصفحة الرئيسية");
+      return;
+    }
+
+    setSavingHomeCategory(true);
+    setErrorMessage("");
+
+    try {
+      if (editingHomeCategoryId) {
+        const { error } = await supabase
+          .from("home_categories")
+          .update({
+            name,
+            icon,
+            link_url: linkUrl,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", editingHomeCategoryId);
+
+        if (error) throw error;
+        showMessage("تم تعديل تصنيف الصفحة الرئيسية");
+      } else {
+        const nextOrder =
+          homeCategories.length > 0
+            ? Math.max(
+                ...homeCategories.map(
+                  (category) => category.sort_order
+                )
+              ) + 1
+            : 0;
+
+        const { error } = await supabase
+          .from("home_categories")
+          .insert({
+            name,
+            icon,
+            link_url: linkUrl,
+            sort_order: nextOrder,
+            is_active: true,
+            is_system: false,
+          });
+
+        if (error) throw error;
+        showMessage("تمت إضافة التصنيف للصفحة الرئيسية");
+      }
+
+      resetHomeCategoryForm();
+      await loadData();
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "تعذر حفظ تصنيف الصفحة الرئيسية"
+      );
+    } finally {
+      setSavingHomeCategory(false);
+    }
+  }
+
+  async function toggleHomeCategory(category: HomeCategory) {
+    setErrorMessage("");
+
+    const { error } = await supabase
+      .from("home_categories")
+      .update({
+        is_active: !category.is_active,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", category.id);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
+    await loadData();
+  }
+
+  async function moveHomeCategory(
+    category: HomeCategory,
+    direction: "up" | "down"
+  ) {
+    const sorted = [...homeCategories].sort(
+      (a, b) => a.sort_order - b.sort_order
+    );
+    const index = sorted.findIndex(
+      (item) => item.id === category.id
+    );
+    const targetIndex =
+      direction === "up" ? index - 1 : index + 1;
+
+    if (
+      index < 0 ||
+      targetIndex < 0 ||
+      targetIndex >= sorted.length
+    ) {
+      return;
+    }
+
+    const target = sorted[targetIndex];
+
+    const { error: firstError } = await supabase
+      .from("home_categories")
+      .update({
+        sort_order: target.sort_order,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", category.id);
+
+    if (firstError) {
+      setErrorMessage(firstError.message);
+      return;
+    }
+
+    const { error: secondError } = await supabase
+      .from("home_categories")
+      .update({
+        sort_order: category.sort_order,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", target.id);
+
+    if (secondError) {
+      setErrorMessage(secondError.message);
+      return;
+    }
+
+    await loadData();
+  }
+
+  async function deleteHomeCategory(category: HomeCategory) {
+    if (category.is_system) {
+      setErrorMessage(
+        "التصنيف الأساسي لا ينحذف، لكن تقدر تعدله أو تخفيه"
+      );
+      return;
+    }
+
+    if (!window.confirm(`حذف تصنيف ${category.name}؟`)) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("home_categories")
+      .delete()
+      .eq("id", category.id);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
+    showMessage("تم حذف تصنيف الصفحة الرئيسية");
+    await loadData();
+  }
+
+  async function saveHomePageItem() {
+    if (!homeSourceId) {
+      setErrorMessage(
+        homeSectionKey === "packages"
+          ? "اختر البكج"
+          : "اختر اللعبة"
+      );
+      return;
+    }
+
+    const duplicate = homePageItems.some(
+      (item) =>
+        item.section_key === homeSectionKey &&
+        (homeSectionKey === "packages"
+          ? item.package_id === homeSourceId
+          : item.product_id === homeSourceId)
+    );
+
+    if (duplicate) {
+      setErrorMessage("هذا العنصر موجود مسبقًا داخل هذا القسم");
+      return;
+    }
+
+    setSavingHomeItem(true);
+    setErrorMessage("");
+
+    try {
+      const sectionItems = homePageItems.filter(
+        (item) => item.section_key === homeSectionKey
+      );
+      const nextOrder =
+        sectionItems.length > 0
+          ? Math.max(
+              ...sectionItems.map((item) => item.sort_order)
+            ) + 1
+          : 0;
+
+      const { error } = await supabase
+        .from("home_page_items")
+        .insert({
+          section_key: homeSectionKey,
+          product_id:
+            homeSectionKey === "packages"
+              ? null
+              : homeSourceId,
+          package_id:
+            homeSectionKey === "packages"
+              ? homeSourceId
+              : null,
+          sort_order: nextOrder,
+          is_active: true,
+        });
+
+      if (error) throw error;
+
+      setHomeSourceId("");
+      showMessage("تمت إضافة العنصر للصفحة الرئيسية");
+      await loadData();
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "تعذر إضافة العنصر للصفحة الرئيسية"
+      );
+    } finally {
+      setSavingHomeItem(false);
+    }
+  }
+
+  async function changeHomePageItemSection(
+    item: HomePageItem,
+    sectionKey: HomeSectionKey
+  ) {
+    if (item.package_id && sectionKey !== "packages") {
+      setErrorMessage("البكجات توضع داخل قسم بكجات الألعاب");
+      return;
+    }
+
+    if (item.product_id && sectionKey === "packages") {
+      setErrorMessage("قسم البكجات يقبل البكجات فقط");
+      return;
+    }
+
+    if (item.section_key === sectionKey) return;
+
+    const duplicate = homePageItems.some(
+      (current) =>
+        current.id !== item.id &&
+        current.section_key === sectionKey &&
+        current.product_id === item.product_id &&
+        current.package_id === item.package_id
+    );
+
+    if (duplicate) {
+      setErrorMessage("العنصر موجود مسبقًا داخل هذا القسم");
+      return;
+    }
+
+    const sectionItems = homePageItems.filter(
+      (current) => current.section_key === sectionKey
+    );
+    const nextOrder =
+      sectionItems.length > 0
+        ? Math.max(
+            ...sectionItems.map(
+              (current) => current.sort_order
+            )
+          ) + 1
+        : 0;
+
+    const { error } = await supabase
+      .from("home_page_items")
+      .update({
+        section_key: sectionKey,
+        sort_order: nextOrder,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", item.id);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
+    showMessage("تم نقل العنصر للقسم الجديد");
+    await loadData();
+  }
+
+  async function moveHomePageItem(
+    item: HomePageItem,
+    direction: "up" | "down"
+  ) {
+    const sectionItems = homePageItems
+      .filter(
+        (current) => current.section_key === item.section_key
+      )
+      .sort((a, b) => a.sort_order - b.sort_order);
+    const index = sectionItems.findIndex(
+      (current) => current.id === item.id
+    );
+    const targetIndex =
+      direction === "up" ? index - 1 : index + 1;
+
+    if (
+      index < 0 ||
+      targetIndex < 0 ||
+      targetIndex >= sectionItems.length
+    ) {
+      return;
+    }
+
+    const target = sectionItems[targetIndex];
+
+    const { error: firstError } = await supabase
+      .from("home_page_items")
+      .update({
+        sort_order: target.sort_order,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", item.id);
+
+    if (firstError) {
+      setErrorMessage(firstError.message);
+      return;
+    }
+
+    const { error: secondError } = await supabase
+      .from("home_page_items")
+      .update({
+        sort_order: item.sort_order,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", target.id);
+
+    if (secondError) {
+      setErrorMessage(secondError.message);
+      return;
+    }
+
+    await loadData();
+  }
+
+  async function deleteHomePageItem(item: HomePageItem) {
+    if (!window.confirm("إزالة هذا العنصر من الصفحة الرئيسية؟")) {
+      return;
+    }
+
+    const { error } = await supabase
+      .from("home_page_items")
+      .delete()
+      .eq("id", item.id);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
+    showMessage("تمت إزالة العنصر من الصفحة الرئيسية");
+    await loadData();
   }
 
   async function saveOffersHero() {
@@ -1112,6 +1562,19 @@ export default function AdminPage() {
 
             <button
               type="button"
+              onClick={() => setTab("home")}
+              className={`flex min-h-[64px] items-center justify-center gap-2 rounded-[18px] px-3 py-3 text-xs font-black transition active:scale-[0.98] lg:min-h-0 lg:justify-start ${
+                tab === "home"
+                  ? "bg-violet-500/15 text-violet-200"
+                  : "text-gray-400 hover:bg-white/5 hover:text-white"
+              }`}
+            >
+              <span className="text-lg">🏠</span>
+              <span>الصفحة الرئيسية</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setTab("offers")}
               className={`flex min-h-[64px] items-center justify-center gap-2 rounded-[18px] px-3 py-3 text-xs font-black transition active:scale-[0.98] lg:min-h-0 lg:justify-start ${
                 tab === "offers"
@@ -1314,6 +1777,414 @@ export default function AdminPage() {
                     </p>
                   </div>
                 )}
+              </div>
+            </section>
+          )}
+
+          {tab === "home" && (
+            <section className="rounded-[28px] border border-white/[0.07] bg-[#121019] p-4 sm:p-6">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-bold text-violet-300">
+                    إدارة محتوى المتجر
+                  </p>
+
+                  <h2 className="mt-1 text-xl font-black">
+                    الصفحة الرئيسية
+                  </h2>
+
+                  <p className="mt-2 text-xs leading-6 text-gray-500">
+                    عدّل التصنيفات واختر الألعاب والبكجات التي تظهر في كل قسم، بدون تغيير تصميم الصفحة.
+                  </p>
+                </div>
+
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-violet-500/10 text-2xl">
+                  🏠
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-5">
+                <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-black">
+                        تصنيفات الصفحة الرئيسية
+                      </h3>
+                      <p className="mt-1 text-[10px] leading-5 text-gray-500">
+                        أضف تصنيفًا أو عدّل اسمه وأيقونته ورابطه، ورتّبه أو أخفه.
+                      </p>
+                    </div>
+
+                    <span className="rounded-xl bg-violet-500/10 px-3 py-2 text-[10px] font-black text-violet-200">
+                      {homeCategories.length} تصنيف
+                    </span>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-[90px_1fr]">
+                    <AdminField label="الأيقونة">
+                      <input
+                        value={homeCategoryIcon}
+                        onChange={(event) =>
+                          setHomeCategoryIcon(event.target.value)
+                        }
+                        maxLength={8}
+                        placeholder="🎮"
+                        className={adminInputClass}
+                      />
+                    </AdminField>
+
+                    <AdminField label="اسم التصنيف">
+                      <input
+                        value={homeCategoryName}
+                        onChange={(event) =>
+                          setHomeCategoryName(event.target.value)
+                        }
+                        placeholder="مثال: ألعاب السباقات"
+                        className={adminInputClass}
+                      />
+                    </AdminField>
+                  </div>
+
+                  <div className="mt-3">
+                    <AdminField label="الرابط عند الضغط — اختياري">
+                      <input
+                        dir="ltr"
+                        value={homeCategoryLink}
+                        onChange={(event) =>
+                          setHomeCategoryLink(event.target.value)
+                        }
+                        placeholder="/categories/racing"
+                        className={`${adminInputClass} text-left`}
+                      />
+                    </AdminField>
+                  </div>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={saveHomeCategory}
+                      disabled={savingHomeCategory}
+                      className="rounded-[18px] bg-violet-600 px-4 py-3.5 text-xs font-black disabled:opacity-50"
+                    >
+                      {savingHomeCategory
+                        ? "جاري الحفظ..."
+                        : editingHomeCategoryId
+                          ? "حفظ التعديل"
+                          : "إضافة التصنيف"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={resetHomeCategoryForm}
+                      className="rounded-[18px] border border-white/10 bg-white/5 px-4 py-3.5 text-xs font-black text-gray-300"
+                    >
+                      مسح الحقول
+                    </button>
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    {homeCategories.map((category, index) => (
+                      <div
+                        key={category.id}
+                        className="flex flex-wrap items-center gap-2 rounded-[18px] border border-white/10 bg-black/20 p-3"
+                      >
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-500/10 text-xl">
+                          {category.icon || "🎮"}
+                        </span>
+
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-black">
+                            {category.name}
+                          </p>
+                          <p
+                            dir="ltr"
+                            className="mt-1 truncate text-left text-[8px] text-gray-500"
+                          >
+                            {category.link_url || "بدون رابط"}
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingHomeCategoryId(category.id);
+                            setHomeCategoryName(category.name);
+                            setHomeCategoryIcon(
+                              category.icon || "🎮"
+                            );
+                            setHomeCategoryLink(
+                              category.link_url || ""
+                            );
+                          }}
+                          className="rounded-xl border border-violet-400/15 bg-violet-500/10 px-3 py-2 text-[9px] font-black text-violet-200"
+                        >
+                          تعديل
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            toggleHomeCategory(category)
+                          }
+                          className={`rounded-xl px-3 py-2 text-[9px] font-black ${
+                            category.is_active
+                              ? "bg-emerald-500/10 text-emerald-300"
+                              : "bg-red-500/10 text-red-300"
+                          }`}
+                        >
+                          {category.is_active ? "ظاهر" : "مخفي"}
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={index === 0}
+                          onClick={() =>
+                            moveHomeCategory(category, "up")
+                          }
+                          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[9px] disabled:opacity-30"
+                        >
+                          ↑
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={
+                            index === homeCategories.length - 1
+                          }
+                          onClick={() =>
+                            moveHomeCategory(category, "down")
+                          }
+                          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[9px] disabled:opacity-30"
+                        >
+                          ↓
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            deleteHomeCategory(category)
+                          }
+                          className="rounded-xl border border-red-400/15 bg-red-500/10 px-3 py-2 text-[9px] font-black text-red-300"
+                        >
+                          حذف
+                        </button>
+                      </div>
+                    ))}
+
+                    {!homeCategories.length && (
+                      <div className="rounded-[18px] border border-dashed border-white/10 px-4 py-8 text-center text-xs text-gray-500">
+                        لا توجد تصنيفات حتى الآن.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-black">
+                        الألعاب والبكجات الظاهرة
+                      </h3>
+                      <p className="mt-1 text-[10px] leading-5 text-gray-500">
+                        اختر القسم ثم اختر اللعبة أو البكج الذي تريد إظهاره فيه.
+                      </p>
+                    </div>
+
+                    <span className="rounded-xl bg-fuchsia-500/10 px-3 py-2 text-[10px] font-black text-fuchsia-200">
+                      {homePageItems.length} عنصر
+                    </span>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <AdminField label="مكان الظهور">
+                      <select
+                        value={homeSectionKey}
+                        onChange={(event) => {
+                          setHomeSectionKey(
+                            event.target.value as HomeSectionKey
+                          );
+                          setHomeSourceId("");
+                        }}
+                        className={adminInputClass}
+                      >
+                        {(
+                          Object.keys(
+                            homeSectionLabel
+                          ) as HomeSectionKey[]
+                        ).map((sectionKey) => (
+                          <option
+                            key={sectionKey}
+                            value={sectionKey}
+                          >
+                            {homeSectionLabel[sectionKey]}
+                          </option>
+                        ))}
+                      </select>
+                    </AdminField>
+
+                    <AdminField
+                      label={
+                        homeSectionKey === "packages"
+                          ? "اختر البكج"
+                          : "اختر اللعبة"
+                      }
+                    >
+                      <select
+                        value={homeSourceId}
+                        onChange={(event) =>
+                          setHomeSourceId(event.target.value)
+                        }
+                        className={adminInputClass}
+                      >
+                        <option value="">
+                          {homeSectionKey === "packages"
+                            ? "اختر بكج"
+                            : "اختر لعبة"}
+                        </option>
+
+                        {homeSourceOptions.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name} — {formatMoney(item.price)}
+                          </option>
+                        ))}
+                      </select>
+                    </AdminField>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={saveHomePageItem}
+                    disabled={savingHomeItem}
+                    className="mt-3 w-full rounded-[20px] bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-4 text-sm font-black disabled:opacity-50"
+                  >
+                    {savingHomeItem
+                      ? "جاري الإضافة..."
+                      : "إضافة إلى الصفحة الرئيسية"}
+                  </button>
+
+                  <div className="mt-5 space-y-3">
+                    {homePageItems.map((item) => {
+                      const product = products.find(
+                        (current) =>
+                          current.id === item.product_id
+                      );
+                      const pkg = packages.find(
+                        (current) =>
+                          current.id === item.package_id
+                      );
+                      const source = product || pkg;
+
+                      return (
+                        <div
+                          key={item.id}
+                          className="rounded-[20px] border border-white/10 bg-black/20 p-3"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-violet-500/10 text-2xl">
+                              {(
+                                product?.cover_url ||
+                                pkg?.image_url
+                              ) ? (
+                                <img
+                                  src={
+                                    product?.cover_url ||
+                                    pkg?.image_url ||
+                                    ""
+                                  }
+                                  alt={source?.name || "عنصر"}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : item.package_id ? (
+                                "🎁"
+                              ) : (
+                                "🎮"
+                              )}
+                            </div>
+
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-black">
+                                {source?.name || "عنصر محذوف"}
+                              </p>
+                              <p className="mt-1 text-[9px] text-gray-500">
+                                {homeSectionLabel[item.section_key]}
+                              </p>
+                            </div>
+
+                            <span className="rounded-xl bg-white/5 px-2 py-1 text-[8px] text-gray-400">
+                              ترتيب {item.sort_order + 1}
+                            </span>
+                          </div>
+
+                          <div className="mt-3 grid grid-cols-[1fr_auto_auto_auto] gap-2">
+                            {item.product_id ? (
+                              <select
+                                value={item.section_key}
+                                onChange={(event) =>
+                                  changeHomePageItemSection(
+                                    item,
+                                    event.target
+                                      .value as HomeSectionKey
+                                  )
+                                }
+                                className="min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[9px] text-white outline-none"
+                              >
+                                <option value="featured">
+                                  ألعاب مميزة
+                                </option>
+                                <option value="shared">
+                                  ألعاب PC مشتركة
+                                </option>
+                                <option value="private">
+                                  ألعاب PC خاصة
+                                </option>
+                              </select>
+                            ) : (
+                              <div className="rounded-xl border border-amber-400/15 bg-amber-500/10 px-3 py-2 text-[9px] font-black text-amber-300">
+                                بكجات الألعاب
+                              </div>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                moveHomePageItem(item, "up")
+                              }
+                              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[10px]"
+                            >
+                              ↑
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                moveHomePageItem(item, "down")
+                              }
+                              className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[10px]"
+                            >
+                              ↓
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                deleteHomePageItem(item)
+                              }
+                              className="rounded-xl border border-red-400/15 bg-red-500/10 px-3 py-2 text-[9px] font-black text-red-300"
+                            >
+                              حذف
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {!homePageItems.length && (
+                      <div className="rounded-[20px] border border-dashed border-white/10 px-4 py-10 text-center text-xs text-gray-500">
+                        لم تتم إضافة ألعاب أو بكجات للصفحة الرئيسية بعد.
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </section>
           )}
