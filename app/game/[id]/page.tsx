@@ -16,7 +16,7 @@ type GameDetails = {
   price: number;
   oldPrice: number;
   description: string;
-  delivery: string;
+  delivery?: string;
   ownership: string;
   usage: string;
   gallery: {
