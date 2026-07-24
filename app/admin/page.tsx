@@ -12,6 +12,7 @@ type AdminTab =
   | "home"
   | "notifications"
   | "offers"
+  | "discountCodes"
   | "announcement";
 
 type AnnouncementBar = {
@@ -46,7 +47,6 @@ type ProductOption = {
   ownership_text: string | null;
   usage_text: string | null;
   discount_percent: number | null;
-  promo_code: string | null;
 };
 
 type ProductImageRow = {
@@ -140,6 +140,22 @@ type OfferCategory = {
   sort_order: number;
   is_active: boolean;
   is_system: boolean;
+};
+
+type DiscountCodeRow = {
+  id: string;
+  code: string;
+  discount_percent: number;
+  starts_at: string | null;
+  ends_at: string | null;
+  is_active: boolean;
+  created_at: string;
+};
+
+type DiscountCodeProductRow = {
+  id: string;
+  discount_code_id: string;
+  product_id: string;
 };
 
 type Profile = {
@@ -358,7 +374,6 @@ export default function AdminPage() {
   const [productHomeSection, setProductHomeSection] =
     useState<"" | "featured" | "shared" | "private">("");
   const [productCategoryIds, setProductCategoryIds] = useState<string[]>([]);
-  const [productPromoCode, setProductPromoCode] = useState("");
   const [productActive, setProductActive] = useState(true);
   const [productNewImages, setProductNewImages] = useState<File[]>([]);
   const [productNewImagePreviews, setProductNewImagePreviews] =
@@ -380,6 +395,20 @@ export default function AdminPage() {
   const [offersInnerTab, setOffersInnerTab] =
     useState<"content" | "discounts">("content");
   const [savingOffersHero, setSavingOffersHero] = useState(false);
+
+  const [discountCodes, setDiscountCodes] = useState<DiscountCodeRow[]>([]);
+  const [discountCodeProducts, setDiscountCodeProducts] =
+    useState<DiscountCodeProductRow[]>([]);
+  const [editingDiscountCodeId, setEditingDiscountCodeId] =
+    useState<string | null>(null);
+  const [discountCodeText, setDiscountCodeText] = useState("");
+  const [discountCodePercent, setDiscountCodePercent] = useState("");
+  const [discountCodeStartsAt, setDiscountCodeStartsAt] = useState("");
+  const [discountCodeEndsAt, setDiscountCodeEndsAt] = useState("");
+  const [discountCodeActive, setDiscountCodeActive] = useState(true);
+  const [discountCodeProductIds, setDiscountCodeProductIds] =
+    useState<string[]>([]);
+  const [savingDiscountCode, setSavingDiscountCode] = useState(false);
 
   const [homeCategoryName, setHomeCategoryName] = useState("");
   const [homeCategoryIcon, setHomeCategoryIcon] = useState("🎮");
@@ -696,6 +725,8 @@ export default function AdminPage() {
         homeCategoriesResult,
         homeCategoryItemsResult,
         homePageItemsResult,
+        discountCodesResult,
+        discountCodeProductsResult,
       ] = await Promise.all([
         supabase
           .from("profiles")
@@ -718,7 +749,7 @@ export default function AdminPage() {
         supabase
           .from("products")
           .select(
-            "id, category_id, name, slug, short_description, description, cover_url, price, old_price, stock, platform, is_shared, is_featured, is_best_seller_manual, is_active, sold_count, display_kind, card_badge, detail_category_label, delivery_text, ownership_text, usage_text, discount_percent, promo_code"
+            "id, category_id, name, slug, short_description, description, cover_url, price, old_price, stock, platform, is_shared, is_featured, is_best_seller_manual, is_active, sold_count, display_kind, card_badge, detail_category_label, delivery_text, ownership_text, usage_text, discount_percent"
           )
           .order("created_at", { ascending: false }),
 
@@ -774,6 +805,18 @@ export default function AdminPage() {
           )
           .order("section_key", { ascending: true })
           .order("sort_order", { ascending: true }),
+
+        supabase
+          .from("discount_codes")
+          .select(
+            "id, code, discount_percent, starts_at, ends_at, is_active, created_at"
+          )
+          .order("created_at", { ascending: false }),
+
+        supabase
+          .from("discount_code_products")
+          .select("id, discount_code_id, product_id")
+          .order("created_at", { ascending: true }),
       ]);
 
       if (profilesResult.error) throw profilesResult.error;
@@ -788,6 +831,9 @@ export default function AdminPage() {
       if (homeCategoriesResult.error) throw homeCategoriesResult.error;
       if (homeCategoryItemsResult.error) throw homeCategoryItemsResult.error;
       if (homePageItemsResult.error) throw homePageItemsResult.error;
+      if (discountCodesResult.error) throw discountCodesResult.error;
+      if (discountCodeProductsResult.error)
+        throw discountCodeProductsResult.error;
 
       setProfiles((profilesResult.data ?? []) as Profile[]);
       setOrders((ordersResult.data ?? []) as UserOrder[]);
@@ -840,7 +886,6 @@ export default function AdminPage() {
             product.discount_percent === undefined
               ? null
               : toNumber(product.discount_percent),
-          promo_code: product.promo_code ?? null,
         }))
       );
 
@@ -933,6 +978,26 @@ export default function AdminPage() {
           package_id: item.package_id ?? null,
           sort_order: Number(item.sort_order ?? 0),
           is_active: Boolean(item.is_active),
+        }))
+      );
+
+      setDiscountCodes(
+        (discountCodesResult.data ?? []).map((item) => ({
+          id: item.id,
+          code: item.code,
+          discount_percent: toNumber(item.discount_percent),
+          starts_at: item.starts_at ?? null,
+          ends_at: item.ends_at ?? null,
+          is_active: Boolean(item.is_active),
+          created_at: item.created_at,
+        }))
+      );
+
+      setDiscountCodeProducts(
+        (discountCodeProductsResult.data ?? []).map((item) => ({
+          id: item.id,
+          discount_code_id: item.discount_code_id,
+          product_id: item.product_id,
         }))
       );
 
@@ -1097,7 +1162,6 @@ export default function AdminPage() {
     setProductDisplayKind("featured");
     setProductHomeSection("");
     setProductCategoryIds([]);
-    setProductPromoCode("");
     setProductActive(true);
     setProductNewImages([]);
     setEditingProductImages([]);
@@ -1127,7 +1191,6 @@ export default function AdminPage() {
       setProductSoldCount(String(product.sold_count));
       setProductStock(String(product.stock));
       setProductDisplayKind(product.display_kind);
-      setProductPromoCode(product.promo_code || "");
       setProductActive(product.is_active);
       setEditingProductImages(
         productImages
@@ -1255,7 +1318,6 @@ export default function AdminPage() {
         ownership_text: productOwnership.trim() || null,
         usage_text: productUsage.trim() || null,
         discount_percent: discountPercent,
-        promo_code: productPromoCode.trim().toUpperCase() || null,
       };
 
       let productId = editingProduct?.id;
@@ -1440,6 +1502,179 @@ export default function AdminPage() {
         .update({ cover_url: reordered[0].image_url })
         .eq("id", editingProduct.id);
     }
+  }
+
+  function resetDiscountCodeForm() {
+    setEditingDiscountCodeId(null);
+    setDiscountCodeText("");
+    setDiscountCodePercent("");
+    setDiscountCodeStartsAt("");
+    setDiscountCodeEndsAt("");
+    setDiscountCodeActive(true);
+    setDiscountCodeProductIds([]);
+  }
+
+  function openDiscountCodeForEdit(code: DiscountCodeRow) {
+    setEditingDiscountCodeId(code.id);
+    setDiscountCodeText(code.code);
+    setDiscountCodePercent(String(code.discount_percent));
+    setDiscountCodeStartsAt(toDateTimeLocal(code.starts_at));
+    setDiscountCodeEndsAt(toDateTimeLocal(code.ends_at));
+    setDiscountCodeActive(code.is_active);
+    setDiscountCodeProductIds(
+      discountCodeProducts
+        .filter((item) => item.discount_code_id === code.id)
+        .map((item) => item.product_id)
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function saveDiscountCode() {
+    setErrorMessage("");
+
+    const normalizedCode = discountCodeText
+      .trim()
+      .toUpperCase()
+      .replace(/\s+/g, "");
+    const percent = Math.min(
+      100,
+      Math.max(1, toNumber(discountCodePercent))
+    );
+
+    if (!/^[A-Z0-9_-]{1,30}$/.test(normalizedCode)) {
+      setErrorMessage(
+        "اكتب كودًا من حرف واحد إلى 30 حرفًا إنجليزيًا أو رقمًا بدون مسافات"
+      );
+      return;
+    }
+
+    if (!discountCodePercent || percent <= 0) {
+      setErrorMessage("اكتب نسبة خصم صحيحة");
+      return;
+    }
+
+    if (!discountCodeProductIds.length) {
+      setErrorMessage("اختر لعبة واحدة على الأقل لهذا الكود");
+      return;
+    }
+
+    if (
+      discountCodeStartsAt &&
+      discountCodeEndsAt &&
+      new Date(discountCodeEndsAt).getTime() <=
+        new Date(discountCodeStartsAt).getTime()
+    ) {
+      setErrorMessage("تاريخ انتهاء الكود يجب أن يكون بعد تاريخ البداية");
+      return;
+    }
+
+    setSavingDiscountCode(true);
+
+    try {
+      const payload = {
+        code: normalizedCode,
+        discount_percent: percent,
+        starts_at: discountCodeStartsAt
+          ? new Date(discountCodeStartsAt).toISOString()
+          : null,
+        ends_at: discountCodeEndsAt
+          ? new Date(discountCodeEndsAt).toISOString()
+          : null,
+        is_active: discountCodeActive,
+        updated_at: new Date().toISOString(),
+      };
+
+      let codeId = editingDiscountCodeId;
+
+      if (editingDiscountCodeId) {
+        const { error } = await supabase
+          .from("discount_codes")
+          .update(payload)
+          .eq("id", editingDiscountCodeId);
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase
+          .from("discount_codes")
+          .insert(payload)
+          .select("id")
+          .single();
+        if (error) throw error;
+        codeId = data.id;
+      }
+
+      if (!codeId) throw new Error("تعذر حفظ كود الخصم");
+
+      const { error: deleteAssignmentsError } = await supabase
+        .from("discount_code_products")
+        .delete()
+        .eq("discount_code_id", codeId);
+      if (deleteAssignmentsError) throw deleteAssignmentsError;
+
+      const assignmentRows = discountCodeProductIds.map((productId) => ({
+        discount_code_id: codeId,
+        product_id: productId,
+      }));
+
+      const { error: assignmentError } = await supabase
+        .from("discount_code_products")
+        .insert(assignmentRows);
+      if (assignmentError) throw assignmentError;
+
+      showMessage(
+        editingDiscountCodeId
+          ? "تم تعديل كود الخصم"
+          : "تم إنشاء كود الخصم"
+      );
+      resetDiscountCodeForm();
+      await loadData();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "تعذر حفظ كود الخصم";
+      setErrorMessage(
+        message.toLowerCase().includes("duplicate") ||
+          message.toLowerCase().includes("unique")
+          ? "كود الخصم مستخدم مسبقًا"
+          : message
+      );
+    } finally {
+      setSavingDiscountCode(false);
+    }
+  }
+
+  async function toggleDiscountCodeActive(code: DiscountCodeRow) {
+    const { error } = await supabase
+      .from("discount_codes")
+      .update({
+        is_active: !code.is_active,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", code.id);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
+    showMessage(code.is_active ? "تم إيقاف الكود" : "تم تفعيل الكود");
+    await loadData();
+  }
+
+  async function deleteDiscountCode(code: DiscountCodeRow) {
+    if (!window.confirm(`حذف كود ${code.code} نهائيًا؟`)) return;
+
+    const { error } = await supabase
+      .from("discount_codes")
+      .delete()
+      .eq("id", code.id);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
+    if (editingDiscountCodeId === code.id) resetDiscountCodeForm();
+    showMessage("تم حذف كود الخصم");
+    await loadData();
   }
 
   async function saveAnnouncement() {
@@ -2817,6 +3052,19 @@ export default function AdminPage() {
 
             <button
               type="button"
+              onClick={() => setTab("discountCodes")}
+              className={`flex min-h-[64px] items-center justify-center gap-2 rounded-[18px] px-3 py-3 text-xs font-black transition active:scale-[0.98] lg:min-h-0 lg:justify-start ${
+                tab === "discountCodes"
+                  ? "bg-violet-500/15 text-violet-200"
+                  : "text-gray-400 hover:bg-white/5 hover:text-white"
+              }`}
+            >
+              <span className="text-lg">🎟️</span>
+              <span>أكواد الخصم</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setTab("notifications")}
               className={`flex min-h-[64px] items-center justify-center gap-2 rounded-[18px] px-3 py-3 text-xs font-black transition active:scale-[0.98] lg:min-h-0 lg:justify-start ${
                 tab === "notifications"
@@ -4071,6 +4319,306 @@ export default function AdminPage() {
             </section>
           )}
 
+          {tab === "discountCodes" && (
+            <section className="space-y-4">
+              <div className="rounded-[28px] border border-white/[0.07] bg-[#121019] p-4 sm:p-6">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-bold text-violet-300">
+                      أكواد مستقلة للألعاب
+                    </p>
+                    <h2 className="mt-1 text-xl font-black">أكواد الخصم</h2>
+                    <p className="mt-2 text-xs leading-6 text-gray-500">
+                      أنشئ كودًا وحدد نسبته والألعاب التي يظهر لها تحت مؤقت التخفيض.
+                    </p>
+                  </div>
+
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/10 text-2xl">
+                    🎟️
+                  </div>
+                </div>
+
+                <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)]">
+                  <div className="space-y-4 rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-black">
+                          {editingDiscountCodeId ? "تعديل الكود" : "إضافة كود جديد"}
+                        </h3>
+                        <p className="mt-1 text-[10px] text-gray-500">
+                          يظهر الكود فقط داخل الألعاب التي تحددها.
+                        </p>
+                      </div>
+
+                      {editingDiscountCodeId && (
+                        <button
+                          type="button"
+                          onClick={resetDiscountCodeForm}
+                          className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[10px] font-black text-gray-300"
+                        >
+                          إلغاء التعديل
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <AdminField label="كود الخصم">
+                        <input
+                          dir="ltr"
+                          value={discountCodeText}
+                          onChange={(event) =>
+                            setDiscountCodeText(event.target.value.toUpperCase())
+                          }
+                          placeholder="ZETA10"
+                          maxLength={30}
+                          className={`${adminInputClass} text-left uppercase`}
+                        />
+                      </AdminField>
+
+                      <AdminField label="نسبة الخصم %">
+                        <input
+                          type="number"
+                          min="1"
+                          max="100"
+                          step="1"
+                          value={discountCodePercent}
+                          onChange={(event) =>
+                            setDiscountCodePercent(event.target.value)
+                          }
+                          placeholder="10"
+                          className={adminInputClass}
+                        />
+                      </AdminField>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <AdminField label="بداية الكود (اختياري)">
+                        <input
+                          type="datetime-local"
+                          value={discountCodeStartsAt}
+                          onChange={(event) =>
+                            setDiscountCodeStartsAt(event.target.value)
+                          }
+                          className={adminInputClass}
+                        />
+                      </AdminField>
+
+                      <AdminField label="نهاية الكود (اختياري)">
+                        <input
+                          type="datetime-local"
+                          value={discountCodeEndsAt}
+                          onChange={(event) =>
+                            setDiscountCodeEndsAt(event.target.value)
+                          }
+                          className={adminInputClass}
+                        />
+                      </AdminField>
+                    </div>
+
+                    <label className="flex items-center justify-between gap-4 rounded-[18px] border border-white/10 bg-black/20 px-4 py-3">
+                      <div>
+                        <p className="text-xs font-black">الكود مفعّل</p>
+                        <p className="mt-1 text-[9px] text-gray-500">
+                          تقدر توقفه وترجعه بدون حذفه.
+                        </p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={discountCodeActive}
+                        onChange={(event) =>
+                          setDiscountCodeActive(event.target.checked)
+                        }
+                        className="h-5 w-5 accent-violet-500"
+                      />
+                    </label>
+
+                    <button
+                      type="button"
+                      onClick={saveDiscountCode}
+                      disabled={savingDiscountCode}
+                      className="flex w-full items-center justify-center rounded-[18px] bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-4 text-sm font-black text-white shadow-xl shadow-violet-950/30 transition active:scale-[0.98] disabled:opacity-50"
+                    >
+                      {savingDiscountCode
+                        ? "جاري الحفظ..."
+                        : editingDiscountCodeId
+                          ? "حفظ تعديلات الكود"
+                          : "إضافة كود الخصم"}
+                    </button>
+                  </div>
+
+                  <div className="rounded-[24px] border border-white/10 bg-white/[0.03] p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-black">الألعاب المخصصة للكود</h3>
+                        <p className="mt-1 text-[10px] text-gray-500">
+                          تقدر تختار لعبة واحدة أو عدة ألعاب.
+                        </p>
+                      </div>
+                      <span className="rounded-full bg-violet-500/10 px-3 py-1.5 text-[10px] font-black text-violet-200">
+                        {discountCodeProductIds.length} محدد
+                      </span>
+                    </div>
+
+                    <div className="mt-4 max-h-[430px] space-y-2 overflow-y-auto pl-1">
+                      {products.map((product) => (
+                        <label
+                          key={product.id}
+                          className={`flex cursor-pointer items-center gap-3 rounded-[18px] border p-3 transition ${
+                            discountCodeProductIds.includes(product.id)
+                              ? "border-violet-400/30 bg-violet-500/10"
+                              : "border-white/10 bg-black/20 hover:bg-white/5"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={discountCodeProductIds.includes(product.id)}
+                            onChange={(event) =>
+                              setDiscountCodeProductIds((current) =>
+                                event.target.checked
+                                  ? Array.from(new Set([...current, product.id]))
+                                  : current.filter((id) => id !== product.id)
+                              )
+                            }
+                            className="h-5 w-5 shrink-0 accent-violet-500"
+                          />
+
+                          <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-violet-500/10">
+                            {product.cover_url ? (
+                              <img
+                                src={product.cover_url}
+                                alt={product.name}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-xl">
+                                🎮
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-black">
+                              {product.name}
+                            </p>
+                            <p className="mt-1 text-[9px] text-gray-500">
+                              {product.is_active ? "ظاهرة في المتجر" : "اللعبة مخفية"}
+                            </p>
+                          </div>
+                        </label>
+                      ))}
+
+                      {!products.length && (
+                        <div className="rounded-[18px] border border-dashed border-white/10 px-4 py-10 text-center text-xs text-gray-500">
+                          لا توجد ألعاب حتى الآن.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-[28px] border border-white/[0.07] bg-[#121019] p-4 sm:p-6">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-black">الأكواد المحفوظة</h2>
+                    <p className="mt-1 text-[10px] text-gray-500">
+                      عدّل الكود أو أوقفه أو احذفه من هنا.
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-white/5 px-3 py-2 text-[10px] text-gray-400">
+                    {discountCodes.length} كود
+                  </span>
+                </div>
+
+                <div className="mt-5 grid gap-3 md:grid-cols-2">
+                  {discountCodes.map((code) => {
+                    const assignedIds = discountCodeProducts
+                      .filter((item) => item.discount_code_id === code.id)
+                      .map((item) => item.product_id);
+                    const assignedNames = products
+                      .filter((product) => assignedIds.includes(product.id))
+                      .map((product) => product.name);
+
+                    return (
+                      <article
+                        key={code.id}
+                        className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p
+                              dir="ltr"
+                              className="truncate text-left text-lg font-black tracking-[2px] text-emerald-300"
+                            >
+                              {code.code}
+                            </p>
+                            <p className="mt-1 text-xs font-black text-white">
+                              خصم {code.discount_percent}%
+                            </p>
+                          </div>
+                          <span
+                            className={`rounded-full px-3 py-1.5 text-[9px] font-black ${
+                              code.is_active
+                                ? "bg-emerald-500/10 text-emerald-300"
+                                : "bg-red-500/10 text-red-300"
+                            }`}
+                          >
+                            {code.is_active ? "مفعّل" : "متوقف"}
+                          </span>
+                        </div>
+
+                        <div className="mt-3 rounded-[16px] bg-black/20 p-3">
+                          <p className="text-[9px] text-gray-500">الألعاب</p>
+                          <p className="mt-1 line-clamp-2 text-[10px] leading-5 text-gray-300">
+                            {assignedNames.length
+                              ? assignedNames.join("، ")
+                              : "لا توجد ألعاب مرتبطة"}
+                          </p>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-3 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openDiscountCodeForEdit(code)}
+                            className="rounded-[14px] bg-violet-500/15 px-2 py-3 text-[10px] font-black text-violet-200"
+                          >
+                            تعديل
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleDiscountCodeActive(code)}
+                            className="rounded-[14px] bg-amber-500/10 px-2 py-3 text-[10px] font-black text-amber-200"
+                          >
+                            {code.is_active ? "إيقاف" : "تفعيل"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteDiscountCode(code)}
+                            className="rounded-[14px] bg-red-500/10 px-2 py-3 text-[10px] font-black text-red-300"
+                          >
+                            حذف
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+
+                  {!discountCodes.length && (
+                    <div className="md:col-span-2 rounded-[22px] border border-dashed border-white/10 px-4 py-12 text-center">
+                      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 text-3xl">
+                        🎟️
+                      </div>
+                      <p className="mt-4 text-sm font-black">لا توجد أكواد خصم</p>
+                      <p className="mt-2 text-xs text-gray-500">
+                        أضف أول كود من النموذج الموجود فوق.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+          )}
+
           {tab === "notifications" && (
             <section className="rounded-[28px] border border-white/[0.07] bg-[#121019] p-4 sm:p-6">
               <div className="flex items-start justify-between gap-3">
@@ -4536,15 +5084,6 @@ export default function AdminPage() {
                 <input type="number" min="0" step="1" value={productStock} onChange={(event) => setProductStock(event.target.value)} className={adminInputClass} />
               </AdminField>
             </div>
-
-            <AdminField label="كود الخصم الظاهر تحت المؤقت (اختياري)">
-              <input
-                value={productPromoCode}
-                onChange={(event) => setProductPromoCode(event.target.value)}
-                placeholder="ZETA10"
-                className={adminInputClass}
-              />
-            </AdminField>
 
             <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
               <h3 className="text-sm font-black">التصنيفات التي تظهر فيها اللعبة</h3>

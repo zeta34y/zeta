@@ -24,7 +24,11 @@ type GameDetails = {
     title: string;
   }[];
   discountPercent?: number;
-  promoCode?: string;
+};
+
+type ActiveDiscountCode = {
+  code: string;
+  discountPercent: number;
 };
 
 const fallbackGames: Record<string, GameDetails> = {
@@ -239,6 +243,8 @@ export default function GameDetailsPage() {
   const [loadingGame, setLoadingGame] = useState(true);
   const [purchaseCount, setPurchaseCount] = useState(0);
   const [offerEndsAt, setOfferEndsAt] = useState<string | null>(null);
+  const [activeDiscountCode, setActiveDiscountCode] =
+    useState<ActiveDiscountCode | null>(null);
 
   const [currentSlide, setCurrentSlide] = useState(0);
   const [favorite, setFavorite] = useState(false);
@@ -264,16 +270,16 @@ export default function GameDetailsPage() {
             setGame(fallback);
             setPurchaseCount(0);
             setOfferEndsAt(null);
+            setActiveDiscountCode(null);
           }
           return;
         }
 
-        const now = new Date().toISOString();
         const [productResult, imagesResult, offerResult] = await Promise.all([
           supabase
             .from("products")
             .select(
-              "id, name, display_kind, card_badge, platform, detail_category_label, price, old_price, discount_percent, description, ownership_text, usage_text, sold_count, cover_url, promo_code, is_active"
+              "id, name, display_kind, card_badge, platform, detail_category_label, price, old_price, discount_percent, description, ownership_text, usage_text, sold_count, cover_url, is_active"
             )
             .eq("id", productId)
             .eq("is_active", true)
@@ -288,8 +294,6 @@ export default function GameDetailsPage() {
             .select("starts_at, ends_at")
             .eq("product_id", productId)
             .eq("is_active", true)
-            .lte("starts_at", now)
-            .or(`ends_at.is.null,ends_at.gt.${now}`)
             .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle(),
@@ -305,6 +309,7 @@ export default function GameDetailsPage() {
           setGame(fallback);
           setPurchaseCount(0);
           setOfferEndsAt(null);
+          setActiveDiscountCode(null);
           return;
         }
 
@@ -325,6 +330,52 @@ export default function GameDetailsPage() {
           product.display_kind === "shared" || product.display_kind === "private"
             ? product.display_kind
             : "featured";
+
+        let loadedDiscountCode: ActiveDiscountCode | null = null;
+
+        const assignmentResult = await supabase
+          .from("discount_code_products")
+          .select("discount_code_id")
+          .eq("product_id", productId);
+
+        if (!assignmentResult.error && assignmentResult.data?.length) {
+          const codeIds = Array.from(
+            new Set(
+              assignmentResult.data.map((item) => item.discount_code_id)
+            )
+          );
+
+          const codesResult = await supabase
+            .from("discount_codes")
+            .select(
+              "id, code, discount_percent, starts_at, ends_at, is_active, created_at"
+            )
+            .in("id", codeIds)
+            .eq("is_active", true)
+            .order("created_at", { ascending: false });
+
+          if (!codesResult.error) {
+            const now = Date.now();
+            const activeCode = (codesResult.data ?? []).find((code) => {
+              const startsAt = code.starts_at
+                ? new Date(code.starts_at).getTime()
+                : null;
+              const endsAt = code.ends_at
+                ? new Date(code.ends_at).getTime()
+                : null;
+
+              return (startsAt === null || startsAt <= now) &&
+                (endsAt === null || endsAt > now);
+            });
+
+            if (activeCode) {
+              loadedDiscountCode = {
+                code: activeCode.code,
+                discountPercent: Number(activeCode.discount_percent || 0),
+              };
+            }
+          }
+        }
 
         setGame({
           id: product.id,
@@ -357,10 +408,10 @@ export default function GameDetailsPage() {
             product.discount_percent === undefined
               ? undefined
               : Number(product.discount_percent),
-          promoCode: product.promo_code || "",
         });
         setPurchaseCount(Math.max(0, Number(product.sold_count || 0)));
         setOfferEndsAt(offerResult.data?.ends_at ?? null);
+        setActiveDiscountCode(loadedDiscountCode);
         setCurrentSlide(0);
       } catch (error) {
         console.error("تعذر تحميل اللعبة:", error);
@@ -368,6 +419,7 @@ export default function GameDetailsPage() {
           setGame(fallback);
           setPurchaseCount(0);
           setOfferEndsAt(null);
+          setActiveDiscountCode(null);
         }
       } finally {
         if (mounted) setLoadingGame(false);
@@ -575,6 +627,12 @@ export default function GameDetailsPage() {
   const offerMinutes = Math.floor((offerSeconds % 3600) / 60);
   const offerRemainingSeconds = offerSeconds % 60;
   const offerExpired = offerSeconds <= 0;
+  const formattedOfferEndDate = offerEndsAt
+    ? new Intl.DateTimeFormat("ar-SA", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(new Date(offerEndsAt))
+    : "لم يتم تحديد تاريخ انتهاء التخفيضات";
 
   function formatTime(value: number) {
     return String(value).padStart(2, "0");
@@ -797,13 +855,15 @@ export default function GameDetailsPage() {
                       offerExpired ? "text-red-300" : "text-violet-300"
                     }`}
                   >
-                    {offerExpired
-                      ? "انتهت صلاحية العرض"
-                      : "الوقت المتبقي لانتهاء العرض"}
+                    تاريخ انتهاء التخفيضات
                   </p>
 
                   <p className="mt-1 text-[10px] text-gray-500">
-                    يتوقف الخصم تلقائيًا عند انتهاء المؤقت
+                    {offerEndsAt
+                      ? offerExpired
+                        ? `انتهى التخفيض في ${formattedOfferEndDate}`
+                        : `ينتهي في ${formattedOfferEndDate}`
+                      : formattedOfferEndDate}
                   </p>
                 </div>
 
@@ -840,16 +900,24 @@ export default function GameDetailsPage() {
               </div>
             </div>
 
-            {game.promoCode && (
+            {activeDiscountCode && (
               <div className="mt-3 rounded-[20px] border border-emerald-400/15 bg-emerald-500/[0.06] p-3.5 sm:mt-4 sm:p-4">
                 <div className="flex items-center justify-between gap-3">
-                  <div>
+                  <div className="min-w-0">
                     <p className="text-[10px] text-gray-500">كود الخصم المتاح</p>
-                    <p dir="ltr" className="mt-1 text-left text-lg font-black tracking-[3px] text-emerald-300">
-                      {game.promoCode}
-                    </p>
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                      <p
+                        dir="ltr"
+                        className="truncate text-left text-lg font-black tracking-[3px] text-emerald-300"
+                      >
+                        {activeDiscountCode.code}
+                      </p>
+                      <span className="rounded-full bg-emerald-500/10 px-2.5 py-1 text-[9px] font-black text-emerald-200">
+                        خصم {activeDiscountCode.discountPercent}%
+                      </span>
+                    </div>
                   </div>
-                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/10 text-lg">🏷️</span>
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/10 text-lg">🏷️</span>
                 </div>
               </div>
             )}
