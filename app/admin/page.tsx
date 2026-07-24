@@ -340,7 +340,6 @@ export default function AdminPage() {
   const [productOldPrice, setProductOldPrice] = useState("");
   const [productDiscountPercent, setProductDiscountPercent] = useState("");
   const [productDescription, setProductDescription] = useState("");
-  const [productDelivery, setProductDelivery] = useState("");
   const [productOwnership, setProductOwnership] = useState("");
   const [productUsage, setProductUsage] = useState("");
   const [productSoldCount, setProductSoldCount] = useState("0");
@@ -935,6 +934,37 @@ export default function AdminPage() {
     return data.publicUrl;
   }
 
+  function addProductImageFiles(fileList: FileList | null) {
+    const selectedFiles = Array.from(fileList ?? []).filter((file) =>
+      file.type.startsWith("image/")
+    );
+
+    if (!selectedFiles.length) return;
+
+    setProductNewImages((current) => {
+      const updated = [...current];
+
+      selectedFiles.forEach((file) => {
+        const exists = updated.some(
+          (currentFile) =>
+            currentFile.name === file.name &&
+            currentFile.size === file.size &&
+            currentFile.lastModified === file.lastModified
+        );
+
+        if (!exists) updated.push(file);
+      });
+
+      return updated;
+    });
+  }
+
+  function removeProductNewImage(index: number) {
+    setProductNewImages((current) =>
+      current.filter((_, currentIndex) => currentIndex !== index)
+    );
+  }
+
   function resetProductForm() {
     setEditingProduct(null);
     setProductName("");
@@ -945,7 +975,6 @@ export default function AdminPage() {
     setProductOldPrice("");
     setProductDiscountPercent("");
     setProductDescription("");
-    setProductDelivery("");
     setProductOwnership("");
     setProductUsage("");
     setProductSoldCount("0");
@@ -978,7 +1007,6 @@ export default function AdminPage() {
           : String(product.discount_percent)
       );
       setProductDescription(product.description || "");
-      setProductDelivery(product.delivery_text || "");
       setProductOwnership(product.ownership_text || "");
       setProductUsage(product.usage_text || "");
       setProductSoldCount(String(product.sold_count));
@@ -1109,7 +1137,6 @@ export default function AdminPage() {
         display_kind: productDisplayKind,
         card_badge: productCardBadge.trim() || null,
         detail_category_label: productDetailCategory.trim() || null,
-        delivery_text: productDelivery.trim() || null,
         ownership_text: productOwnership.trim() || null,
         usage_text: productUsage.trim() || null,
         discount_percent: discountPercent,
@@ -4509,10 +4536,7 @@ export default function AdminPage() {
               />
             </AdminField>
 
-            <div className="grid gap-4 sm:grid-cols-3">
-              <AdminField label="طريقة الاستلام">
-                <textarea value={productDelivery} onChange={(event) => setProductDelivery(event.target.value)} rows={3} className={`${adminInputClass} resize-none`} />
-              </AdminField>
+            <div className="grid gap-4 sm:grid-cols-2">
               <AdminField label="نوع الملكية">
                 <textarea value={productOwnership} onChange={(event) => setProductOwnership(event.target.value)} rows={3} className={`${adminInputClass} resize-none`} />
               </AdminField>
@@ -4557,23 +4581,36 @@ export default function AdminPage() {
               <h3 className="text-sm font-black">التصنيفات التي تظهر فيها اللعبة</h3>
               <p className="mt-1 text-[10px] text-gray-500">تقدر تختار أكثر من تصنيف.</p>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {homeCategories.filter((category) => category.slug).map((category) => (
-                  <label key={category.id} className="flex items-center gap-3 rounded-[16px] border border-white/10 bg-black/20 p-3 text-xs font-black">
-                    <input
-                      type="checkbox"
-                      checked={productCategoryIds.includes(category.id)}
-                      onChange={(event) =>
-                        setProductCategoryIds((current) =>
-                          event.target.checked
-                            ? [...current, category.id]
-                            : current.filter((id) => id !== category.id)
-                        )
-                      }
-                    />
-                    <span>{category.icon}</span>
-                    <span>{category.name}</span>
-                  </label>
-                ))}
+                {homeCategories
+                  .filter(
+                    (category) =>
+                      category.name.trim() !== "الكل"
+                  )
+                  .map((category) => (
+                    <label key={category.id} className="flex items-center gap-3 rounded-[16px] border border-white/10 bg-black/20 p-3 text-xs font-black">
+                      <input
+                        type="checkbox"
+                        checked={productCategoryIds.includes(category.id)}
+                        onChange={(event) =>
+                          setProductCategoryIds((current) =>
+                            event.target.checked
+                              ? Array.from(new Set([...current, category.id]))
+                              : current.filter((id) => id !== category.id)
+                          )
+                        }
+                      />
+                      <span>{category.icon}</span>
+                      <span>{category.name}</span>
+                    </label>
+                  ))}
+
+                {homeCategories.filter(
+                  (category) => category.name.trim() !== "الكل"
+                ).length === 0 && (
+                  <div className="sm:col-span-2 rounded-[16px] border border-dashed border-amber-400/20 bg-amber-500/[0.06] p-4 text-center text-[10px] font-bold leading-6 text-amber-200">
+                    لا توجد تصنيفات حاليًا. أضف التصنيفات من قسم الصفحة الرئيسية وستظهر هنا مباشرة.
+                  </div>
+                )}
               </div>
             </div>
 
@@ -4587,13 +4624,45 @@ export default function AdminPage() {
                 type="file"
                 accept="image/*"
                 multiple
-                onChange={(event) => setProductNewImages(Array.from(event.target.files ?? []))}
+                onChange={(event) => {
+                  addProductImageFiles(event.target.files);
+                  event.target.value = "";
+                }}
                 className="mt-4 block w-full rounded-[18px] border border-dashed border-violet-400/25 bg-violet-500/[0.06] p-4 text-xs text-gray-300 file:ml-3 file:rounded-xl file:border-0 file:bg-violet-600 file:px-3 file:py-2 file:text-xs file:font-black file:text-white"
               />
 
+              <p className="mt-2 text-[9px] leading-5 text-gray-500">
+                تقدر تختار عدة صور دفعة واحدة، أو تضيف صورة ثم تفتح الاختيار مرة ثانية؛ الصور الجديدة تتجمع ولا تستبدل السابقة.
+              </p>
+
               {productNewImages.length > 0 && (
-                <div className="mt-3 rounded-[16px] bg-black/20 p-3 text-[10px] text-gray-400">
-                  {productNewImages.length} صورة جديدة جاهزة للرفع
+                <div className="mt-3 space-y-2">
+                  {productNewImages.map((file, index) => (
+                    <div
+                      key={`${file.name}-${file.size}-${file.lastModified}`}
+                      className="flex items-center justify-between gap-3 rounded-[16px] border border-violet-400/15 bg-violet-500/[0.06] p-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-[10px] font-black text-violet-100">
+                          {index === 0 && editingProductImages.length === 0
+                            ? "الغلاف الرئيسي — "
+                            : ""}
+                          {file.name}
+                        </p>
+                        <p className="mt-1 text-[8px] text-gray-500">
+                          {(file.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => removeProductNewImage(index)}
+                        className="shrink-0 rounded-xl bg-red-500/10 px-3 py-2 text-[9px] font-black text-red-300"
+                      >
+                        إزالة
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
 

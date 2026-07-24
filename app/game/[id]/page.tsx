@@ -273,7 +273,7 @@ export default function GameDetailsPage() {
           supabase
             .from("products")
             .select(
-              "id, name, display_kind, card_badge, platform, detail_category_label, price, old_price, discount_percent, description, delivery_text, ownership_text, usage_text, sold_count, cover_url, promo_code, is_active"
+              "id, name, display_kind, card_badge, platform, detail_category_label, price, old_price, discount_percent, description, ownership_text, usage_text, sold_count, cover_url, promo_code, is_active"
             )
             .eq("id", productId)
             .eq("is_active", true)
@@ -342,8 +342,6 @@ export default function GameDetailsPage() {
           oldPrice: Number(product.old_price ?? product.price ?? 0),
           description:
             product.description || "تفاصيل اللعبة والاستلام تظهر هنا.",
-          delivery:
-            product.delivery_text || "تسليم رقمي بعد تأكيد الطلب",
           ownership:
             product.ownership_text ||
             (kind === "shared"
@@ -857,21 +855,6 @@ export default function GameDetailsPage() {
             )}
 
             <div className="mt-4 space-y-2 sm:mt-5 sm:space-y-3">
-              <div className="flex items-start gap-3">
-                <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-500/10">
-                  ⚡
-                </span>
-
-                <div>
-                  <p className="text-xs font-black">
-                    طريقة الاستلام
-                  </p>
-                  <p className="mt-1 text-xs leading-5 text-gray-500">
-                    {game.delivery}
-                  </p>
-                </div>
-              </div>
-
               <div className="flex items-start gap-3">
                 <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-fuchsia-500/10">
                   🔐
