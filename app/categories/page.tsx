@@ -1,48 +1,147 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import BottomNav from "@/components/BottomNav";
+import { supabase } from "@/lib/supabase";
 
-const categories = [
+type Category = {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  slug: string;
+  href: string;
+};
+
+const fallbackCategories: Category[] = [
   {
+    id: "simulation",
     title: "ألعاب المحاكاة",
     description: "تجارب تحاكي حياة وواقع",
     icon: "🕹️",
     slug: "simulation",
+    href: "/categories/simulation",
   },
   {
+    id: "sports",
     title: "ألعاب الرياضة",
     description: "كرة قدم ورياضات متنوعة",
     icon: "⚽",
     slug: "sports",
+    href: "/categories/sports",
   },
   {
+    id: "action",
     title: "ألعاب الأكشن",
     description: "قتال، إطلاق نار وحماس",
     icon: "🔥",
     slug: "action",
+    href: "/categories/action",
   },
   {
+    id: "2d",
     title: "ألعاب 2D",
     description: "لعب خفيف وأجواء كلاسيكية",
     icon: "👾",
     slug: "2d",
+    href: "/categories/2d",
   },
   {
+    id: "adventure",
     title: "ألعاب المغامرات",
     description: "استكشاف وقصص وعوالم",
     icon: "🗺️",
     slug: "adventure",
+    href: "/categories/adventure",
   },
   {
+    id: "horror",
     title: "ألعاب الرعب",
     description: "رعب وتشويق وبقاء",
     icon: "👻",
     slug: "horror",
+    href: "/categories/horror",
   },
 ];
 
 export default function CategoriesPage() {
+  const [categories, setCategories] = useState<Category[]>(fallbackCategories);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadCategories() {
+      const { data, error } = await supabase
+        .from("home_categories")
+        .select(
+          "id, name, icon, slug, link_url, page_description, sort_order, is_active, is_system"
+        )
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true });
+
+      if (error) {
+        console.error("تعذر تحميل التصنيفات:", error);
+        return;
+      }
+
+      const mapped = (data ?? [])
+        .filter((category) => {
+          const isAllCategory =
+            category.is_system === true && category.name === "الكل";
+
+          return !isAllCategory && Boolean(category.slug || category.link_url);
+        })
+        .map((category): Category => {
+          const slug = category.slug ?? "";
+          const href = category.link_url || `/categories/${slug}`;
+
+          return {
+            id: category.id,
+            title: category.name || "تصنيف",
+            description:
+              category.page_description || "الألعاب الموجودة في هذا التصنيف",
+            icon: category.icon || "🎮",
+            slug: slug || category.id,
+            href,
+          };
+        });
+
+      if (mounted && mapped.length > 0) {
+        setCategories(mapped);
+      }
+    }
+
+    loadCategories();
+
+    const channel = supabase
+      .channel("all-categories-page")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "home_categories",
+        },
+        () => {
+          loadCategories();
+        }
+      )
+      .subscribe();
+
+    function refreshOnFocus() {
+      loadCategories();
+    }
+
+    window.addEventListener("focus", refreshOnFocus);
+
+    return () => {
+      mounted = false;
+      window.removeEventListener("focus", refreshOnFocus);
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   return (
     <main
       dir="rtl"
@@ -113,8 +212,8 @@ export default function CategoriesPage() {
         <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {categories.map((category) => (
             <Link
-              key={category.slug}
-              href={`/categories/${category.slug}`}
+              key={category.id}
+              href={category.href}
               className="group flex min-h-[132px] items-center gap-4 rounded-[26px] border border-white/[0.08] bg-gradient-to-br from-[#181724] to-[#101019] p-4 shadow-lg transition duration-300 hover:-translate-y-1 hover:border-violet-400/35 hover:shadow-2xl hover:shadow-violet-950/30 active:scale-[0.99]"
             >
               <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[24px] bg-gradient-to-br from-violet-600 to-indigo-600 text-4xl shadow-xl shadow-violet-900/30 transition duration-300 group-hover:scale-105">
