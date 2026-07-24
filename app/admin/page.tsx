@@ -7,6 +7,7 @@ import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 
 type AdminTab =
+  | "overview"
   | "users"
   | "games"
   | "home"
@@ -212,6 +213,8 @@ type UserOrder = {
   payment_method: string | null;
   subtotal: number;
   discount_amount: number;
+  discount_code: string | null;
+  discount_percent: number | null;
   total: number;
   customer_name: string | null;
   customer_email: string | null;
@@ -225,6 +228,15 @@ type UserOrder = {
   updated_at: string;
   order_items?: OrderItem[];
   payments?: Payment[];
+};
+
+type SitePresenceRow = {
+  session_id: string;
+  user_id: string | null;
+  display_name: string | null;
+  current_path: string | null;
+  first_seen_at: string;
+  last_seen_at: string;
 };
 
 const defaultAnnouncement: AnnouncementBar = {
@@ -327,9 +339,14 @@ export default function AdminPage() {
   const [authorized, setAuthorized] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const [tab, setTab] = useState<AdminTab>("users");
+  const [tab, setTab] = useState<AdminTab>("overview");
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [orders, setOrders] = useState<UserOrder[]>([]);
+  const [sitePresence, setSitePresence] = useState<SitePresenceRow[]>([]);
+  const [visitsToday, setVisitsToday] = useState(0);
+  const [orderStatusFilter, setOrderStatusFilter] =
+    useState<OrderStatus | "all">("all");
+  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
   const [notificationTitle, setNotificationTitle] = useState("");
@@ -531,6 +548,33 @@ export default function AdminPage() {
       );
   }, [selectedProfileOrders]);
 
+  const overviewStats = useMemo(() => {
+    const saleOrders = orders.filter(
+      (order) =>
+        order.payment_status === "paid" &&
+        !["cancelled", "refunded", "rejected"].includes(order.status)
+    );
+
+    return {
+      totalSales: saleOrders.reduce(
+        (total, order) => total + toNumber(order.total),
+        0
+      ),
+      processing: orders.filter((order) => order.status === "processing").length,
+      completed: orders.filter((order) => order.status === "completed").length,
+      cancelled: orders.filter((order) => order.status === "cancelled").length,
+      pending: orders.filter((order) =>
+        ["pending", "paid"].includes(order.status)
+      ).length,
+    };
+  }, [orders]);
+
+  const filteredOverviewOrders = useMemo(() => {
+    if (orderStatusFilter === "all") return orders;
+
+    return orders.filter((order) => order.status === orderStatusFilter);
+  }, [orders, orderStatusFilter]);
+
   const homeSourceOptions = useMemo(() => {
     return homeSectionKey === "packages" ? homePackages : homeProducts;
   }, [homeSectionKey, homePackages, homeProducts]);
@@ -704,6 +748,37 @@ export default function AdminPage() {
       );
     } finally {
       setLoadingHomeSources(false);
+    }
+  }
+
+  async function loadPresence() {
+    try {
+      const onlineThreshold = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+
+      const [onlineResult, todayResult] = await Promise.all([
+        supabase
+          .from("site_presence")
+          .select(
+            "session_id, user_id, display_name, current_path, first_seen_at, last_seen_at"
+          )
+          .gte("last_seen_at", onlineThreshold)
+          .order("last_seen_at", { ascending: false }),
+
+        supabase
+          .from("site_presence")
+          .select("session_id", { count: "exact", head: true })
+          .gte("last_seen_at", startOfToday.toISOString()),
+      ]);
+
+      if (onlineResult.error) throw onlineResult.error;
+      if (todayResult.error) throw todayResult.error;
+
+      setSitePresence((onlineResult.data ?? []) as SitePresenceRow[]);
+      setVisitsToday(todayResult.count ?? 0);
+    } catch (error) {
+      console.error("تعذر تحميل المتصلين الآن:", error);
     }
   }
 
@@ -1059,6 +1134,17 @@ export default function AdminPage() {
     if (authorized && tab === "home") {
       void loadHomeSourceOptions();
     }
+  }, [authorized, tab]);
+
+  useEffect(() => {
+    if (!authorized || tab !== "overview") return;
+
+    void loadPresence();
+    const timer = window.setInterval(() => {
+      void loadPresence();
+    }, 30000);
+
+    return () => window.clearInterval(timer);
   }, [authorized, tab]);
 
   useEffect(() => {
@@ -1675,6 +1761,65 @@ export default function AdminPage() {
     if (editingDiscountCodeId === code.id) resetDiscountCodeForm();
     showMessage("تم حذف كود الخصم");
     await loadData();
+  }
+
+  async function updateOrderStatus(
+    order: UserOrder,
+    status: "processing" | "completed" | "cancelled"
+  ) {
+    let cancellationReason: string | null = null;
+
+    if (status === "cancelled") {
+      cancellationReason = window.prompt("اكتب سبب إلغاء الطلب:")?.trim() || null;
+      if (!cancellationReason) return;
+    }
+
+    setUpdatingOrderId(order.id);
+    setErrorMessage("");
+
+    try {
+      const updates: Record<string, unknown> = {
+        status,
+        updated_at: new Date().toISOString(),
+        cancellation_reason:
+          status === "cancelled" ? cancellationReason : null,
+      };
+
+      if (status === "completed") {
+        updates.completed_at = new Date().toISOString();
+      } else if (order.status === "completed") {
+        updates.completed_at = null;
+      }
+
+      const { data, error } = await supabase
+        .from("orders")
+        .update(updates)
+        .eq("id", order.id)
+        .select("*, order_items(*), payments(*)")
+        .single();
+
+      if (error) throw error;
+
+      const updatedOrder = data as UserOrder;
+
+      setOrders((current) =>
+        current.map((item) =>
+          item.id === updatedOrder.id ? updatedOrder : item
+        )
+      );
+
+      setSelectedOrder((current) =>
+        current?.id === updatedOrder.id ? updatedOrder : current
+      );
+
+      showMessage(`تم تغيير حالة الطلب إلى ${statusLabel[status]}`);
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "تعذر تحديث حالة الطلب"
+      );
+    } finally {
+      setUpdatingOrderId(null);
+    }
   }
 
   async function saveAnnouncement() {
@@ -2953,7 +3098,10 @@ export default function AdminPage() {
           <div className="flex shrink-0 items-center gap-2">
             <button
               type="button"
-              onClick={loadData}
+              onClick={() => {
+                void loadData();
+                void loadPresence();
+              }}
               aria-label="تحديث البيانات"
               className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-lg transition active:scale-95"
             >
@@ -2998,6 +3146,19 @@ export default function AdminPage() {
           </div>
 
           <nav className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-1">
+            <button
+              type="button"
+              onClick={() => setTab("overview")}
+              className={`flex min-h-[64px] items-center justify-center gap-2 rounded-[18px] px-3 py-3 text-xs font-black transition active:scale-[0.98] lg:min-h-0 lg:justify-start ${
+                tab === "overview"
+                  ? "bg-violet-500/15 text-violet-200"
+                  : "text-gray-400 hover:bg-white/5 hover:text-white"
+              }`}
+            >
+              <span className="text-lg">📊</span>
+              <span>نظرة عامة</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setTab("users")}
@@ -3103,6 +3264,278 @@ export default function AdminPage() {
               >
                 ×
               </button>
+            </div>
+          )}
+
+          {tab === "overview" && (
+            <div className="space-y-4">
+              <section className="rounded-[28px] border border-white/[0.07] bg-[#121019] p-4 sm:p-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <p className="text-[10px] font-bold text-violet-300">
+                      بيانات المتجر المباشرة
+                    </p>
+                    <h2 className="mt-1 text-xl font-black sm:text-2xl">
+                      نظرة عامة
+                    </h2>
+                    <p className="mt-2 text-xs leading-6 text-gray-500">
+                      المستخدمون، المتصلون الآن، المبيعات وحالات الطلبات.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void loadData();
+                      void loadPresence();
+                    }}
+                    className="self-start rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-[10px] font-black text-gray-200 transition active:scale-95"
+                  >
+                    تحديث البيانات
+                  </button>
+                </div>
+
+                <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+                  <OverviewCard
+                    icon="👥"
+                    label="المستخدمون"
+                    value={profiles.length.toLocaleString("ar-SA")}
+                    hint="حساب مسجل"
+                  />
+                  <OverviewCard
+                    icon="🟢"
+                    label="متصل الآن"
+                    value={sitePresence.length.toLocaleString("ar-SA")}
+                    hint="خلال آخر دقيقتين"
+                  />
+                  <OverviewCard
+                    icon="👀"
+                    label="زيارات اليوم"
+                    value={visitsToday.toLocaleString("ar-SA")}
+                    hint="جلسة متصفح"
+                  />
+                  <OverviewCard
+                    icon="💰"
+                    label="إجمالي المبيعات"
+                    value={formatMoney(overviewStats.totalSales)}
+                    hint="طلبات مدفوعة"
+                  />
+                  <OverviewCard
+                    icon="⚙️"
+                    label="قيد التجهيز"
+                    value={overviewStats.processing.toLocaleString("ar-SA")}
+                    hint="طلب"
+                  />
+                  <OverviewCard
+                    icon="✅"
+                    label="مكتملة"
+                    value={overviewStats.completed.toLocaleString("ar-SA")}
+                    hint={`${overviewStats.cancelled.toLocaleString("ar-SA")} ملغية`}
+                  />
+                </div>
+              </section>
+
+              <section className="rounded-[28px] border border-white/[0.07] bg-[#121019] p-4 sm:p-6">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-bold text-emerald-300">
+                      مباشر
+                    </p>
+                    <h3 className="mt-1 text-lg font-black">
+                      الموجودون في الموقع الآن
+                    </h3>
+                  </div>
+                  <span className="rounded-full border border-emerald-400/15 bg-emerald-500/10 px-3 py-1.5 text-[9px] font-black text-emerald-300">
+                    {sitePresence.length} متصل
+                  </span>
+                </div>
+
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {sitePresence.map((presence) => {
+                    const profile = presence.user_id
+                      ? profiles.find((item) => item.id === presence.user_id)
+                      : null;
+
+                    return (
+                      <div
+                        key={presence.session_id}
+                        className="flex items-center gap-3 rounded-[20px] border border-white/[0.07] bg-black/20 p-3"
+                      >
+                        <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-violet-500/10 text-lg">
+                          {profile ? "👤" : "🌐"}
+                          <span className="absolute -bottom-0.5 -left-0.5 h-3 w-3 rounded-full border-2 border-[#121019] bg-emerald-400" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-black">
+                            {profile?.display_name ||
+                              presence.display_name ||
+                              (profile?.email ? profile.email.split("@")[0] : "زائر")}
+                          </p>
+                          <p dir="ltr" className="mt-1 truncate text-left text-[9px] text-gray-500">
+                            {presence.current_path || "/"}
+                          </p>
+                        </div>
+                        <p className="shrink-0 text-[8px] text-gray-600">
+                          {formatDate(presence.last_seen_at)}
+                        </p>
+                      </div>
+                    );
+                  })}
+
+                  {!sitePresence.length && (
+                    <div className="sm:col-span-2 rounded-[20px] border border-dashed border-white/10 px-4 py-8 text-center text-xs text-gray-500">
+                      لا يوجد أحد مسجل كمتصل الآن.
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              <section className="rounded-[28px] border border-white/[0.07] bg-[#121019] p-4 sm:p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p className="text-[10px] font-bold text-violet-300">
+                      إدارة الطلبات
+                    </p>
+                    <h3 className="mt-1 text-lg font-black">
+                      جميع الطلبات
+                    </h3>
+                    <p className="mt-2 text-xs text-gray-500">
+                      غيّر الحالة أو افتح التفاصيل الكاملة للطلب.
+                    </p>
+                  </div>
+
+                  <div className="flex max-w-full gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    {[
+                      { key: "all", label: "الكل" },
+                      { key: "processing", label: "قيد التجهيز" },
+                      { key: "completed", label: "مكتملة" },
+                      { key: "cancelled", label: "ملغية" },
+                      { key: "pending", label: "بانتظار الدفع" },
+                    ].map((item) => (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() =>
+                          setOrderStatusFilter(item.key as OrderStatus | "all")
+                        }
+                        className={`shrink-0 rounded-xl border px-3 py-2 text-[9px] font-black transition ${
+                          orderStatusFilter === item.key
+                            ? "border-violet-400/25 bg-violet-500/15 text-violet-200"
+                            : "border-white/10 bg-white/[0.03] text-gray-500"
+                        }`}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mt-5 space-y-3">
+                  {filteredOverviewOrders.map((order) => {
+                    const profile = profiles.find(
+                      (item) => item.id === order.user_id
+                    );
+                    const firstItem = order.order_items?.[0];
+
+                    return (
+                      <div
+                        key={order.id}
+                        className="rounded-[22px] border border-white/[0.07] bg-black/20 p-3 sm:p-4"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-violet-500/10 text-xl">
+                            {firstItem?.image_url ? (
+                              <img
+                                src={firstItem.image_url}
+                                alt=""
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              "🛒"
+                            )}
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-xs font-black">
+                                {order.order_number}
+                              </p>
+                              <span
+                                className={`rounded-full border px-2 py-1 text-[7px] font-black ${statusClass[order.status]}`}
+                              >
+                                {statusLabel[order.status]}
+                              </span>
+                            </div>
+                            <p className="mt-1 truncate text-[10px] text-gray-400">
+                              {order.customer_name ||
+                                profile?.display_name ||
+                                order.customer_email ||
+                                profile?.email ||
+                                "مستخدم"}
+                            </p>
+                            <p className="mt-1 truncate text-[9px] text-gray-600">
+                              {firstItem?.item_name || "لا توجد عناصر"}{" "}
+                              {(order.order_items?.length ?? 0) > 1
+                                ? `+${(order.order_items?.length ?? 1) - 1}`
+                                : ""}
+                            </p>
+                          </div>
+
+                          <div className="shrink-0 text-left">
+                            <p className="text-sm font-black">
+                              {formatMoney(order.total)}
+                            </p>
+                            <p className="mt-1 text-[8px] text-gray-600">
+                              {formatDate(order.created_at)}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+                          <select
+                            value={
+                              ["processing", "completed", "cancelled"].includes(
+                                order.status
+                              )
+                                ? order.status
+                                : ""
+                            }
+                            onChange={(event) => {
+                              const value = event.target.value as
+                                | "processing"
+                                | "completed"
+                                | "cancelled"
+                                | "";
+                              if (value) void updateOrderStatus(order, value);
+                            }}
+                            disabled={updatingOrderId === order.id}
+                            className="w-full rounded-2xl border border-white/10 bg-[#171322] px-3 py-3 text-xs font-black text-white outline-none disabled:opacity-50"
+                          >
+                            <option value="">تغيير حالة الطلب</option>
+                            <option value="processing">قيد التجهيز</option>
+                            <option value="completed">مكتمل</option>
+                            <option value="cancelled">ملغي</option>
+                          </select>
+
+                          <button
+                            type="button"
+                            onClick={() => setSelectedOrder(order)}
+                            className="rounded-2xl border border-violet-400/15 bg-violet-500/10 px-4 py-3 text-xs font-black text-violet-200 transition active:scale-95"
+                          >
+                            تفاصيل الطلب
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {!filteredOverviewOrders.length && (
+                    <div className="rounded-[20px] border border-dashed border-white/10 px-4 py-10 text-center text-xs text-gray-500">
+                      لا توجد طلبات في هذه الحالة.
+                    </div>
+                  )}
+                </div>
+              </section>
             </div>
           )}
 
@@ -5380,7 +5813,53 @@ export default function AdminPage() {
             setSelectedOrder(null)
           }
         >
-          <div className="grid grid-cols-2 gap-3">
+          <div className="rounded-[22px] border border-violet-400/15 bg-violet-500/[0.07] p-4">
+            <p className="text-[9px] font-bold text-violet-300">
+              المشتري
+            </p>
+            <h3 className="mt-1 text-base font-black">
+              {selectedOrder.customer_name ||
+                profiles.find((profile) => profile.id === selectedOrder.user_id)
+                  ?.display_name ||
+                "بدون اسم"}
+            </h3>
+            <p dir="ltr" className="mt-2 truncate text-left text-[10px] text-gray-400">
+              {selectedOrder.customer_email ||
+                profiles.find((profile) => profile.id === selectedOrder.user_id)
+                  ?.email ||
+                "—"}
+            </p>
+            <p dir="ltr" className="mt-1 truncate text-left text-[10px] text-gray-500">
+              {selectedOrder.customer_phone ||
+                profiles.find((profile) => profile.id === selectedOrder.user_id)
+                  ?.phone ||
+                "—"}
+            </p>
+          </div>
+
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            {[
+              { status: "processing" as const, label: "قيد التجهيز" },
+              { status: "completed" as const, label: "مكتمل" },
+              { status: "cancelled" as const, label: "ملغي" },
+            ].map((item) => (
+              <button
+                key={item.status}
+                type="button"
+                onClick={() => void updateOrderStatus(selectedOrder, item.status)}
+                disabled={updatingOrderId === selectedOrder.id}
+                className={`rounded-2xl border px-2 py-3 text-[9px] font-black transition disabled:opacity-50 ${
+                  selectedOrder.status === item.status
+                    ? statusClass[item.status]
+                    : "border-white/10 bg-white/[0.03] text-gray-400"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-3">
             <InfoCard
               label="حالة الطلب"
               value={
@@ -5405,6 +5884,30 @@ export default function AdminPage() {
                       selectedOrder.payment_method
                     ] ||
                     selectedOrder.payment_method
+                  : "—"
+              }
+            />
+
+            <InfoCard
+              label="السعر قبل الخصم"
+              value={formatMoney(selectedOrder.subtotal)}
+            />
+
+            <InfoCard
+              label="قيمة الخصم"
+              value={formatMoney(selectedOrder.discount_amount)}
+            />
+
+            <InfoCard
+              label="كود الخصم"
+              value={selectedOrder.discount_code || "لم يستخدم كود"}
+            />
+
+            <InfoCard
+              label="نسبة الكود"
+              value={
+                selectedOrder.discount_percent
+                  ? `${selectedOrder.discount_percent}%`
                   : "—"
               }
             />
@@ -5449,7 +5952,7 @@ export default function AdminPage() {
                       </p>
 
                       <p className="mt-1 text-[9px] text-gray-500">
-                        الكمية: {item.quantity}
+                        الكمية: {item.quantity} • سعر الوحدة: {formatMoney(item.unit_price)}
                       </p>
                     </div>
 
@@ -5549,6 +6052,31 @@ export default function AdminPage() {
 
 const adminInputClass =
   "w-full rounded-[20px] border border-white/10 bg-white/[0.04] px-4 py-4 text-sm text-white outline-none transition placeholder:text-gray-600 focus:border-violet-400/50";
+
+function OverviewCard({
+  icon,
+  label,
+  value,
+  hint,
+}: {
+  icon: string;
+  label: string;
+  value: string;
+  hint: string;
+}) {
+  return (
+    <div className="rounded-[22px] border border-white/[0.07] bg-black/20 p-3 sm:p-4">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[9px] font-bold text-gray-500">{label}</p>
+        <span className="text-lg">{icon}</span>
+      </div>
+      <p className="mt-3 break-words text-lg font-black text-white sm:text-xl">
+        {value}
+      </p>
+      <p className="mt-1 text-[8px] text-gray-600">{hint}</p>
+    </div>
+  );
+}
 
 function AdminField({
   label,
