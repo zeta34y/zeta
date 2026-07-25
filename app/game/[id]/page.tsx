@@ -333,47 +333,34 @@ export default function GameDetailsPage() {
 
         let loadedDiscountCode: ActiveDiscountCode | null = null;
 
-        const assignmentResult = await supabase
-          .from("discount_code_products")
-          .select("discount_code_id")
-          .eq("product_id", productId);
-
-        if (!assignmentResult.error && assignmentResult.data?.length) {
-          const codeIds = Array.from(
-            new Set(
-              assignmentResult.data.map((item) => item.discount_code_id)
-            )
-          );
-
-          const codesResult = await supabase
+        const [assignmentResult, codesResult] = await Promise.all([
+          supabase
+            .from("discount_code_products")
+            .select("discount_code_id")
+            .eq("product_id", productId),
+          supabase
             .from("discount_codes")
             .select(
-              "id, code, discount_percent, starts_at, ends_at, is_active, created_at"
+              "id, code, discount_percent, applies_to_all, is_active, created_at"
             )
-            .in("id", codeIds)
             .eq("is_active", true)
-            .order("created_at", { ascending: false });
+            .order("created_at", { ascending: false }),
+        ]);
 
-          if (!codesResult.error) {
-            const now = Date.now();
-            const activeCode = (codesResult.data ?? []).find((code) => {
-              const startsAt = code.starts_at
-                ? new Date(code.starts_at).getTime()
-                : null;
-              const endsAt = code.ends_at
-                ? new Date(code.ends_at).getTime()
-                : null;
+        if (!assignmentResult.error && !codesResult.error) {
+          const assignedCodeIds = new Set(
+            (assignmentResult.data ?? []).map((item) => item.discount_code_id)
+          );
 
-              return (startsAt === null || startsAt <= now) &&
-                (endsAt === null || endsAt > now);
-            });
+          const activeCode = (codesResult.data ?? []).find(
+            (code) => code.applies_to_all || assignedCodeIds.has(code.id)
+          );
 
-            if (activeCode) {
-              loadedDiscountCode = {
-                code: activeCode.code,
-                discountPercent: Number(activeCode.discount_percent || 0),
-              };
-            }
+          if (activeCode) {
+            loadedDiscountCode = {
+              code: activeCode.code,
+              discountPercent: Number(activeCode.discount_percent || 0),
+            };
           }
         }
 

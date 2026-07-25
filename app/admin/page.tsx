@@ -147,8 +147,7 @@ type DiscountCodeRow = {
   id: string;
   code: string;
   discount_percent: number;
-  starts_at: string | null;
-  ends_at: string | null;
+  applies_to_all: boolean;
   is_active: boolean;
   created_at: string;
 };
@@ -420,8 +419,8 @@ export default function AdminPage() {
     useState<string | null>(null);
   const [discountCodeText, setDiscountCodeText] = useState("");
   const [discountCodePercent, setDiscountCodePercent] = useState("");
-  const [discountCodeStartsAt, setDiscountCodeStartsAt] = useState("");
-  const [discountCodeEndsAt, setDiscountCodeEndsAt] = useState("");
+  const [discountCodeAppliesToAll, setDiscountCodeAppliesToAll] =
+    useState(false);
   const [discountCodeActive, setDiscountCodeActive] = useState(true);
   const [discountCodeProductIds, setDiscountCodeProductIds] =
     useState<string[]>([]);
@@ -884,7 +883,7 @@ export default function AdminPage() {
         supabase
           .from("discount_codes")
           .select(
-            "id, code, discount_percent, starts_at, ends_at, is_active, created_at"
+            "id, code, discount_percent, applies_to_all, is_active, created_at"
           )
           .order("created_at", { ascending: false }),
 
@@ -1061,8 +1060,7 @@ export default function AdminPage() {
           id: item.id,
           code: item.code,
           discount_percent: toNumber(item.discount_percent),
-          starts_at: item.starts_at ?? null,
-          ends_at: item.ends_at ?? null,
+          applies_to_all: Boolean(item.applies_to_all),
           is_active: Boolean(item.is_active),
           created_at: item.created_at,
         }))
@@ -1594,8 +1592,7 @@ export default function AdminPage() {
     setEditingDiscountCodeId(null);
     setDiscountCodeText("");
     setDiscountCodePercent("");
-    setDiscountCodeStartsAt("");
-    setDiscountCodeEndsAt("");
+    setDiscountCodeAppliesToAll(false);
     setDiscountCodeActive(true);
     setDiscountCodeProductIds([]);
   }
@@ -1604,8 +1601,7 @@ export default function AdminPage() {
     setEditingDiscountCodeId(code.id);
     setDiscountCodeText(code.code);
     setDiscountCodePercent(String(code.discount_percent));
-    setDiscountCodeStartsAt(toDateTimeLocal(code.starts_at));
-    setDiscountCodeEndsAt(toDateTimeLocal(code.ends_at));
+    setDiscountCodeAppliesToAll(code.applies_to_all);
     setDiscountCodeActive(code.is_active);
     setDiscountCodeProductIds(
       discountCodeProducts
@@ -1639,18 +1635,8 @@ export default function AdminPage() {
       return;
     }
 
-    if (!discountCodeProductIds.length) {
-      setErrorMessage("اختر لعبة واحدة على الأقل لهذا الكود");
-      return;
-    }
-
-    if (
-      discountCodeStartsAt &&
-      discountCodeEndsAt &&
-      new Date(discountCodeEndsAt).getTime() <=
-        new Date(discountCodeStartsAt).getTime()
-    ) {
-      setErrorMessage("تاريخ انتهاء الكود يجب أن يكون بعد تاريخ البداية");
+    if (!discountCodeAppliesToAll && !discountCodeProductIds.length) {
+      setErrorMessage("اختر الكل أو اختر لعبة واحدة على الأقل لهذا الكود");
       return;
     }
 
@@ -1660,12 +1646,9 @@ export default function AdminPage() {
       const payload = {
         code: normalizedCode,
         discount_percent: percent,
-        starts_at: discountCodeStartsAt
-          ? new Date(discountCodeStartsAt).toISOString()
-          : null,
-        ends_at: discountCodeEndsAt
-          ? new Date(discountCodeEndsAt).toISOString()
-          : null,
+        applies_to_all: discountCodeAppliesToAll,
+        starts_at: null,
+        ends_at: null,
         is_active: discountCodeActive,
         updated_at: new Date().toISOString(),
       };
@@ -1696,15 +1679,17 @@ export default function AdminPage() {
         .eq("discount_code_id", codeId);
       if (deleteAssignmentsError) throw deleteAssignmentsError;
 
-      const assignmentRows = discountCodeProductIds.map((productId) => ({
-        discount_code_id: codeId,
-        product_id: productId,
-      }));
+      if (!discountCodeAppliesToAll) {
+        const assignmentRows = discountCodeProductIds.map((productId) => ({
+          discount_code_id: codeId,
+          product_id: productId,
+        }));
 
-      const { error: assignmentError } = await supabase
-        .from("discount_code_products")
-        .insert(assignmentRows);
-      if (assignmentError) throw assignmentError;
+        const { error: assignmentError } = await supabase
+          .from("discount_code_products")
+          .insert(assignmentRows);
+        if (assignmentError) throw assignmentError;
+      }
 
       showMessage(
         editingDiscountCodeId
@@ -4779,7 +4764,7 @@ export default function AdminPage() {
                           {editingDiscountCodeId ? "تعديل الكود" : "إضافة كود جديد"}
                         </h3>
                         <p className="mt-1 text-[10px] text-gray-500">
-                          يظهر الكود فقط داخل الألعاب التي تحددها.
+                          اختر جميع الألعاب أو ألعابًا محددة لهذا الكود.
                         </p>
                       </div>
 
@@ -4824,28 +4809,13 @@ export default function AdminPage() {
                       </AdminField>
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <AdminField label="بداية الكود (اختياري)">
-                        <input
-                          type="datetime-local"
-                          value={discountCodeStartsAt}
-                          onChange={(event) =>
-                            setDiscountCodeStartsAt(event.target.value)
-                          }
-                          className={adminInputClass}
-                        />
-                      </AdminField>
-
-                      <AdminField label="نهاية الكود (اختياري)">
-                        <input
-                          type="datetime-local"
-                          value={discountCodeEndsAt}
-                          onChange={(event) =>
-                            setDiscountCodeEndsAt(event.target.value)
-                          }
-                          className={adminInputClass}
-                        />
-                      </AdminField>
+                    <div className="rounded-[18px] border border-violet-400/15 bg-violet-500/[0.06] px-4 py-3">
+                      <p className="text-xs font-black text-violet-100">
+                        الكود يعمل مباشرة بدون مؤقت
+                      </p>
+                      <p className="mt-1 text-[9px] leading-5 text-gray-500">
+                        أوقف الكود أو احذفه يدويًا وقت ما تبي.
+                      </p>
                     </div>
 
                     <label className="flex items-center justify-between gap-4 rounded-[18px] border border-white/10 bg-black/20 px-4 py-3">
@@ -4884,19 +4854,52 @@ export default function AdminPage() {
                       <div>
                         <h3 className="text-sm font-black">الألعاب المخصصة للكود</h3>
                         <p className="mt-1 text-[10px] text-gray-500">
-                          تقدر تختار لعبة واحدة أو عدة ألعاب.
+                          اختر الكل أو حدد لعبة واحدة أو عدة ألعاب.
                         </p>
                       </div>
                       <span className="rounded-full bg-violet-500/10 px-3 py-1.5 text-[10px] font-black text-violet-200">
-                        {discountCodeProductIds.length} محدد
+                        {discountCodeAppliesToAll
+                          ? "جميع الألعاب"
+                          : `${discountCodeProductIds.length} محدد`}
                       </span>
                     </div>
 
                     <div className="mt-4 max-h-[430px] space-y-2 overflow-y-auto pl-1">
+                      <label
+                        className={`flex cursor-pointer items-center gap-3 rounded-[18px] border p-3 transition ${
+                          discountCodeAppliesToAll
+                            ? "border-violet-400/40 bg-violet-500/15"
+                            : "border-white/10 bg-black/20 hover:bg-white/5"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={discountCodeAppliesToAll}
+                          onChange={(event) => {
+                            const checked = event.target.checked;
+                            setDiscountCodeAppliesToAll(checked);
+                            if (checked) setDiscountCodeProductIds([]);
+                          }}
+                          className="h-5 w-5 shrink-0 accent-violet-500"
+                        />
+
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-500/15 text-xl">
+                          🎮
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-black">الكل</p>
+                          <p className="mt-1 text-[9px] text-gray-500">
+                            يطبق الكود على جميع الألعاب الحالية والجديدة
+                          </p>
+                        </div>
+                      </label>
+
                       {products.map((product) => (
                         <label
                           key={product.id}
                           className={`flex cursor-pointer items-center gap-3 rounded-[18px] border p-3 transition ${
+                            discountCodeAppliesToAll ||
                             discountCodeProductIds.includes(product.id)
                               ? "border-violet-400/30 bg-violet-500/10"
                               : "border-white/10 bg-black/20 hover:bg-white/5"
@@ -4904,14 +4907,23 @@ export default function AdminPage() {
                         >
                           <input
                             type="checkbox"
-                            checked={discountCodeProductIds.includes(product.id)}
-                            onChange={(event) =>
+                            checked={
+                              discountCodeAppliesToAll ||
+                              discountCodeProductIds.includes(product.id)
+                            }
+                            onChange={(event) => {
+                              if (discountCodeAppliesToAll) {
+                                setDiscountCodeAppliesToAll(false);
+                                setDiscountCodeProductIds([product.id]);
+                                return;
+                              }
+
                               setDiscountCodeProductIds((current) =>
                                 event.target.checked
                                   ? Array.from(new Set([...current, product.id]))
                                   : current.filter((id) => id !== product.id)
-                              )
-                            }
+                              );
+                            }}
                             className="h-5 w-5 shrink-0 accent-violet-500"
                           />
 
@@ -5003,9 +5015,11 @@ export default function AdminPage() {
                         <div className="mt-3 rounded-[16px] bg-black/20 p-3">
                           <p className="text-[9px] text-gray-500">الألعاب</p>
                           <p className="mt-1 line-clamp-2 text-[10px] leading-5 text-gray-300">
-                            {assignedNames.length
-                              ? assignedNames.join("، ")
-                              : "لا توجد ألعاب مرتبطة"}
+                            {code.applies_to_all
+                              ? "جميع الألعاب"
+                              : assignedNames.length
+                                ? assignedNames.join("، ")
+                                : "لا توجد ألعاب مرتبطة"}
                           </p>
                         </div>
 
