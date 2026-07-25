@@ -131,141 +131,6 @@ const fallbackCategoryInfo: Record<string, CategoryInfo> = {
   },
 };
 
-const fallbackGames: Array<Game & { category: string }> = [
-  {
-    id: "featured-1",
-    name: "EA SPORTS FC 26",
-    type: "نسخة رقمية",
-    category: "sports",
-    price: 189,
-    oldPrice: 249,
-    image: "",
-    detailsHref: "/game/featured-1",
-    isPackage: false,
-  },
-  {
-    id: "shared-1",
-    name: "EA SPORTS FC",
-    type: "حساب PC مشترك",
-    category: "sports",
-    price: 29,
-    oldPrice: 49,
-    image: "",
-    detailsHref: "/game/shared-1",
-    isPackage: false,
-  },
-  {
-    id: "featured-2",
-    name: "Call of Duty",
-    type: "نسخة رقمية",
-    category: "action",
-    price: 159,
-    oldPrice: 219,
-    image: "",
-    detailsHref: "/game/featured-2",
-    isPackage: false,
-  },
-  {
-    id: "private-1",
-    name: "Call of Duty",
-    type: "حساب PC خاص",
-    category: "action",
-    price: 149,
-    oldPrice: 199,
-    image: "",
-    detailsHref: "/game/private-1",
-    isPackage: false,
-  },
-  {
-    id: "featured-3",
-    name: "Grand Theft Auto V",
-    type: "نسخة رقمية",
-    category: "simulation",
-    price: 79,
-    oldPrice: 129,
-    image: "",
-    detailsHref: "/game/featured-3",
-    isPackage: false,
-  },
-  {
-    id: "shared-2",
-    name: "GTA V",
-    type: "حساب PC مشترك",
-    category: "simulation",
-    price: 19,
-    oldPrice: 39,
-    image: "",
-    detailsHref: "/game/shared-2",
-    isPackage: false,
-  },
-  {
-    id: "featured-4",
-    name: "Forza Horizon",
-    type: "نسخة رقمية",
-    category: "simulation",
-    price: 139,
-    oldPrice: 199,
-    image: "",
-    detailsHref: "/game/featured-4",
-    isPackage: false,
-  },
-  {
-    id: "shared-3",
-    name: "Forza Horizon",
-    type: "حساب PC مشترك",
-    category: "simulation",
-    price: 35,
-    oldPrice: 59,
-    image: "",
-    detailsHref: "/game/shared-3",
-    isPackage: false,
-  },
-  {
-    id: "private-2",
-    name: "Red Dead Redemption",
-    type: "حساب PC خاص",
-    category: "adventure",
-    price: 119,
-    oldPrice: 169,
-    image: "",
-    detailsHref: "/game/private-2",
-    isPackage: false,
-  },
-  {
-    id: "private-3-adventure",
-    name: "Cyber Adventure",
-    type: "حساب PC خاص",
-    category: "adventure",
-    price: 89,
-    oldPrice: 129,
-    image: "",
-    detailsHref: "/game/private-3",
-    isPackage: false,
-  },
-  {
-    id: "featured-2-horror",
-    name: "Call of Duty",
-    type: "نسخة رقمية",
-    category: "horror",
-    price: 159,
-    oldPrice: 219,
-    image: "",
-    detailsHref: "/game/featured-2",
-    isPackage: false,
-  },
-  {
-    id: "private-3-2d",
-    name: "Cyber Adventure",
-    type: "حساب PC خاص",
-    category: "2d",
-    price: 89,
-    oldPrice: 129,
-    image: "",
-    detailsHref: "/game/private-3",
-    isPackage: false,
-  },
-];
-
 function toNumber(value: unknown) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
@@ -292,9 +157,7 @@ export default function CategoryDetailsPage() {
   };
 
   const [current, setCurrent] = useState<CategoryInfo>(fallbackCurrent);
-  const [games, setGames] = useState<Game[]>(
-    fallbackGames.filter((game) => game.category === slug)
-  );
+  const [games, setGames] = useState<Game[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [message, setMessage] = useState("");
   const [loadingContent, setLoadingContent] = useState(true);
@@ -397,17 +260,6 @@ export default function CategoryDetailsPage() {
         if (itemsError) throw itemsError;
 
         const rows = (itemRows ?? []) as unknown as CategoryItemRow[];
-
-        if (
-          rows.length === 0 &&
-          !Boolean(category.use_custom_items) &&
-          fallbackCategoryInfo[slug]
-        ) {
-          setGames(
-            fallbackGames.filter((game) => game.category === slug)
-          );
-          return;
-        }
 
         const mapped = rows
           .map((row): Game | null => {

@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import BottomNav from "@/components/BottomNav";
+import { supabase } from "@/lib/supabase";
 
 type PackageGame = {
-  id: number;
+  id: string;
   name: string;
   platform: string;
   price: number;
@@ -14,49 +15,33 @@ type PackageGame = {
   gamesCount: number;
 };
 
-const packageGames: PackageGame[] = [
-  {
-    id: 1,
-    name: "بكج الأكشن",
-    platform: "ألعاب PC",
-    price: 99,
-    oldPrice: 159,
-    image: "",
-    gamesCount: 3,
-  },
-  {
-    id: 2,
-    name: "بكج العالم المفتوح",
-    platform: "ألعاب PC",
-    price: 119,
-    oldPrice: 189,
-    image: "",
-    gamesCount: 3,
-  },
-  {
-    id: 3,
-    name: "بكج الرياضة والسباقات",
-    platform: "ألعاب PC",
-    price: 129,
-    oldPrice: 209,
-    image: "",
-    gamesCount: 4,
-  },
-  {
-    id: 4,
-    name: "بكج المغامرات",
-    platform: "ألعاب PC",
-    price: 109,
-    oldPrice: 179,
-    image: "",
-    gamesCount: 3,
-  },
-];
+type PackageRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number | string;
+  old_price: number | string | null;
+  image_url: string | null;
+};
+
+function toNumber(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function extractGamesCount(value: string | null) {
+  if (!value) return 0;
+
+  const match = value.match(/\d+/);
+  return match ? Math.max(0, Number(match[0])) : 0;
+}
 
 export default function PackagesPage() {
-  const [addingId, setAddingId] = useState<number | null>(null);
+  const [packageGames, setPackageGames] = useState<PackageGame[]>([]);
+  const [addingId, setAddingId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [loadingPackages, setLoadingPackages] = useState(true);
 
   useEffect(() => {
     try {
@@ -66,6 +51,78 @@ export default function PackagesPage() {
     } catch {
       setFavorites([]);
     }
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadPackages() {
+      setLoadingPackages(true);
+
+      try {
+        const { data, error } = await supabase
+          .from("packages")
+          .select("id, name, description, price, old_price, image_url")
+          .order("name", { ascending: true });
+
+        if (error) throw error;
+        if (!mounted) return;
+
+        const loadedPackages = ((data ?? []) as PackageRow[]).map((pkg) => {
+          const price = toNumber(pkg.price);
+          const oldPrice = pkg.old_price ? toNumber(pkg.old_price) : price;
+
+          return {
+            id: pkg.id,
+            name: pkg.name,
+            platform: pkg.description || "بكج ألعاب PC",
+            price,
+            oldPrice: oldPrice > 0 ? oldPrice : price,
+            image: pkg.image_url || "",
+            gamesCount: extractGamesCount(pkg.description),
+          };
+        });
+
+        setPackageGames(loadedPackages);
+      } catch (error) {
+        console.error("تعذر تحميل البكجات:", error);
+
+        if (mounted) {
+          setPackageGames([]);
+        }
+      } finally {
+        if (mounted) {
+          setLoadingPackages(false);
+        }
+      }
+    }
+
+    void loadPackages();
+
+    function refreshPackages() {
+      void loadPackages();
+    }
+
+    window.addEventListener("focus", refreshPackages);
+
+    const channel = supabase
+      .channel("zeta-packages-page")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "packages",
+        },
+        refreshPackages
+      )
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      window.removeEventListener("focus", refreshPackages);
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   function showMessage(value: string) {
@@ -88,24 +145,20 @@ export default function PackagesPage() {
       );
 
       const updatedCart = exists
-        ? cart.map(
-            (item: {
-              id: string;
-              quantity?: number;
-            }) =>
-              item.id === cartId
-                ? {
-                    ...item,
-                    quantity: Number(item.quantity || 1) + 1,
-                  }
-                : item
+        ? cart.map((item: { id: string; quantity?: number }) =>
+            item.id === cartId
+              ? {
+                  ...item,
+                  quantity: Number(item.quantity || 1) + 1,
+                }
+              : item
           )
         : [
             ...cart,
             {
               id: cartId,
               name: game.name,
-              platform: `${game.gamesCount} ألعاب PC`,
+              platform: game.platform,
               price: game.price,
               oldPrice: game.oldPrice,
               image: game.image,
@@ -113,10 +166,7 @@ export default function PackagesPage() {
             },
           ];
 
-      localStorage.setItem(
-        "zeta_cart",
-        JSON.stringify(updatedCart)
-      );
+      localStorage.setItem("zeta_cart", JSON.stringify(updatedCart));
 
       window.dispatchEvent(
         new CustomEvent("zeta-cart-updated", {
@@ -148,11 +198,7 @@ export default function PackagesPage() {
         : [...current, favoriteId];
 
       setFavorites(updated);
-
-      localStorage.setItem(
-        "zeta_favorites",
-        JSON.stringify(updated)
-      );
+      localStorage.setItem("zeta_favorites", JSON.stringify(updated));
 
       window.dispatchEvent(
         new CustomEvent("zeta-favorites-updated", {
@@ -226,8 +272,7 @@ export default function PackagesPage() {
               </h1>
 
               <p className="mt-2 max-w-xl text-xs leading-6 text-gray-400 sm:text-sm">
-                أكثر من لعبة داخل بكج واحد بسعر أقل من شراء كل لعبة
-                بشكل منفصل.
+                أكثر من لعبة داخل بكج واحد بسعر أقل من شراء كل لعبة بشكل منفصل.
               </p>
             </div>
           </div>
@@ -249,115 +294,140 @@ export default function PackagesPage() {
           </span>
         </div>
 
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {packageGames.map((game) => {
-            const discount = Math.round(
-              ((game.oldPrice - game.price) / game.oldPrice) * 100
-            );
+        {loadingPackages ? (
+          <div className="flex min-h-[260px] items-center justify-center">
+            <div className="h-11 w-11 animate-spin rounded-full border-4 border-white/10 border-t-amber-500" />
+          </div>
+        ) : packageGames.length === 0 ? (
+          <div className="mt-5 rounded-[26px] border border-white/[0.08] bg-white/[0.03] px-5 py-14 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10 text-3xl">
+              🎁
+            </div>
+            <h3 className="mt-4 text-lg font-black">لا توجد بكجات حاليًا</h3>
+            <p className="mt-2 text-xs text-gray-500">
+              البكجات التي تضيفها من الإدارة ستظهر هنا مباشرة.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {packageGames.map((game) => {
+              const discount =
+                game.oldPrice > game.price && game.oldPrice > 0
+                  ? Math.round(
+                      ((game.oldPrice - game.price) / game.oldPrice) * 100
+                    )
+                  : 0;
 
-            const favoriteId = `package-${game.id}`;
-            const isFavorite = favorites.includes(favoriteId);
+              const favoriteId = `package-${game.id}`;
+              const isFavorite = favorites.includes(favoriteId);
 
-            return (
-              <article
-                key={game.id}
-                className="group overflow-hidden rounded-[20px] border border-amber-400/10 bg-[#121019] transition duration-300 hover:-translate-y-1 hover:border-amber-400/40 hover:shadow-2xl hover:shadow-amber-950/20 sm:rounded-[24px]"
-              >
-                <div className="relative aspect-[4/5] overflow-hidden">
-                  <Link
-                    href={`/game/package-${game.id}`}
-                    aria-label={`عرض تفاصيل ${game.name}`}
-                    className="absolute inset-0 z-10"
-                  />
-
-                  {game.image ? (
-                    <img
-                      src={game.image}
-                      alt={game.name}
-                      className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+              return (
+                <article
+                  key={game.id}
+                  className="group overflow-hidden rounded-[20px] border border-amber-400/10 bg-[#121019] transition duration-300 hover:-translate-y-1 hover:border-amber-400/40 hover:shadow-2xl hover:shadow-amber-950/20 sm:rounded-[24px]"
+                >
+                  <div className="relative aspect-[4/5] overflow-hidden">
+                    <Link
+                      href={`/packages/${game.id}`}
+                      aria-label={`عرض تفاصيل ${game.name}`}
+                      className="absolute inset-0 z-10"
                     />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-700/20 via-violet-700/15 to-fuchsia-700/20 text-5xl transition duration-300 group-hover:scale-105">
-                      🎁
-                    </div>
-                  )}
 
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#121019] via-transparent to-transparent" />
+                    {game.image ? (
+                      <img
+                        src={game.image}
+                        alt={game.name}
+                        className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-700/20 via-violet-700/15 to-fuchsia-700/20 text-5xl transition duration-300 group-hover:scale-105">
+                        🎁
+                      </div>
+                    )}
 
-                  <span className="pointer-events-none absolute right-2 top-2 z-20 rounded-lg bg-gradient-to-l from-amber-500 to-orange-600 px-2 py-1 text-[9px] font-black text-white">
-                    -{discount}%
-                  </span>
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#121019] via-transparent to-transparent" />
 
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      toggleFavorite(game);
-                    }}
-                    aria-label={
-                      isFavorite
-                        ? `إزالة ${game.name} من المفضلة`
-                        : `إضافة ${game.name} للمفضلة`
-                    }
-                    className={`absolute left-2 top-2 z-30 flex h-8 w-8 items-center justify-center rounded-full border text-sm backdrop-blur-md transition active:scale-90 sm:h-9 sm:w-9 ${
-                      isFavorite
-                        ? "border-rose-400/40 bg-rose-500/25 text-rose-300"
-                        : "border-white/10 bg-black/40 text-white"
-                    }`}
-                  >
-                    {isFavorite ? "♥" : "♡"}
-                  </button>
-
-                  <div className="pointer-events-none absolute bottom-3 right-3 z-20 rounded-xl border border-white/10 bg-black/50 px-2.5 py-1.5 text-[9px] font-black backdrop-blur-md">
-                    {game.gamesCount} ألعاب
-                  </div>
-                </div>
-
-                <div className="p-3 sm:p-4">
-                  <p className="text-[8px] font-bold text-amber-400 sm:text-[10px]">
-                    {game.platform}
-                  </p>
-
-                  <Link
-                    href={`/game/package-${game.id}`}
-                    className="mt-1 block truncate text-xs font-black transition hover:text-amber-300 sm:text-sm"
-                  >
-                    {game.name}
-                  </Link>
-
-                  <div className="mt-3 flex items-end justify-between gap-2">
-                    <div>
-                      <p className="text-base font-black sm:text-lg">
-                        {game.price}
-                        <span className="mr-1 text-[8px] text-gray-500 sm:text-[9px]">
-                          ر.س
-                        </span>
-                      </p>
-
-                      <p className="text-[8px] text-gray-600 line-through sm:text-[9px]">
-                        {game.oldPrice} ر.س
-                      </p>
-                    </div>
+                    {discount > 0 && (
+                      <span className="pointer-events-none absolute right-2 top-2 z-20 rounded-lg bg-gradient-to-l from-amber-500 to-orange-600 px-2 py-1 text-[9px] font-black text-white">
+                        -{discount}%
+                      </span>
+                    )}
 
                     <button
                       type="button"
-                      onClick={() => addToCart(game)}
-                      aria-label={`إضافة ${game.name} للسلة`}
-                      className={`relative z-20 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-lg font-black text-white shadow-lg transition active:scale-90 sm:h-10 sm:w-10 ${
-                        addingId === game.id
-                          ? "rotate-12 scale-90 brightness-125"
-                          : ""
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        toggleFavorite(game);
+                      }}
+                      aria-label={
+                        isFavorite
+                          ? `إزالة ${game.name} من المفضلة`
+                          : `إضافة ${game.name} للمفضلة`
+                      }
+                      className={`absolute left-2 top-2 z-30 flex h-8 w-8 items-center justify-center rounded-full border text-sm backdrop-blur-md transition active:scale-90 sm:h-9 sm:w-9 ${
+                        isFavorite
+                          ? "border-rose-400/40 bg-rose-500/25 text-rose-300"
+                          : "border-white/10 bg-black/40 text-white"
                       }`}
                     >
-                      {addingId === game.id ? "✓" : "+"}
+                      {isFavorite ? "♥" : "♡"}
                     </button>
+
+                    <div className="pointer-events-none absolute bottom-3 right-3 z-20 rounded-xl border border-white/10 bg-black/50 px-2.5 py-1.5 text-[9px] font-black backdrop-blur-md">
+                      {game.gamesCount > 0
+                        ? `${game.gamesCount} ألعاب`
+                        : "بكج ألعاب"}
+                    </div>
                   </div>
-                </div>
-              </article>
-            );
-          })}
-        </div>
+
+                  <div className="p-3 sm:p-4">
+                    <p className="text-[8px] font-bold text-amber-400 sm:text-[10px]">
+                      {game.platform}
+                    </p>
+
+                    <Link
+                      href={`/packages/${game.id}`}
+                      className="mt-1 block truncate text-xs font-black transition hover:text-amber-300 sm:text-sm"
+                    >
+                      {game.name}
+                    </Link>
+
+                    <div className="mt-3 flex items-end justify-between gap-2">
+                      <div>
+                        <p className="text-base font-black sm:text-lg">
+                          {game.price}
+                          <span className="mr-1 text-[8px] text-gray-500 sm:text-[9px]">
+                            ر.س
+                          </span>
+                        </p>
+
+                        {game.oldPrice > game.price && (
+                          <p className="text-[8px] text-gray-600 line-through sm:text-[9px]">
+                            {game.oldPrice} ر.س
+                          </p>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => addToCart(game)}
+                        aria-label={`إضافة ${game.name} للسلة`}
+                        className={`relative z-20 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-lg font-black text-white shadow-lg transition active:scale-90 sm:h-10 sm:w-10 ${
+                          addingId === game.id
+                            ? "rotate-12 scale-90 brightness-125"
+                            : ""
+                        }`}
+                      >
+                        {addingId === game.id ? "✓" : "+"}
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {message && (

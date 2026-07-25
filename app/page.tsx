@@ -72,49 +72,6 @@ type HomePageItemRow = {
   packages: HomePackageRelation | HomePackageRelation[] | null;
 };
 
-const fallbackGames: HomeGame[] = [
-  {
-    id: "1",
-    name: "EA SPORTS FC 26",
-    category: "رياضة",
-    platform: "PC",
-    price: 189,
-    oldPrice: 249,
-    image: "",
-    detailsHref: "/game/featured-1",
-  },
-  {
-    id: "2",
-    name: "Call of Duty",
-    category: "أكشن",
-    platform: "PC",
-    price: 159,
-    oldPrice: 219,
-    image: "",
-    detailsHref: "/game/featured-2",
-  },
-  {
-    id: "3",
-    name: "Grand Theft Auto V",
-    category: "عالم مفتوح",
-    platform: "PC",
-    price: 79,
-    oldPrice: 129,
-    image: "",
-    detailsHref: "/game/featured-3",
-  },
-  {
-    id: "4",
-    name: "Forza Horizon",
-    category: "سباقات",
-    platform: "PC",
-    price: 139,
-    oldPrice: 199,
-    image: "",
-    detailsHref: "/game/featured-4",
-  },
-];
-
 const fallbackCategories: HomeCategory[] = [
   { id: "all", name: "الكل", icon: "🎮", link_url: null, sort_order: 0, is_active: true },
   { id: "simulation", name: "محاكي", icon: "🕹️", link_url: "/categories/simulation", sort_order: 1, is_active: true },
@@ -123,102 +80,6 @@ const fallbackCategories: HomeCategory[] = [
   { id: "2d", name: "2D", icon: "👾", link_url: "/categories/2d", sort_order: 4, is_active: true },
   { id: "adventure", name: "مغامرات", icon: "🗺️", link_url: "/categories/adventure", sort_order: 5, is_active: true },
   { id: "horror", name: "رعب", icon: "👻", link_url: "/categories/horror", sort_order: 6, is_active: true },
-];
-
-const fallbackSharedGames: HomeGame[] = [
-  {
-    id: "1",
-    name: "EA SPORTS FC",
-    category: "مشترك",
-    platform: "Steam PC",
-    price: 29,
-    oldPrice: 49,
-    image: "",
-    detailsHref: "/game/shared-1",
-  },
-  {
-    id: "2",
-    name: "GTA V",
-    category: "مشترك",
-    platform: "Rockstar PC",
-    price: 19,
-    oldPrice: 39,
-    image: "",
-    detailsHref: "/game/shared-2",
-  },
-  {
-    id: "3",
-    name: "Forza Horizon",
-    category: "مشترك",
-    platform: "Xbox PC",
-    price: 35,
-    oldPrice: 59,
-    image: "",
-    detailsHref: "/game/shared-3",
-  },
-];
-
-const fallbackPrivateGames: HomeGame[] = [
-  {
-    id: "1",
-    name: "Call of Duty",
-    category: "خاص",
-    platform: "حساب خاص",
-    price: 149,
-    oldPrice: 199,
-    image: "",
-    detailsHref: "/game/private-1",
-  },
-  {
-    id: "2",
-    name: "Red Dead Redemption",
-    category: "خاص",
-    platform: "حساب خاص",
-    price: 119,
-    oldPrice: 169,
-    image: "",
-    detailsHref: "/game/private-2",
-  },
-  {
-    id: "3",
-    name: "Cyber Adventure",
-    category: "خاص",
-    platform: "حساب خاص",
-    price: 89,
-    oldPrice: 129,
-    image: "",
-    detailsHref: "/game/private-3",
-  },
-];
-
-const fallbackPackageGames: HomePackage[] = [
-  {
-    id: "1",
-    name: "بكج الأكشن",
-    platform: "3 ألعاب PC",
-    price: 99,
-    oldPrice: 159,
-    image: "",
-    detailsHref: "/game/package-1",
-  },
-  {
-    id: "2",
-    name: "بكج العالم المفتوح",
-    platform: "3 ألعاب PC",
-    price: 119,
-    oldPrice: 189,
-    image: "",
-    detailsHref: "/game/package-2",
-  },
-  {
-    id: "3",
-    name: "بكج الرياضة والسباقات",
-    platform: "4 ألعاب PC",
-    price: 129,
-    oldPrice: 209,
-    image: "",
-    detailsHref: "/game/package-3",
-  },
 ];
 
 function toNumber(value: unknown) {
@@ -268,15 +129,15 @@ export default function HomePage() {
 
   const [categories, setCategories] =
     useState<HomeCategory[]>(fallbackCategories);
-  const [games, setGames] = useState<HomeGame[]>(fallbackGames);
+  const [games, setGames] = useState<HomeGame[]>([]);
   const [sharedGames, setSharedGames] =
-    useState<HomeGame[]>(fallbackSharedGames);
+    useState<HomeGame[]>([]);
   const [privateGames, setPrivateGames] =
-    useState<HomeGame[]>(fallbackPrivateGames);
+    useState<HomeGame[]>([]);
   const [packageGames, setPackageGames] =
-    useState<HomePackage[]>(fallbackPackageGames);
+    useState<HomePackage[]>([]);
 
-  const [showSplash, setShowSplash] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
   const [splashClosing, setSplashClosing] = useState(false);
   const [activeCategory, setActiveCategory] = useState("الكل");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -535,7 +396,13 @@ export default function HomePage() {
         const rows =
           (itemsResult.data ?? []) as unknown as HomePageItemRow[];
 
-        if (rows.length === 0) return;
+        if (rows.length === 0) {
+          setGames([]);
+          setSharedGames([]);
+          setPrivateGames([]);
+          setPackageGames([]);
+          return;
+        }
 
         const mapProduct = (
           row: HomePageItemRow,
@@ -659,6 +526,10 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    // نعيد تشغيل أنميشن الدخول عند فتح الصفحة أو عند تحديثها محليًا.
+    setShowSplash(true);
+    setSplashClosing(false);
+
     const closeTimer = window.setTimeout(() => {
       setSplashClosing(true);
     }, 1600);
@@ -1083,7 +954,7 @@ export default function HomePage() {
     return (
       <main
         dir="rtl"
-        className={`fixed inset-0 z-[999] flex items-center justify-center overflow-hidden bg-[#07050c] transition-all duration-500 ${
+        className={`fixed inset-0 z-[999] flex items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_50%_30%,#2a1745_0%,#140c20_45%,#08070d_100%)] transition-all duration-500 ${
           splashClosing
             ? "pointer-events-none scale-105 opacity-0 blur-sm"
             : "scale-100 opacity-100"

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import BottomNav from "@/components/BottomNav";
+import { supabase } from "@/lib/supabase";
 
 type Game = {
   id: string;
@@ -11,46 +12,30 @@ type Game = {
   price: number;
   oldPrice: number;
   category: string;
+  image: string;
 };
 
-const games: Game[] = [
-  {
-    id: "featured-1",
-    name: "EA SPORTS FC 26",
-    platform: "PC",
-    category: "رياضة",
-    price: 189,
-    oldPrice: 249,
-  },
-  {
-    id: "featured-2",
-    name: "Call of Duty",
-    platform: "PC",
-    category: "أكشن",
-    price: 159,
-    oldPrice: 219,
-  },
-  {
-    id: "featured-3",
-    name: "Grand Theft Auto V",
-    platform: "Rockstar PC",
-    category: "عالم مفتوح",
-    price: 79,
-    oldPrice: 129,
-  },
-  {
-    id: "featured-4",
-    name: "Forza Horizon",
-    platform: "Xbox PC",
-    category: "سباقات",
-    price: 139,
-    oldPrice: 199,
-  },
-];
+type ProductRow = {
+  id: string;
+  name: string;
+  platform: string | null;
+  price: number | string;
+  old_price: number | string | null;
+  cover_url: string | null;
+  detail_category_label: string | null;
+  short_description: string | null;
+};
+
+function toNumber(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
 
 export default function FeaturedGamesPage() {
+  const [games, setGames] = useState<Game[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [message, setMessage] = useState("");
+  const [loadingGames, setLoadingGames] = useState(true);
 
   useEffect(() => {
     try {
@@ -62,10 +47,93 @@ export default function FeaturedGamesPage() {
     }
   }, []);
 
-  function toggleFavorite(id: string) {
-    const updated = favorites.includes(id)
-      ? favorites.filter((item) => item !== id)
-      : [...favorites, id];
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadGames() {
+      setLoadingGames(true);
+
+      try {
+        const { data, error } = await supabase
+          .from("products")
+          .select(
+            "id, name, platform, price, old_price, cover_url, detail_category_label, short_description"
+          )
+          .eq("is_active", true)
+          .or("display_kind.eq.featured,is_featured.eq.true")
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+        if (!mounted) return;
+
+        const loadedGames = ((data ?? []) as ProductRow[]).map((product) => {
+          const price = toNumber(product.price);
+          const oldPrice = product.old_price
+            ? toNumber(product.old_price)
+            : price;
+
+          return {
+            id: product.id,
+            name: product.name,
+            platform: product.platform || "PC",
+            category:
+              product.detail_category_label ||
+              product.short_description ||
+              "لعبة مميزة",
+            price,
+            oldPrice: oldPrice > 0 ? oldPrice : price,
+            image: product.cover_url || "",
+          };
+        });
+
+        setGames(loadedGames);
+      } catch (error) {
+        console.error("تعذر تحميل الألعاب:", error);
+
+        if (mounted) {
+          setGames([]);
+        }
+      } finally {
+        if (mounted) {
+          setLoadingGames(false);
+        }
+      }
+    }
+
+    void loadGames();
+
+    function refreshGames() {
+      void loadGames();
+    }
+
+    window.addEventListener("focus", refreshGames);
+
+    const channel = supabase
+      .channel("zeta-featured-games")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "products",
+        },
+        refreshGames
+      )
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      window.removeEventListener("focus", refreshGames);
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  function toggleFavorite(game: Game) {
+    const favoriteId = "featured-" + game.id;
+
+    const updated = favorites.includes(favoriteId)
+      ? favorites.filter((item) => item !== favoriteId)
+      : [...favorites, favoriteId];
 
     setFavorites(updated);
     localStorage.setItem("zeta_favorites", JSON.stringify(updated));
@@ -79,29 +147,30 @@ export default function FeaturedGamesPage() {
 
   function addToCart(game: Game) {
     try {
+      const cartId = "featured-" + game.id;
       const saved = localStorage.getItem("zeta_cart");
       const parsed = saved ? JSON.parse(saved) : [];
       const cart = Array.isArray(parsed) ? parsed : [];
 
       const exists = cart.some(
-        (item: { id: string }) => item.id === game.id
+        (item: { id: string }) => item.id === cartId
       );
 
       const updated = exists
         ? cart.map((item: { id: string; quantity?: number }) =>
-            item.id === game.id
+            item.id === cartId
               ? { ...item, quantity: Number(item.quantity || 1) + 1 }
               : item
           )
         : [
             ...cart,
             {
-              id: game.id,
+              id: cartId,
               name: game.name,
               platform: game.platform,
               price: game.price,
               oldPrice: game.oldPrice,
-              image: "",
+              image: game.image,
               quantity: 1,
             },
           ];
@@ -140,12 +209,8 @@ export default function FeaturedGamesPage() {
             </div>
 
             <div>
-              <h1 className="text-lg font-black tracking-wider">
-                ZETA
-              </h1>
-              <p className="text-[10px] text-gray-500">
-                الألعاب المميزة
-              </p>
+              <h1 className="text-lg font-black tracking-wider">ZETA</h1>
+              <p className="text-[10px] text-gray-500">الألعاب المميزة</p>
             </div>
           </div>
 
@@ -174,88 +239,128 @@ export default function FeaturedGamesPage() {
           </p>
         </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {games.map((game) => {
-            const discount = Math.round(
-              ((game.oldPrice - game.price) / game.oldPrice) * 100
-            );
+        {loadingGames ? (
+          <div className="flex min-h-[260px] items-center justify-center">
+            <div className="h-11 w-11 animate-spin rounded-full border-4 border-white/10 border-t-violet-500" />
+          </div>
+        ) : games.length === 0 ? (
+          <div className="mt-6 rounded-[26px] border border-white/[0.08] bg-white/[0.03] px-5 py-14 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-violet-500/10 text-3xl">
+              🎮
+            </div>
+            <h3 className="mt-4 text-lg font-black">لا توجد ألعاب حاليًا</h3>
+            <p className="mt-2 text-xs text-gray-500">
+              الألعاب التي تضيفها من الإدارة لهذا القسم ستظهر هنا مباشرة.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {games.map((game) => {
+              const discount =
+                game.oldPrice > game.price && game.oldPrice > 0
+                  ? Math.round(
+                      ((game.oldPrice - game.price) / game.oldPrice) * 100
+                    )
+                  : 0;
 
-            return (
-              <article
-                key={game.id}
-                className="group overflow-hidden rounded-[24px] border border-white/[0.08] bg-gradient-to-br from-[#171322] to-[#0f0d16] shadow-xl transition duration-300 hover:-translate-y-1 hover:border-violet-400/35"
-              >
-                <div className="relative aspect-[4/5] overflow-hidden">
-                  <Link
-                    href={`/game/${game.id}`}
-                    className="absolute inset-0 z-10"
-                    aria-label={`عرض تفاصيل ${game.name}`}
-                  />
+              const favoriteId = "featured-" + game.id;
+              const isFavorite = favorites.includes(favoriteId);
 
-                  <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-700/20 to-fuchsia-700/20 text-5xl transition duration-300 group-hover:scale-105">
-                    🎮
-                  </div>
+              return (
+                <article
+                  key={game.id}
+                  className="group overflow-hidden rounded-[24px] border border-white/[0.08] bg-gradient-to-br from-[#171322] to-[#0f0d16] shadow-xl transition duration-300 hover:-translate-y-1 hover:border-violet-400/35"
+                >
+                  <div className="relative aspect-[4/5] overflow-hidden">
+                    <Link
+                      href={`/game/${game.id}`}
+                      className="absolute inset-0 z-10"
+                      aria-label={`عرض تفاصيل ${game.name}`}
+                    />
 
-                  <span className="pointer-events-none absolute right-2 top-2 z-20 rounded-lg bg-red-500 px-2 py-1 text-[9px] font-black">
-                    -{discount}%
-                  </span>
+                    {game.image ? (
+                      <img
+                        src={game.image}
+                        alt={game.name}
+                        className="h-full w-full object-cover transition duration-300 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-violet-700/20 to-fuchsia-700/20 text-5xl transition duration-300 group-hover:scale-105">
+                        🎮
+                      </div>
+                    )}
 
-                  <button
-                    type="button"
-                    onClick={() => toggleFavorite(game.id)}
-                    className={`absolute left-2 top-2 z-20 flex h-9 w-9 items-center justify-center rounded-full border backdrop-blur-md ${
-                      favorites.includes(game.id)
-                        ? "border-rose-400/30 bg-rose-500/20 text-rose-300"
-                        : "border-white/10 bg-black/40 text-white"
-                    }`}
-                  >
-                    {favorites.includes(game.id) ? "♥" : "♡"}
-                  </button>
-                </div>
+                    <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#111019] via-transparent to-transparent" />
 
-                <div className="p-3">
-                  <p className="text-[9px] font-bold text-violet-300">
-                    {game.platform}
-                  </p>
-
-                  <Link
-                    href={`/game/${game.id}`}
-                    className="mt-1 block truncate text-sm font-black"
-                  >
-                    {game.name}
-                  </Link>
-
-                  <p className="mt-1 truncate text-[9px] text-gray-500">
-                    {game.category}
-                  </p>
-
-                  <div className="mt-3 flex items-end justify-between">
-                    <div>
-                      <p className="text-base font-black">
-                        {game.price}
-                        <span className="mr-1 text-[9px] text-gray-500">
-                          ر.س
-                        </span>
-                      </p>
-
-                      <p className="text-[9px] text-gray-600 line-through">
-                        {game.oldPrice} ر.س
-                      </p>
-                    </div>
+                    {discount > 0 && (
+                      <span className="pointer-events-none absolute right-2 top-2 z-20 rounded-lg bg-red-500 px-2 py-1 text-[9px] font-black">
+                        -{discount}%
+                      </span>
+                    )}
 
                     <button
                       type="button"
-                      onClick={() => addToCart(game)}
-                      className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-600 text-lg font-black active:scale-90"
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        toggleFavorite(game);
+                      }}
+                      className={`absolute left-2 top-2 z-20 flex h-9 w-9 items-center justify-center rounded-full border backdrop-blur-md ${
+                        isFavorite
+                          ? "border-rose-400/30 bg-rose-500/20 text-rose-300"
+                          : "border-white/10 bg-black/40 text-white"
+                      }`}
                     >
-                      +
+                      {isFavorite ? "♥" : "♡"}
                     </button>
                   </div>
-                </div>
-              </article>
-            );
-          })}
-        </div>
+
+                  <div className="p-3">
+                    <p className="text-[9px] font-bold text-violet-300">
+                      {game.platform}
+                    </p>
+
+                    <Link
+                      href={`/game/${game.id}`}
+                      className="mt-1 block truncate text-sm font-black"
+                    >
+                      {game.name}
+                    </Link>
+
+                    <p className="mt-1 truncate text-[9px] text-gray-500">
+                      {game.category}
+                    </p>
+
+                    <div className="mt-3 flex items-end justify-between">
+                      <div>
+                        <p className="text-base font-black">
+                          {game.price}
+                          <span className="mr-1 text-[9px] text-gray-500">
+                            ر.س
+                          </span>
+                        </p>
+
+                        {game.oldPrice > game.price && (
+                          <p className="text-[9px] text-gray-600 line-through">
+                            {game.oldPrice} ر.س
+                          </p>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => addToCart(game)}
+                        className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-600 text-lg font-black active:scale-90"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {message && (
