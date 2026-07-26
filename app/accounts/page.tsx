@@ -4,6 +4,8 @@ const contactNumber = "0556215107";
 const internationalNumber = "966556215107";
 const email = "klosrg89tt@gmail.com";
 const instagram = "zeta_12123";
+const tiktok = "zeta_12123";
+const telegram = "zeta_12123";
 
 export default function AccountsPage() {
   return (
@@ -156,7 +158,13 @@ export default function AccountsPage() {
                 >
                   <rect x="3" y="3" width="18" height="18" rx="5" />
                   <circle cx="12" cy="12" r="4" />
-                  <circle cx="17.4" cy="6.6" r="1" fill="currentColor" stroke="none" />
+                  <circle
+                    cx="17.4"
+                    cy="6.6"
+                    r="1"
+                    fill="currentColor"
+                    stroke="none"
+                  />
                 </svg>
               </div>
 
@@ -164,15 +172,56 @@ export default function AccountsPage() {
                 <p className="text-[11px] font-bold text-fuchsia-300">
                   إنستغرام
                 </p>
-                <h3 className="mt-1 text-lg font-black">@{instagram}</h3>
+                <h3 className="mt-1 text-lg font-black">
+                  @{instagram}
+                </h3>
                 <p className="mt-2 text-xs leading-6 text-gray-500">
-                  تابع حسابنا الرسمي وآخر الإعلانات.
+                  اضغط على البطاقة لفتح حسابنا في إنستغرام.
                 </p>
               </div>
             </div>
           </a>
 
-          <article className="relative overflow-hidden rounded-[30px] border border-sky-400/15 bg-gradient-to-br from-sky-500/10 via-[#12131a] to-[#0d0c12] p-5">
+          <a
+            href={`https://www.tiktok.com/@${tiktok}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group relative overflow-hidden rounded-[30px] border border-pink-400/15 bg-gradient-to-br from-pink-500/10 via-[#12131a] to-[#0d0c12] p-5 transition hover:-translate-y-1 hover:border-pink-400/35"
+          >
+            <div className="absolute -left-12 -top-12 h-36 w-36 rounded-full bg-fuchsia-500/10 blur-3xl" />
+
+            <div className="relative flex items-start gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-pink-500/15 text-pink-300">
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-7 w-7"
+                  fill="currentColor"
+                  aria-hidden="true"
+                >
+                  <path d="M15.6 3c.4 2.1 1.6 3.4 3.7 3.8v3.1a8.2 8.2 0 0 1-3.7-1.1v6.1a6.1 6.1 0 1 1-5.3-6V12a2.9 2.9 0 1 0 2.1 2.8V3h3.2Z" />
+                </svg>
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <p className="text-[11px] font-bold text-pink-300">
+                  تيك توك
+                </p>
+                <h3 className="mt-1 text-lg font-black">
+                  @{tiktok}
+                </h3>
+                <p className="mt-2 text-xs leading-6 text-gray-500">
+                  اضغط على البطاقة لفتح حسابنا في تيك توك.
+                </p>
+              </div>
+            </div>
+          </a>
+
+          <a
+            href={`https://t.me/${telegram}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="group relative overflow-hidden rounded-[30px] border border-sky-400/15 bg-gradient-to-br from-sky-500/10 via-[#12131a] to-[#0d0c12] p-5 transition hover:-translate-y-1 hover:border-sky-400/35"
+          >
             <div className="absolute -left-12 -top-12 h-36 w-36 rounded-full bg-sky-500/10 blur-3xl" />
 
             <div className="relative flex items-start gap-4">
@@ -191,13 +240,15 @@ export default function AccountsPage() {
                 <p className="text-[11px] font-bold text-sky-300">
                   تليجرام
                 </p>
-                <h3 className="mt-1 text-lg font-black">قريبًا</h3>
+                <h3 className="mt-1 text-lg font-black">
+                  @{telegram}
+                </h3>
                 <p className="mt-2 text-xs leading-6 text-gray-500">
-                  سيتم إضافة حساب التليجرام هنا عند توفره.
+                  اضغط على البطاقة لفتح حسابنا في تليجرام.
                 </p>
               </div>
             </div>
-          </article>
+          </a>
         </div>
 
         <div className="mx-auto mt-7 max-w-2xl rounded-[24px] border border-amber-400/15 bg-amber-500/[0.06] px-5 py-4 text-center">

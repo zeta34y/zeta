@@ -2107,8 +2107,9 @@ export default function HomePage() {
   </a>
 
   <a
-    href="#"
-    onClick={(event) => event.preventDefault()}
+    href="https://t.me/zeta_12123"
+    target="_blank"
+    rel="noopener noreferrer"
     aria-label="تليجرام"
     title="تليجرام"
     className="group flex h-14 w-14 items-center justify-center rounded-2xl border border-sky-400/20 bg-sky-500/10 text-sky-400 transition hover:-translate-y-1 hover:border-sky-400/40 hover:bg-sky-500/20"
