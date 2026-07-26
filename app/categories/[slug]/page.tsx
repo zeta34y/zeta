@@ -543,9 +543,11 @@ export default function CategoryDetailsPage() {
                         </span>
                       )}
 
-                      <span className="truncate rounded-lg border border-violet-300/20 bg-violet-500/20 px-2 py-1 text-[8px] font-black text-violet-100 backdrop-blur-md">
-                        {game.badge || "بدون دينفو"}
-                      </span>
+                      {game.badge && (
+                        <span className="truncate rounded-lg border border-violet-300/20 bg-violet-500/20 px-2 py-1 text-[8px] font-black text-violet-100 backdrop-blur-md">
+                          {game.badge}
+                        </span>
+                      )}
                     </div>
 
                     <button

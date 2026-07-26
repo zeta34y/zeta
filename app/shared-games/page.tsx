@@ -87,7 +87,7 @@ export default function SharedGamesPage() {
             price,
             oldPrice: oldPrice > 0 ? oldPrice : price,
             image: product.cover_url || "",
-            badge: product.card_badge || "بدون دينفو",
+            badge: product.card_badge || "",
             discountPercent: Math.min(
               100,
               Math.max(0, toNumber(product.discount_percent))
@@ -304,9 +304,11 @@ export default function SharedGamesPage() {
                         </span>
                       )}
 
-                      <span className="truncate rounded-lg border border-violet-300/20 bg-violet-500/20 px-2 py-1 text-[8px] font-black text-violet-100 backdrop-blur-md">
-                        {game.badge}
-                      </span>
+                      {game.badge && (
+                        <span className="truncate rounded-lg border border-violet-300/20 bg-violet-500/20 px-2 py-1 text-[8px] font-black text-violet-100 backdrop-blur-md">
+                          {game.badge}
+                        </span>
+                      )}
                     </div>
 
                     <button

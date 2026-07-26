@@ -1420,9 +1420,11 @@ export default function HomePage() {
                         </span>
                       )}
 
-                      <span className="truncate rounded-lg border border-violet-300/20 bg-violet-500/20 px-2 py-1 text-[9px] font-black text-violet-100 backdrop-blur-md">
-                        {game.badge || "بدون دينفو"}
-                      </span>
+                      {game.badge && (
+                        <span className="truncate rounded-lg border border-violet-300/20 bg-violet-500/20 px-2 py-1 text-[9px] font-black text-violet-100 backdrop-blur-md">
+                          {game.badge}
+                        </span>
+                      )}
                     </div>
 
                     <button
@@ -1572,9 +1574,11 @@ export default function HomePage() {
                       </span>
                     )}
 
-                    <span className="max-w-[150px] truncate rounded-xl border border-violet-300/20 bg-violet-500/15 px-2.5 py-1.5 text-[9px] font-black text-violet-100 backdrop-blur-md">
-                      {game.badge || "بدون دينفو"}
-                    </span>
+                    {game.badge && (
+                      <span className="max-w-[150px] truncate rounded-xl border border-violet-300/20 bg-violet-500/15 px-2.5 py-1.5 text-[9px] font-black text-violet-100 backdrop-blur-md">
+                        {game.badge}
+                      </span>
+                    )}
                   </div>
 
                   <span className="shrink-0 rounded-xl border border-white/10 bg-black/60 px-3 py-1.5 text-[10px] font-bold backdrop-blur-md">
@@ -1690,9 +1694,11 @@ export default function HomePage() {
                       </span>
                     )}
 
-                    <span className="max-w-[145px] truncate rounded-lg border border-fuchsia-300/20 bg-fuchsia-500/15 px-2 py-1 text-[8px] font-black text-fuchsia-100 backdrop-blur-md">
-                      {game.badge || "بدون دينفو"}
-                    </span>
+                    {game.badge && (
+                      <span className="max-w-[145px] truncate rounded-lg border border-fuchsia-300/20 bg-fuchsia-500/15 px-2 py-1 text-[8px] font-black text-fuchsia-100 backdrop-blur-md">
+                        {game.badge}
+                      </span>
+                    )}
                   </div>
 
                   <span className="shrink-0 rounded-lg bg-gradient-to-l from-fuchsia-600 to-violet-600 px-2 py-1 text-[9px] font-black">

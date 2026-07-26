@@ -3758,9 +3758,11 @@ export default function AdminPage() {
                           </span>
                         )}
 
-                        <span className="absolute left-2 top-2 max-w-[55%] truncate rounded-lg border border-white/10 bg-black/60 px-2 py-1 text-[8px] font-black backdrop-blur-md">
-                          {product.card_badge || "بدون دينفو"}
-                        </span>
+                        {product.card_badge && (
+                          <span className="absolute left-2 top-2 max-w-[55%] truncate rounded-lg border border-white/10 bg-black/60 px-2 py-1 text-[8px] font-black backdrop-blur-md">
+                            {product.card_badge}
+                          </span>
+                        )}
                       </div>
 
                       <div className="p-4">
@@ -5492,11 +5494,11 @@ export default function AdminPage() {
                 <input
                   value={productCardBadge}
                   onChange={(event) => setProductCardBadge(event.target.value)}
-                  placeholder="بدون دينفو"
+                  placeholder="مثال: بدون دينفو"
                   className={adminInputClass}
                 />
                 <p className="mt-1 text-[8px] leading-4 text-gray-600">
-                  إذا تركتها فارغة سيظهر تلقائيًا: بدون دينفو
+                  اكتب العبارة التي تريدها، أو اتركها فارغة لإخفائها.
                 </p>
               </AdminField>
             </div>
