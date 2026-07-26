@@ -113,7 +113,7 @@ export default function ReviewPage() {
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "store_reviews",
         },

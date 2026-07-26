@@ -2067,9 +2067,61 @@ export default function HomePage() {
           <div className="mt-9">
 <h3 className="text-center text-base font-black">تواصل معنا</h3>
 <div className="mt-5 flex justify-center gap-4">
-<a href="#" className="flex h-14 w-14 items-center justify-center rounded-2xl border border-violet-400/20 bg-white/5 hover:bg-violet-600/20 transition text-2xl">✈️</a>
-<a href="#" className="flex h-14 w-14 items-center justify-center rounded-2xl border border-violet-400/20 bg-white/5 hover:bg-violet-600/20 transition text-2xl">💬</a>
-<a href="mailto:support@zeta.com" className="flex h-14 w-14 items-center justify-center rounded-2xl border border-violet-400/20 bg-white/5 hover:bg-violet-600/20 transition text-2xl">✉️</a>
+  <a
+    href="mailto:klosrg89tt@gmail.com"
+    aria-label="البريد الإلكتروني"
+    title="البريد الإلكتروني"
+    className="group flex h-14 w-14 items-center justify-center rounded-2xl border border-violet-400/20 bg-white/5 text-violet-200 transition hover:-translate-y-1 hover:border-violet-400/40 hover:bg-violet-600/20"
+  >
+    <svg
+      viewBox="0 0 24 24"
+      className="h-6 w-6 transition group-hover:scale-110"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="3" y="5" width="18" height="14" rx="3" />
+      <path d="m4 7 8 6 8-6" />
+    </svg>
+  </a>
+
+  <a
+    href="https://wa.me/966556215107"
+    target="_blank"
+    rel="noopener noreferrer"
+    aria-label="واتساب"
+    title="واتساب"
+    className="group flex h-14 w-14 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-500/10 text-emerald-400 transition hover:-translate-y-1 hover:border-emerald-400/40 hover:bg-emerald-500/20"
+  >
+    <svg
+      viewBox="0 0 24 24"
+      className="h-7 w-7 transition group-hover:scale-110"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M12.04 2a9.83 9.83 0 0 0-8.47 14.82L2 22l5.32-1.52A9.97 9.97 0 1 0 12.04 2Zm0 17.84a7.82 7.82 0 0 1-3.99-1.09l-.29-.17-3.16.9.92-3.08-.19-.31a7.73 7.73 0 0 1-1.2-4.14 7.91 7.91 0 1 1 7.91 7.89Zm4.34-5.93c-.24-.12-1.4-.69-1.62-.77-.22-.08-.38-.12-.54.12-.16.24-.62.77-.76.93-.14.16-.28.18-.52.06-.24-.12-1-.37-1.91-1.18-.7-.63-1.18-1.41-1.32-1.65-.14-.24-.01-.37.1-.49.11-.11.24-.28.36-.42.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.54-1.3-.74-1.78-.2-.47-.4-.4-.54-.41h-.46c-.16 0-.42.06-.64.3-.22.24-.84.82-.84 2s.86 2.32.98 2.48c.12.16 1.69 2.58 4.1 3.62.57.25 1.02.4 1.37.51.58.18 1.1.16 1.51.1.46-.07 1.4-.57 1.6-1.12.2-.55.2-1.02.14-1.12-.06-.1-.22-.16-.46-.28Z" />
+    </svg>
+  </a>
+
+  <a
+    href="#"
+    onClick={(event) => event.preventDefault()}
+    aria-label="تليجرام"
+    title="تليجرام"
+    className="group flex h-14 w-14 items-center justify-center rounded-2xl border border-sky-400/20 bg-sky-500/10 text-sky-400 transition hover:-translate-y-1 hover:border-sky-400/40 hover:bg-sky-500/20"
+  >
+    <svg
+      viewBox="0 0 24 24"
+      className="h-7 w-7 transition group-hover:scale-110"
+      fill="currentColor"
+      aria-hidden="true"
+    >
+      <path d="M21.7 3.4 18.8 20c-.22 1.17-.8 1.46-1.62.91l-4.42-3.26-2.13 2.05c-.24.24-.44.44-.9.44l.32-4.5 8.19-7.4c.36-.32-.08-.5-.55-.18L7.57 14.43 3.2 13.06c-.95-.3-.97-.95.2-1.4L20.5 5.08c.79-.29 1.48.18 1.2 1.32Z" />
+    </svg>
+  </a>
 </div>
 </div>
 
@@ -2080,7 +2132,7 @@ export default function HomePage() {
               <div className="mt-4 flex flex-col gap-3 text-xs text-gray-500">
                 <Link href="/about">من نحن</Link>
                 <Link href="/faq">الأسئلة الشائعة</Link>
-                <a href="#">تواصل معنا</a>
+                <Link href="/accounts">حساباتنا</Link>
                 <Link href="/review">قيّمنا</Link>
               </div>
             </div>

@@ -9,6 +9,7 @@ import { supabase } from "@/lib/supabase";
 type AdminTab =
   | "overview"
   | "users"
+  | "reviews"
   | "games"
   | "home"
   | "notifications"
@@ -156,6 +157,16 @@ type DiscountCodeProductRow = {
   id: string;
   discount_code_id: string;
   product_id: string;
+};
+
+type StoreReview = {
+  id: string;
+  user_id: string | null;
+  customer_name: string;
+  review_text: string;
+  rating: number;
+  is_visible: boolean;
+  created_at: string;
 };
 
 type Profile = {
@@ -357,6 +368,9 @@ export default function AdminPage() {
 
   const [tab, setTab] = useState<AdminTab>("overview");
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [reviews, setReviews] = useState<StoreReview[]>([]);
+  const [deletingReviewId, setDeletingReviewId] =
+    useState<string | null>(null);
   const [orders, setOrders] = useState<UserOrder[]>([]);
   const [sitePresence, setSitePresence] = useState<SitePresenceRow[]>([]);
   const [visitsToday, setVisitsToday] = useState(0);
@@ -585,6 +599,17 @@ export default function AdminPage() {
     };
   }, [orders]);
 
+  const reviewsAverage = useMemo(() => {
+    if (!reviews.length) return 0;
+
+    const total = reviews.reduce(
+      (sum, review) => sum + review.rating,
+      0
+    );
+
+    return Math.round((total / reviews.length) * 10) / 10;
+  }, [reviews]);
+
   const filteredOverviewOrders = useMemo(() => {
     if (orderStatusFilter === "all") return orders;
 
@@ -806,6 +831,7 @@ export default function AdminPage() {
       const [
         profilesResult,
         ordersResult,
+        reviewsResult,
         announcementResult,
         productsResult,
         productImagesResult,
@@ -829,6 +855,13 @@ export default function AdminPage() {
         supabase
           .from("orders")
           .select("*, order_items(*), payments(*)")
+          .order("created_at", { ascending: false }),
+
+        supabase
+          .from("store_reviews")
+          .select(
+            "id, user_id, customer_name, review_text, rating, is_visible, created_at"
+          )
           .order("created_at", { ascending: false }),
 
         supabase
@@ -912,6 +945,7 @@ export default function AdminPage() {
 
       if (profilesResult.error) throw profilesResult.error;
       if (ordersResult.error) throw ordersResult.error;
+      if (reviewsResult.error) throw reviewsResult.error;
       if (announcementResult.error) throw announcementResult.error;
       if (productsResult.error) throw productsResult.error;
       if (productImagesResult.error) throw productImagesResult.error;
@@ -927,6 +961,20 @@ export default function AdminPage() {
         throw discountCodeProductsResult.error;
 
       setProfiles((profilesResult.data ?? []) as Profile[]);
+      setReviews(
+        (reviewsResult.data ?? []).map((review) => ({
+          id: review.id,
+          user_id: review.user_id ?? null,
+          customer_name: review.customer_name,
+          review_text: review.review_text,
+          rating: Math.max(
+            1,
+            Math.min(5, Math.floor(toNumber(review.rating)))
+          ),
+          is_visible: Boolean(review.is_visible),
+          created_at: review.created_at,
+        }))
+      );
       setOrders((ordersResult.data ?? []) as UserOrder[]);
 
       if (announcementResult.data) {
@@ -3057,6 +3105,46 @@ export default function AdminPage() {
     }
   }
 
+  async function deleteReview(review: StoreReview) {
+    const confirmed = window.confirm(
+      `هل تريد حذف تقييم ${review.customer_name}؟`
+    );
+
+    if (!confirmed || deletingReviewId) return;
+
+    setDeletingReviewId(review.id);
+    setErrorMessage("");
+
+    try {
+      const { data, error } = await supabase.rpc(
+        "delete_store_review",
+        {
+          input_review_id: review.id,
+        }
+      );
+
+      if (error) throw error;
+
+      if (data !== true) {
+        throw new Error("لم يتم العثور على التقييم");
+      }
+
+      setReviews((current) =>
+        current.filter((item) => item.id !== review.id)
+      );
+
+      showMessage("تم حذف التقييم");
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "تعذر حذف التقييم"
+      );
+    } finally {
+      setDeletingReviewId(null);
+    }
+  }
+
   async function logout() {
     await supabase.auth.signOut();
     router.replace("/");
@@ -3188,6 +3276,24 @@ export default function AdminPage() {
             >
               <span className="text-lg">👥</span>
               <span>المستخدمون</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setTab("reviews")}
+              className={`flex min-h-[64px] items-center justify-center gap-2 rounded-[18px] px-3 py-3 text-xs font-black transition active:scale-[0.98] lg:min-h-0 lg:justify-start ${
+                tab === "reviews"
+                  ? "bg-violet-500/15 text-violet-200"
+                  : "text-gray-400 hover:bg-white/5 hover:text-white"
+              }`}
+            >
+              <span className="text-lg">⭐</span>
+              <span>التقييمات</span>
+              {reviews.length > 0 && (
+                <span className="mr-auto rounded-full bg-violet-500/20 px-2 py-1 text-[8px] text-violet-200">
+                  {reviews.length}
+                </span>
+              )}
             </button>
 
             <button
@@ -3707,6 +3813,148 @@ export default function AdminPage() {
                 )}
               </div>
             </section>
+          )}
+
+          {tab === "reviews" && (
+            <div className="space-y-4">
+              <section className="rounded-[28px] border border-white/[0.07] bg-[#121019] p-4 sm:p-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-[10px] font-bold text-violet-300">
+                      آراء العملاء
+                    </p>
+                    <h2 className="mt-1 text-xl font-black">
+                      إدارة التقييمات
+                    </h2>
+                    <p className="mt-2 text-xs leading-6 text-gray-500">
+                      راجع تقييمات العملاء واحذف أي تقييم لا تريد
+                      ظهوره في المتجر.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => void loadData()}
+                    disabled={refreshing}
+                    className="flex h-11 items-center justify-center rounded-2xl border border-violet-400/15 bg-violet-500/10 px-4 text-xs font-black text-violet-200 transition hover:bg-violet-500/15 active:scale-95 disabled:opacity-50"
+                  >
+                    {refreshing ? "جاري التحديث..." : "تحديث التقييمات"}
+                  </button>
+                </div>
+
+                <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  <div className="rounded-[22px] border border-white/[0.07] bg-black/20 p-4">
+                    <p className="text-[9px] text-gray-500">
+                      عدد التقييمات
+                    </p>
+                    <p className="mt-2 text-2xl font-black">
+                      {reviews.length}
+                    </p>
+                  </div>
+
+                  <div className="rounded-[22px] border border-amber-400/10 bg-amber-500/[0.05] p-4">
+                    <p className="text-[9px] text-amber-200/60">
+                      متوسط النجوم
+                    </p>
+                    <p className="mt-2 text-2xl font-black text-amber-400">
+                      {reviewsAverage || "—"}
+                    </p>
+                  </div>
+
+                  <div className="col-span-2 rounded-[22px] border border-emerald-400/10 bg-emerald-500/[0.05] p-4 sm:col-span-1">
+                    <p className="text-[9px] text-emerald-200/60">
+                      الظاهرة حاليًا
+                    </p>
+                    <p className="mt-2 text-2xl font-black text-emerald-300">
+                      {
+                        reviews.filter(
+                          (review) => review.is_visible
+                        ).length
+                      }
+                    </p>
+                  </div>
+                </div>
+              </section>
+
+              <section className="rounded-[28px] border border-white/[0.07] bg-[#121019] p-4 sm:p-6">
+                <div className="space-y-3">
+                  {reviews.map((review) => (
+                    <article
+                      key={review.id}
+                      className="rounded-[24px] border border-white/[0.07] bg-black/20 p-4"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-fuchsia-600 text-lg font-black">
+                          {review.customer_name.charAt(0)}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="truncate text-sm font-black">
+                              {review.customer_name}
+                            </h3>
+
+                            <span className="rounded-full border border-emerald-400/15 bg-emerald-500/10 px-2 py-1 text-[8px] font-black text-emerald-300">
+                              ظاهر
+                            </span>
+                          </div>
+
+                          <div className="mt-2 flex gap-1 text-sm">
+                            {Array.from({ length: 5 }).map(
+                              (_, index) => (
+                                <span
+                                  key={index}
+                                  className={
+                                    index < review.rating
+                                      ? "text-amber-400"
+                                      : "text-white/10"
+                                  }
+                                >
+                                  ★
+                                </span>
+                              )
+                            )}
+                          </div>
+                        </div>
+
+                        <p className="shrink-0 text-[8px] text-gray-600">
+                          {formatDate(review.created_at)}
+                        </p>
+                      </div>
+
+                      <p className="mt-4 break-words rounded-[18px] border border-white/[0.05] bg-white/[0.025] px-4 py-3 text-xs leading-7 text-gray-300">
+                        {review.review_text}
+                      </p>
+
+                      <div className="mt-4 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => void deleteReview(review)}
+                          disabled={deletingReviewId === review.id}
+                          className="flex h-10 items-center justify-center rounded-2xl border border-red-400/15 bg-red-500/10 px-4 text-[10px] font-black text-red-300 transition hover:bg-red-500/15 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {deletingReviewId === review.id
+                            ? "جاري الحذف..."
+                            : "حذف التقييم"}
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+
+                  {!reviews.length && (
+                    <div className="rounded-[24px] border border-dashed border-white/10 px-5 py-12 text-center">
+                      <div className="text-4xl">⭐</div>
+                      <h3 className="mt-4 text-sm font-black">
+                        لا توجد تقييمات
+                      </h3>
+                      <p className="mt-2 text-xs text-gray-500">
+                        ستظهر تقييمات العملاء هنا بعد نشرها.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </section>
+            </div>
           )}
 
           {tab === "games" && (
