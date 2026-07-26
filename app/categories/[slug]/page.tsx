@@ -509,14 +509,8 @@ export default function CategoryDetailsPage() {
         {games.length > 0 ? (
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {games.map((game) => {
-              const discount =
-                game.oldPrice > game.price && game.oldPrice > 0
-                  ? Math.round(
-                      ((game.oldPrice - game.price) /
-                        game.oldPrice) *
-                        100
-                    )
-                  : 0;
+              // نسبة البطاقة للعرض فقط ولا تغيّر السعر.
+              const discount = game.discountPercent ?? 0;
 
               return (
                 <article
@@ -542,11 +536,17 @@ export default function CategoryDetailsPage() {
                       </div>
                     )}
 
-                    {discount > 0 && (
-                      <span className="pointer-events-none absolute right-2 top-2 z-20 rounded-lg bg-red-500 px-2 py-1 text-[8px] font-black sm:text-[9px]">
-                        -{discount}%
+                    <div className="pointer-events-none absolute right-2 top-2 z-20 flex max-w-[72%] items-center gap-1.5">
+                      {discount > 0 && (
+                        <span className="shrink-0 rounded-lg bg-red-500 px-2 py-1 text-[8px] font-black sm:text-[9px]">
+                          -{discount}%
+                        </span>
+                      )}
+
+                      <span className="truncate rounded-lg border border-violet-300/20 bg-violet-500/20 px-2 py-1 text-[8px] font-black text-violet-100 backdrop-blur-md">
+                        {game.badge || "بدون دينفو"}
                       </span>
-                    )}
+                    </div>
 
                     <button
                       type="button"
@@ -560,12 +560,6 @@ export default function CategoryDetailsPage() {
                     >
                       {favorites.includes(game.id) ? "♥" : "♡"}
                     </button>
-
-                    {game.badge && (
-                      <span className="pointer-events-none absolute left-2 top-12 z-20 max-w-[58%] truncate rounded-lg border border-violet-300/20 bg-violet-500/15 px-2 py-1 text-[8px] font-black text-violet-100 backdrop-blur-md">
-                        {game.badge}
-                      </span>
-                    )}
                   </div>
 
                   <div className="p-3">

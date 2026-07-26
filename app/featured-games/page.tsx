@@ -13,6 +13,8 @@ type Game = {
   oldPrice: number;
   category: string;
   image: string;
+  badge: string;
+  discountPercent: number;
 };
 
 type ProductRow = {
@@ -24,6 +26,8 @@ type ProductRow = {
   cover_url: string | null;
   detail_category_label: string | null;
   short_description: string | null;
+  card_badge: string | null;
+  discount_percent: number | string | null;
 };
 
 function toNumber(value: unknown) {
@@ -57,7 +61,7 @@ export default function FeaturedGamesPage() {
         const { data, error } = await supabase
           .from("products")
           .select(
-            "id, name, platform, price, old_price, cover_url, detail_category_label, short_description"
+            "id, name, platform, price, old_price, cover_url, detail_category_label, short_description, card_badge, discount_percent"
           )
           .eq("is_active", true)
           .or("display_kind.eq.featured,is_featured.eq.true")
@@ -83,6 +87,11 @@ export default function FeaturedGamesPage() {
             price,
             oldPrice: oldPrice > 0 ? oldPrice : price,
             image: product.cover_url || "",
+            badge: product.card_badge || "بدون دينفو",
+            discountPercent: Math.min(
+              100,
+              Math.max(0, toNumber(product.discount_percent))
+            ),
           };
         });
 
@@ -256,12 +265,8 @@ export default function FeaturedGamesPage() {
         ) : (
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {games.map((game) => {
-              const discount =
-                game.oldPrice > game.price && game.oldPrice > 0
-                  ? Math.round(
-                      ((game.oldPrice - game.price) / game.oldPrice) * 100
-                    )
-                  : 0;
+              // نسبة شكلية للعرض فقط؛ السعر يأتي من حقل السعر نفسه.
+              const discount = game.discountPercent;
 
               const favoriteId = "featured-" + game.id;
               const isFavorite = favorites.includes(favoriteId);
@@ -292,11 +297,17 @@ export default function FeaturedGamesPage() {
 
                     <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#111019] via-transparent to-transparent" />
 
-                    {discount > 0 && (
-                      <span className="pointer-events-none absolute right-2 top-2 z-20 rounded-lg bg-red-500 px-2 py-1 text-[9px] font-black">
-                        -{discount}%
+                    <div className="pointer-events-none absolute right-2 top-2 z-20 flex max-w-[72%] items-center gap-1.5">
+                      {discount > 0 && (
+                        <span className="shrink-0 rounded-lg bg-red-500 px-2 py-1 text-[9px] font-black">
+                          -{discount}%
+                        </span>
+                      )}
+
+                      <span className="truncate rounded-lg border border-violet-300/20 bg-violet-500/20 px-2 py-1 text-[8px] font-black text-violet-100 backdrop-blur-md">
+                        {game.badge}
                       </span>
-                    )}
+                    </div>
 
                     <button
                       type="button"

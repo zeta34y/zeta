@@ -3733,16 +3733,8 @@ export default function AdminPage() {
 
               <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {products.map((product) => {
-                  const automaticDiscount =
-                    product.old_price && product.old_price > product.price
-                      ? Math.round(
-                          ((product.old_price - product.price) /
-                            product.old_price) *
-                            100
-                        )
-                      : 0;
-                  const discount =
-                    product.discount_percent ?? automaticDiscount;
+                  // النسبة الحمراء شكلية فقط ولا تغيّر السعر.
+                  const discount = product.discount_percent ?? 0;
 
                   return (
                     <article
@@ -3766,11 +3758,9 @@ export default function AdminPage() {
                           </span>
                         )}
 
-                        {product.card_badge && (
-                          <span className="absolute left-2 top-2 max-w-[55%] truncate rounded-lg border border-white/10 bg-black/60 px-2 py-1 text-[8px] font-black backdrop-blur-md">
-                            {product.card_badge}
-                          </span>
-                        )}
+                        <span className="absolute left-2 top-2 max-w-[55%] truncate rounded-lg border border-white/10 bg-black/60 px-2 py-1 text-[8px] font-black backdrop-blur-md">
+                          {product.card_badge || "بدون دينفو"}
+                        </span>
                       </div>
 
                       <div className="p-4">
@@ -5502,9 +5492,12 @@ export default function AdminPage() {
                 <input
                   value={productCardBadge}
                   onChange={(event) => setProductCardBadge(event.target.value)}
-                  placeholder="حماية Denuvo"
+                  placeholder="بدون دينفو"
                   className={adminInputClass}
                 />
+                <p className="mt-1 text-[8px] leading-4 text-gray-600">
+                  إذا تركتها فارغة سيظهر تلقائيًا: بدون دينفو
+                </p>
               </AdminField>
             </div>
 
@@ -5515,8 +5508,11 @@ export default function AdminPage() {
               <AdminField label="السعر القديم">
                 <input type="number" min="0" step="0.01" value={productOldPrice} onChange={(event) => setProductOldPrice(event.target.value)} className={adminInputClass} />
               </AdminField>
-              <AdminField label="الخصم الأحمر %">
-                <input type="number" min="0" max="100" value={productDiscountPercent} onChange={(event) => setProductDiscountPercent(event.target.value)} placeholder="27" className={adminInputClass} />
+              <AdminField label="الخصم الأحمر الوهمي %">
+                <input type="number" min="0" max="100" value={productDiscountPercent} onChange={(event) => setProductDiscountPercent(event.target.value)} placeholder="20" className={adminInputClass} />
+                <p className="mt-1 text-[8px] leading-4 text-gray-600">
+                  للعرض على البطاقة فقط، ولا يخصم من السعر الحقيقي.
+                </p>
               </AdminField>
               <AdminField label="عدد مرات الشراء">
                 <input type="number" min="0" step="1" value={productSoldCount} onChange={(event) => setProductSoldCount(event.target.value)} className={adminInputClass} />
