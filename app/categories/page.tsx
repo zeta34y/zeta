@@ -72,47 +72,74 @@ export default function CategoriesPage() {
     let mounted = true;
 
     async function loadCategories() {
-      const { data, error } = await supabase
-        .from("home_categories")
-        .select(
-          "id, name, icon, slug, link_url, page_description, sort_order, is_active, is_system"
-        )
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true });
+      try {
+        const fullResult = await supabase
+          .from("home_categories")
+          .select(
+            "id, name, icon, slug, link_url, page_description, sort_order, is_active, is_system"
+          )
+          .eq("is_active", true)
+          .order("sort_order", { ascending: true });
 
-      if (error) {
-        console.error("تعذر تحميل التصنيفات:", error);
-        return;
-      }
+        let rows = fullResult.data as
+          | Array<{
+              id: string;
+              name: string | null;
+              icon: string | null;
+              slug?: string | null;
+              link_url: string | null;
+              page_description?: string | null;
+              is_system?: boolean | null;
+            }>
+          | null;
 
-      const mapped = (data ?? [])
-        .filter((category) => {
-          const isAllCategory =
-            category.is_system === true && category.name === "الكل";
+        if (fullResult.error) {
+          const fallbackResult = await supabase
+            .from("home_categories")
+            .select("id, name, icon, link_url, sort_order, is_active")
+            .eq("is_active", true)
+            .order("sort_order", { ascending: true });
 
-          return !isAllCategory && Boolean(category.slug || category.link_url);
-        })
-        .map((category): Category => {
-          const slug = category.slug ?? "";
-          const href = category.link_url || `/categories/${slug}`;
+          if (fallbackResult.error) {
+            return;
+          }
 
-          return {
-            id: category.id,
-            title: category.name || "تصنيف",
-            description:
-              category.page_description || "الألعاب الموجودة في هذا التصنيف",
-            icon: category.icon || "🎮",
-            slug: slug || category.id,
-            href,
-          };
-        });
+          rows = fallbackResult.data;
+        }
 
-      if (mounted && mapped.length > 0) {
-        setCategories(mapped);
+        const mapped = (rows ?? [])
+          .filter((category) => category.name !== "الكل")
+          .map((category): Category => {
+            const linkSlug =
+              category.link_url?.match(/\/categories\/([^/?#]+)/)?.[1] ??
+              "";
+
+            const slug =
+              category.slug ||
+              linkSlug ||
+              `category-${category.id.replaceAll("-", "").slice(0, 10)}`;
+
+            return {
+              id: category.id,
+              title: category.name || "تصنيف",
+              description:
+                category.page_description ||
+                "الألعاب الموجودة في هذا التصنيف",
+              icon: category.icon || "🎮",
+              slug,
+              href: category.link_url || `/categories/${slug}`,
+            };
+          });
+
+        if (mounted && mapped.length > 0) {
+          setCategories(mapped);
+        }
+      } catch {
+        // تبقى التصنيفات الاحتياطية ظاهرة بدون إظهار شاشة أخطاء.
       }
     }
 
-    loadCategories();
+    void loadCategories();
 
     const channel = supabase
       .channel("all-categories-page")

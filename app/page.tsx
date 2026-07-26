@@ -273,30 +273,44 @@ export default function HomePage() {
     let mounted = true;
 
     async function loadAnnouncement() {
-      const { data, error } = await supabase
-        .from("announcement_bar")
-        .select("text, emoji, link_url, is_visible")
-        .eq("id", 1)
-        .maybeSingle();
+      try {
+        const { data, error } = await supabase
+          .from("announcement_bar")
+          .select("text, emoji, link_url, is_visible")
+          .eq("id", 1)
+          .maybeSingle();
 
-      if (!mounted) return;
+        if (!mounted) return;
 
-      if (error) {
-        console.error("تعذر تحميل الشريط العلوي:", error);
-        return;
-      }
+        if (error || !data) {
+          setAnnouncement({
+            text: "",
+            emoji: "",
+            link_url: "",
+            is_visible: false,
+          });
+          return;
+        }
 
-      if (data) {
         setAnnouncement({
           text: data.text ?? "",
           emoji: data.emoji ?? "",
           link_url: data.link_url ?? "",
           is_visible: Boolean(data.is_visible),
         });
+      } catch {
+        if (!mounted) return;
+
+        setAnnouncement({
+          text: "",
+          emoji: "",
+          link_url: "",
+          is_visible: false,
+        });
       }
     }
 
-    loadAnnouncement();
+    void loadAnnouncement();
 
     function handleWindowFocus() {
       loadAnnouncement();
@@ -378,19 +392,17 @@ export default function HomePage() {
 
         if (!mounted) return;
 
-        if (categoriesResult.error) {
-          throw categoriesResult.error;
-        }
-
-        if (itemsResult.error) {
-          throw itemsResult.error;
-        }
-
         const loadedCategories =
-          (categoriesResult.data ?? []) as HomeCategory[];
+          categoriesResult.error
+            ? []
+            : ((categoriesResult.data ?? []) as HomeCategory[]);
 
         if (loadedCategories.length > 0) {
           setCategories(loadedCategories);
+        }
+
+        if (itemsResult.error) {
+          return;
         }
 
         const rows =
@@ -484,7 +496,8 @@ export default function HomePage() {
         setPrivateGames(mappedPrivate);
         setPackageGames(mappedPackages);
       } catch (error) {
-        console.error("تعذر تحميل محتوى الصفحة الرئيسية:", error);
+        // نبقي الصفحة تعمل بالبيانات الحالية عند تعذر الاتصال.
+        void error;
       }
     }
 
