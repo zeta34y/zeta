@@ -1462,7 +1462,22 @@ export default function HomePage() {
                     </Link>
 
                     <div className="mt-4 flex items-end justify-between">
-                      <div><span className="text-sm text-violet-300 font-bold">السعر قريبًا</span></div>
+                      <div>
+                        <div>
+                          <span className="text-lg font-black">
+                            {game.price}
+                          </span>
+                          <span className="mr-1 text-[10px] text-gray-400">
+                            ر.س
+                          </span>
+                        </div>
+
+                        {game.oldPrice > game.price && (
+                          <span className="text-[10px] text-gray-600 line-through">
+                            {game.oldPrice} ر.س
+                          </span>
+                        )}
+                      </div>
 
                       <button
                         type="button"
