@@ -92,26 +92,13 @@ function relationOne<T>(value: T | T[] | null | undefined): T | null {
   return value ?? null;
 }
 
-const reviews = [
-  {
-    id: 1,
-    name: "عبدالله محمد",
-    text: "المتجر سريع جدًا، استلمت اللعبة مباشرة والتعامل ممتاز.",
-    rating: 5,
-  },
-  {
-    id: 2,
-    name: "سعد العتيبي",
-    text: "الأسعار ممتازة والدعم رد علي بسرعة، تجربة تستحق التقييم.",
-    rating: 5,
-  },
-  {
-    id: 3,
-    name: "فيصل أحمد",
-    text: "اشتريت حساب لعبة ووصلتني البيانات بشكل مرتب وواضح.",
-    rating: 5,
-  },
-];
+type StoreReview = {
+  id: string;
+  customer_name: string;
+  review_text: string;
+  rating: number;
+  created_at: string;
+};
 
 export default function HomePage() {
   const router = useRouter();
@@ -136,6 +123,8 @@ export default function HomePage() {
     useState<HomeGame[]>([]);
   const [packageGames, setPackageGames] =
     useState<HomePackage[]>([]);
+  const [reviews, setReviews] = useState<StoreReview[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
 
   const [showSplash, setShowSplash] = useState(true);
   const [splashClosing, setSplashClosing] = useState(false);
@@ -534,6 +523,73 @@ export default function HomePage() {
     return () => {
       mounted = false;
       window.removeEventListener("focus", refreshHomeContent);
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadReviews() {
+      try {
+        const { data, error } = await supabase
+          .from("store_reviews")
+          .select(
+            "id, customer_name, review_text, rating, created_at"
+          )
+          .eq("is_visible", true)
+          .order("created_at", { ascending: false })
+          .limit(8);
+
+        if (!mounted) return;
+
+        if (error) {
+          setReviews([]);
+          return;
+        }
+
+        setReviews((data ?? []) as StoreReview[]);
+      } catch {
+        if (mounted) {
+          setReviews([]);
+        }
+      } finally {
+        if (mounted) {
+          setReviewsLoading(false);
+        }
+      }
+    }
+
+    void loadReviews();
+
+    function refreshReviews() {
+      void loadReviews();
+    }
+
+    window.addEventListener("focus", refreshReviews);
+    window.addEventListener("zeta-review-added", refreshReviews);
+
+    const channel = supabase
+      .channel("zeta-store-reviews")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "store_reviews",
+        },
+        refreshReviews
+      )
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      window.removeEventListener("focus", refreshReviews);
+      window.removeEventListener(
+        "zeta-review-added",
+        refreshReviews
+      );
       supabase.removeChannel(channel);
     };
   }, []);
@@ -1902,44 +1958,93 @@ export default function HomePage() {
           </p>
         </div>
 
-        <div className="scroll-clip mt-6">
-         <div className="smooth-scroll flex snap-x gap-4 overflow-x-auto pb-5 md:grid md:grid-cols-3 md:overflow-visible">
-          {reviews.map((review) => (
-            <article
-              key={review.id}
-              className="relative min-w-[88%] snap-center overflow-hidden rounded-[28px] md:min-w-0 border border-violet-400/15 bg-gradient-to-br from-[#171322] to-[#0f0d16] p-6 transition duration-300 hover:-translate-y-1 hover:border-violet-400/40 hover:shadow-2xl hover:shadow-violet-950/30 sm:min-w-[360px]"
+        {reviewsLoading ? (
+          <div className="flex min-h-[230px] items-center justify-center">
+            <div className="h-11 w-11 animate-spin rounded-full border-4 border-white/10 border-t-violet-500" />
+          </div>
+        ) : reviews.length === 0 ? (
+          <div className="mx-auto mt-6 max-w-xl rounded-[28px] border border-violet-400/15 bg-gradient-to-br from-[#171322] to-[#0f0d16] px-6 py-10 text-center">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-violet-500/10 text-3xl">
+              ⭐
+            </div>
+
+            <h3 className="mt-4 text-lg font-black">
+              كن أول من يقيّم المتجر
+            </h3>
+
+            <p className="mt-2 text-sm leading-7 text-gray-500">
+              شارك تجربتك وسيظهر تقييمك هنا مباشرة.
+            </p>
+
+            <Link
+              href="/review"
+              className="mt-6 inline-flex items-center justify-center rounded-2xl bg-gradient-to-l from-violet-600 to-fuchsia-600 px-6 py-3.5 text-sm font-black shadow-lg shadow-violet-950/30 transition hover:brightness-110 active:scale-95"
             >
-              <div className="absolute -left-10 -top-10 h-32 w-32 rounded-full bg-violet-600/10 blur-3xl" />
+              اكتب تقييمك
+            </Link>
+          </div>
+        ) : (
+          <>
+            <div className="scroll-clip mt-6">
+              <div className="smooth-scroll flex snap-x gap-4 overflow-x-auto pb-5 md:grid md:grid-cols-3 md:overflow-visible">
+                {reviews.map((review) => (
+                  <article
+                    key={review.id}
+                    className="relative min-w-[88%] snap-center overflow-hidden rounded-[28px] border border-violet-400/15 bg-gradient-to-br from-[#171322] to-[#0f0d16] p-6 transition duration-300 hover:-translate-y-1 hover:border-violet-400/40 hover:shadow-2xl hover:shadow-violet-950/30 sm:min-w-[360px] md:min-w-0"
+                  >
+                    <div className="absolute -left-10 -top-10 h-32 w-32 rounded-full bg-violet-600/10 blur-3xl" />
 
-              <div className="relative">
-                <div className="flex items-center justify-between">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-fuchsia-600 text-lg font-black">
-                    {review.name.charAt(0)}
-                  </div>
+                    <div className="relative">
+                      <div className="flex items-center justify-between">
+                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-fuchsia-600 text-lg font-black">
+                          {review.customer_name.charAt(0)}
+                        </div>
 
-                  <span className="text-5xl font-black text-violet-500/20">
-                    “
-                  </span>
-                </div>
+                        <span className="text-5xl font-black text-violet-500/20">
+                          “
+                        </span>
+                      </div>
 
-                <p className="mt-5 min-h-[70px] text-sm leading-7 text-gray-300">
-                  {review.text}
-                </p>
+                      <p className="mt-5 min-h-[70px] break-words text-sm leading-7 text-gray-300">
+                        {review.review_text}
+                      </p>
 
-                <div className="mt-5 border-t border-white/5 pt-4">
-                  <h3 className="text-sm font-black">{review.name}</h3>
+                      <div className="mt-5 border-t border-white/5 pt-4">
+                        <h3 className="truncate text-sm font-black">
+                          {review.customer_name}
+                        </h3>
 
-                  <div className="mt-2 flex gap-1 text-sm text-amber-400">
-                    {Array.from({ length: review.rating }).map((_, index) => (
-                      <span key={index}>★</span>
-                    ))}
-                  </div>
-                </div>
+                        <div className="mt-2 flex gap-1 text-sm">
+                          {Array.from({ length: 5 }).map((_, index) => (
+                            <span
+                              key={index}
+                              className={
+                                index < review.rating
+                                  ? "text-amber-400"
+                                  : "text-white/10"
+                              }
+                            >
+                              ★
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                ))}
               </div>
-            </article>
-          ))}
-         </div>
-        </div>
+            </div>
+
+            <div className="mt-2 text-center">
+              <Link
+                href="/review"
+                className="inline-flex items-center justify-center rounded-2xl border border-violet-400/20 bg-violet-500/10 px-5 py-3 text-xs font-black text-violet-200 transition hover:border-violet-400/40 hover:bg-violet-500/15 active:scale-95"
+              >
+                شاركنا تقييمك
+              </Link>
+            </div>
+          </>
+        )}
       </section>
 
       {/* الفوتر */}
@@ -1976,7 +2081,7 @@ export default function HomePage() {
                 <Link href="/about">من نحن</Link>
                 <Link href="/faq">الأسئلة الشائعة</Link>
                 <a href="#">تواصل معنا</a>
-                <a href="#">الشكاوى</a>
+                <Link href="/review">قيّمنا</Link>
               </div>
             </div>
 
