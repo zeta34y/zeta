@@ -302,6 +302,23 @@ function toNumber(value: unknown) {
   return Number.isFinite(number) ? number : 0;
 }
 
+function getDatabaseErrorMessage(error: unknown) {
+  if (
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof (error as { message?: unknown }).message === "string"
+  ) {
+    return (error as { message: string }).message;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "تعذر حفظ كود الخصم";
+}
+
 function formatMoney(value: unknown) {
   return `${toNumber(value).toLocaleString("ar-SA", {
     maximumFractionDigits: 2,
@@ -1645,12 +1662,16 @@ export default function AdminPage() {
     try {
       const payload = {
         code: normalizedCode,
-        discount_percent: percent,
-        applies_to_all: discountCodeAppliesToAll,
+        discount_type: "percentage",
+        discount_value: percent,
+        minimum_order: 0,
+        usage_limit: null,
+        usage_per_user: 1,
         starts_at: null,
         ends_at: null,
+        discount_percent: percent,
+        applies_to_all: discountCodeAppliesToAll,
         is_active: discountCodeActive,
-        updated_at: new Date().toISOString(),
       };
 
       let codeId = editingDiscountCodeId;
@@ -1664,7 +1685,10 @@ export default function AdminPage() {
       } else {
         const { data, error } = await supabase
           .from("discount_codes")
-          .insert(payload)
+          .insert({
+            ...payload,
+            used_count: 0,
+          })
           .select("id")
           .single();
         if (error) throw error;
@@ -1699,13 +1723,22 @@ export default function AdminPage() {
       resetDiscountCodeForm();
       await loadData();
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "تعذر حفظ كود الخصم";
+      console.error("تعذر حفظ كود الخصم:", error);
+
+      const message = getDatabaseErrorMessage(error);
+      const normalizedMessage = message.toLowerCase();
+
       setErrorMessage(
-        message.toLowerCase().includes("duplicate") ||
-          message.toLowerCase().includes("unique")
+        normalizedMessage.includes("duplicate") ||
+          normalizedMessage.includes("unique") ||
+          normalizedMessage.includes("23505")
           ? "كود الخصم مستخدم مسبقًا"
-          : message
+          : normalizedMessage.includes("row-level security") ||
+              normalizedMessage.includes("permission denied")
+            ? "صلاحيات حفظ أكواد الخصم غير مفعلة. شغّل ملف SQL المرفق كاملًا."
+            : normalizedMessage.includes("applies_to_all")
+              ? "عمود خيار جميع الألعاب غير موجود. شغّل ملف SQL المرفق كاملًا."
+              : message
       );
     } finally {
       setSavingDiscountCode(false);
