@@ -424,8 +424,37 @@ export default function GameDetailsPage() {
 
     try {
       const saved = localStorage.getItem("zeta_favorites");
-      const ids = saved ? JSON.parse(saved) : [];
-      setFavorite(Array.isArray(ids) && ids.includes(game.id));
+      const parsed = saved ? JSON.parse(saved) : [];
+      const ids: string[] = Array.isArray(parsed)
+        ? parsed.filter((id): id is string => typeof id === "string")
+        : [];
+
+      const favoriteId = `${game.kind}-${game.id}`;
+      const hasCanonicalId = ids.includes(favoriteId);
+      const hasLegacyId = ids.includes(game.id);
+
+      if (hasLegacyId && !hasCanonicalId) {
+        const migratedIds = [
+          ...ids.filter((id) => id !== game.id && id !== favoriteId),
+          favoriteId,
+        ];
+
+        localStorage.setItem(
+          "zeta_favorites",
+          JSON.stringify(migratedIds)
+        );
+
+        window.dispatchEvent(
+          new CustomEvent("zeta-favorites-updated", {
+            detail: migratedIds,
+          })
+        );
+
+        setFavorite(true);
+        return;
+      }
+
+      setFavorite(hasCanonicalId || hasLegacyId);
     } catch {
       setFavorite(false);
     }
@@ -519,15 +548,25 @@ export default function GameDetailsPage() {
 
     try {
       const saved = localStorage.getItem("zeta_favorites");
-      const ids: string[] = saved ? JSON.parse(saved) : [];
-      const safeIds = Array.isArray(ids) ? ids : [];
+      const parsed = saved ? JSON.parse(saved) : [];
+      const safeIds: string[] = Array.isArray(parsed)
+        ? parsed.filter((id): id is string => typeof id === "string")
+        : [];
 
-      const updated = safeIds.includes(game.id)
-        ? safeIds.filter((id) => id !== game.id)
-        : [...safeIds, game.id];
+      const favoriteId = `${game.kind}-${game.id}`;
+      const isCurrentlyFavorite =
+        safeIds.includes(favoriteId) || safeIds.includes(game.id);
+
+      const cleanedIds = safeIds.filter(
+        (id) => id !== favoriteId && id !== game.id
+      );
+
+      const updated = isCurrentlyFavorite
+        ? cleanedIds
+        : [...cleanedIds, favoriteId];
 
       localStorage.setItem("zeta_favorites", JSON.stringify(updated));
-      setFavorite(updated.includes(game.id));
+      setFavorite(!isCurrentlyFavorite);
 
       window.dispatchEvent(
         new CustomEvent("zeta-favorites-updated", {
@@ -536,9 +575,9 @@ export default function GameDetailsPage() {
       );
 
       showMessage(
-        updated.includes(game.id)
-          ? "تمت إضافة اللعبة إلى المفضلة"
-          : "تمت إزالة اللعبة من المفضلة"
+        isCurrentlyFavorite
+          ? "تمت إزالة اللعبة من المفضلة"
+          : "تمت إضافة اللعبة إلى المفضلة"
       );
     } catch {
       showMessage("تعذر تحديث المفضلة");

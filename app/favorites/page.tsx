@@ -31,6 +31,7 @@ type ProductRow = {
   cover_url: string | null;
   card_badge: string | null;
   detail_category_label: string | null;
+  display_kind: string | null;
 };
 
 type PackageRow = {
@@ -57,7 +58,17 @@ function parseFavoriteId(value: string): {
   storageId: string;
   sourceId: string;
   kind: FavoriteKind;
+  legacy: boolean;
 } | null {
+  if (isUuid(value)) {
+    return {
+      storageId: value,
+      sourceId: value,
+      kind: "featured",
+      legacy: true,
+    };
+  }
+
   const separatorIndex = value.indexOf("-");
 
   if (separatorIndex <= 0) return null;
@@ -76,6 +87,7 @@ function parseFavoriteId(value: string): {
     storageId: value,
     sourceId,
     kind,
+    legacy: false,
   };
 }
 
@@ -113,6 +125,7 @@ export default function FavoritesPage() {
               storageId: string;
               sourceId: string;
               kind: FavoriteKind;
+              legacy: boolean;
             } => item !== null
           );
 
@@ -137,7 +150,7 @@ export default function FavoritesPage() {
             ? supabase
                 .from("products")
                 .select(
-                  "id, name, short_description, platform, price, old_price, cover_url, card_badge, detail_category_label"
+                  "id, name, short_description, platform, price, old_price, cover_url, card_badge, detail_category_label, display_kind"
                 )
                 .in("id", productIds)
                 .eq("is_active", true)
@@ -193,19 +206,25 @@ export default function FavoritesPage() {
 
             if (!product) return null;
 
-            const label = favoriteLabel(favorite.kind);
+            const resolvedKind: FavoriteKind =
+              product.display_kind === "shared" ||
+              product.display_kind === "private"
+                ? product.display_kind
+                : favorite.kind;
+
+            const label = favoriteLabel(resolvedKind);
 
             return {
               id: favorite.storageId,
               sourceId: product.id,
               name: product.name,
-              kind: favorite.kind,
+              kind: resolvedKind,
               label,
               platform:
                 product.platform ||
-                (favorite.kind === "shared"
+                (resolvedKind === "shared"
                   ? "حساب PC مشترك"
-                  : favorite.kind === "private"
+                  : resolvedKind === "private"
                     ? "حساب PC خاص"
                     : "PC"),
               category:
