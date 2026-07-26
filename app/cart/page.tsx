@@ -15,15 +15,63 @@ type CartItem = {
   quantity: number;
 };
 
+type AppliedCoupon = {
+  id: string;
+  code: string;
+  discountType: "percentage" | "fixed";
+  discountValue: number;
+  appliesToAll: boolean;
+  eligibleItemIds: string[];
+};
+
+type ValidatedDiscountCodeRow = {
+  discount_code_id: string;
+  code: string;
+  discount_percent: number | string;
+};
+
 const CART_KEY = "zeta_cart";
+const COUPON_KEY = "zeta_coupon";
+const COUPON_DETAILS_KEY = "zeta_coupon_details";
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function toNumber(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function extractProductId(value: string | number) {
+  const rawValue = String(value);
+
+  if (UUID_PATTERN.test(rawValue)) {
+    return rawValue;
+  }
+
+  for (const prefix of [
+    "featured-",
+    "shared-",
+    "private-",
+    "package-",
+  ]) {
+    if (rawValue.startsWith(prefix)) {
+      const productId = rawValue.slice(prefix.length);
+      return UUID_PATTERN.test(productId) ? productId : null;
+    }
+  }
+
+  return null;
+}
 
 export default function CartPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [removingId, setRemovingId] = useState<string | number | null>(null);
   const [couponCode, setCouponCode] = useState("");
-  const [appliedCoupon, setAppliedCoupon] = useState("");
+  const [appliedCoupon, setAppliedCoupon] =
+    useState<AppliedCoupon | null>(null);
   const [couponMessage, setCouponMessage] = useState("");
+  const [couponLoading, setCouponLoading] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
 
   useEffect(() => {
@@ -38,11 +86,10 @@ export default function CartPage() {
         }
       }
 
-      const savedCoupon = localStorage.getItem("zeta_coupon");
+      const savedCoupon = localStorage.getItem(COUPON_KEY);
 
-      if (savedCoupon === "ZETA10") {
-        setCouponCode("ZETA10");
-        setAppliedCoupon("ZETA10");
+      if (savedCoupon) {
+        setCouponCode(savedCoupon.trim().toUpperCase());
       }
     } catch (error) {
       console.error("حدث خطأ أثناء قراءة السلة:", error);
@@ -107,33 +154,189 @@ export default function CartPage() {
     saveCart([]);
   }
 
-  function applyCoupon() {
-    const normalizedCode = couponCode.trim().toUpperCase();
+  function clearAppliedCoupon(clearInput = false) {
+    setAppliedCoupon(null);
+    setCouponMessage("");
+
+    if (clearInput) {
+      setCouponCode("");
+    }
+
+    localStorage.removeItem(COUPON_KEY);
+    localStorage.removeItem(COUPON_DETAILS_KEY);
+  }
+
+  async function validateAndApplyCoupon(
+    rawCode: string,
+    showSuccessMessage = true
+  ) {
+    const normalizedCode = rawCode
+      .replace(/[^a-zA-Z0-9]/g, "")
+      .trim()
+      .toUpperCase();
 
     if (!normalizedCode) {
+      clearAppliedCoupon();
       setCouponMessage("اكتب كود الخصم أولًا");
       return;
     }
 
-    if (normalizedCode !== "ZETA10") {
-      setAppliedCoupon("");
-      localStorage.removeItem("zeta_coupon");
-      setCouponMessage("كود الخصم غير صحيح");
+    if (cart.length === 0) {
+      clearAppliedCoupon();
+      setCouponMessage("أضف لعبة إلى السلة أولًا");
       return;
     }
 
-    setCouponCode("ZETA10");
-    setAppliedCoupon("ZETA10");
-    localStorage.setItem("zeta_coupon", "ZETA10");
-    setCouponMessage("تم تطبيق خصم 10% بنجاح");
+    setCouponLoading(true);
+    setCouponMessage("");
+
+    try {
+      // نستخدم دالة Supabase الآمنة بدل القراءة المباشرة من الجدول؛
+      // لأن قراءة الجدول كانت محجوبة للمستخدم العادي بسياسات RLS.
+      const allProductsProbeId =
+        "00000000-0000-0000-0000-000000000000";
+
+      const { data: allProductsResult, error: allProductsError } =
+        await supabase.rpc("validate_discount_code", {
+          input_code: normalizedCode,
+          input_product_id: allProductsProbeId,
+        });
+
+      if (allProductsError) throw allProductsError;
+
+      const allProductsRows =
+        (allProductsResult ?? []) as ValidatedDiscountCodeRow[];
+
+      const allProductsCode = allProductsRows[0] ?? null;
+
+      let validatedCode = allProductsCode;
+      let appliesToAll = Boolean(allProductsCode);
+      let eligibleItemIds: string[] = [];
+
+      if (allProductsCode) {
+        eligibleItemIds = cart.map((item) => String(item.id));
+      } else {
+        const productEntries = cart
+          .map((item) => ({
+            cartId: String(item.id),
+            productId: extractProductId(item.id),
+          }))
+          .filter(
+            (
+              item
+            ): item is {
+              cartId: string;
+              productId: string;
+            } => Boolean(item.productId)
+          );
+
+        for (const item of productEntries) {
+          const { data, error } = await supabase.rpc(
+            "validate_discount_code",
+            {
+              input_code: normalizedCode,
+              input_product_id: item.productId,
+            }
+          );
+
+          if (error) throw error;
+
+          const rows = (data ?? []) as ValidatedDiscountCodeRow[];
+          const match = rows[0] ?? null;
+
+          if (match) {
+            validatedCode = validatedCode ?? match;
+            eligibleItemIds.push(item.cartId);
+          }
+        }
+      }
+
+      if (!validatedCode || eligibleItemIds.length === 0) {
+        clearAppliedCoupon();
+        setCouponCode(normalizedCode);
+        setCouponMessage(
+          "كود الخصم غير صحيح أو غير مخصص للألعاب الموجودة في السلة"
+        );
+        return;
+      }
+
+      const discountValue = Math.min(
+        100,
+        Math.max(0, toNumber(validatedCode.discount_percent))
+      );
+
+      if (discountValue <= 0) {
+        clearAppliedCoupon();
+        setCouponCode(normalizedCode);
+        setCouponMessage("قيمة الخصم في هذا الكود غير صحيحة");
+        return;
+      }
+
+      const applied: AppliedCoupon = {
+        id: validatedCode.discount_code_id,
+        code: validatedCode.code,
+        discountType: "percentage",
+        discountValue,
+        appliesToAll,
+        eligibleItemIds: Array.from(new Set(eligibleItemIds)),
+      };
+
+      setCouponCode(validatedCode.code);
+      setAppliedCoupon(applied);
+
+      localStorage.setItem(COUPON_KEY, validatedCode.code);
+      localStorage.setItem(
+        COUPON_DETAILS_KEY,
+        JSON.stringify(applied)
+      );
+
+      if (showSuccessMessage) {
+        setCouponMessage(
+          `تم تطبيق خصم ${discountValue}% بنجاح`
+        );
+      }
+    } catch (error) {
+      console.error("تعذر التحقق من كود الخصم:", error);
+      clearAppliedCoupon();
+      setCouponCode(normalizedCode);
+
+      const errorMessage =
+        error &&
+        typeof error === "object" &&
+        "message" in error &&
+        typeof (error as { message?: unknown }).message === "string"
+          ? (error as { message: string }).message
+          : "";
+
+      setCouponMessage(
+        errorMessage.includes("validate_discount_code")
+          ? "دالة التحقق من أكواد الخصم غير موجودة في Supabase"
+          : "تعذر التحقق من الكود، حاول مرة أخرى"
+      );
+    } finally {
+      setCouponLoading(false);
+    }
+  }
+
+  function applyCoupon() {
+    void validateAndApplyCoupon(couponCode);
   }
 
   function removeCoupon() {
-    setCouponCode("");
-    setAppliedCoupon("");
-    setCouponMessage("");
-    localStorage.removeItem("zeta_coupon");
+    clearAppliedCoupon(true);
   }
+
+  useEffect(() => {
+    if (!loaded || cart.length === 0) return;
+
+    const savedCoupon = localStorage.getItem(COUPON_KEY);
+
+    if (!savedCoupon) return;
+
+    void validateAndApplyCoupon(savedCoupon, false);
+    // نتحقق مرة واحدة بعد تحميل السلة من أن الكود ما زال موجودًا ومفعّلًا.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded]);
 
   async function handleCheckout() {
     if (cart.length === 0 || checkoutLoading) return;
@@ -197,10 +400,32 @@ export default function CartPage() {
 
   const discount = Math.max(oldTotal - subtotal, 0);
 
-  const couponDiscount =
-    appliedCoupon === "ZETA10"
-      ? Math.round(subtotal * 0.1 * 100) / 100
-      : 0;
+  const couponEligibleSubtotal = useMemo(() => {
+    if (!appliedCoupon) return 0;
+
+    const eligibleIds = new Set(appliedCoupon.eligibleItemIds);
+
+    return cart.reduce((total, item) => {
+      return eligibleIds.has(String(item.id))
+        ? total + item.price * item.quantity
+        : total;
+    }, 0);
+  }, [appliedCoupon, cart]);
+
+  const couponDiscount = useMemo(() => {
+    if (!appliedCoupon || couponEligibleSubtotal <= 0) return 0;
+
+    const value =
+      appliedCoupon.discountType === "percentage"
+        ? couponEligibleSubtotal *
+          (appliedCoupon.discountValue / 100)
+        : Math.min(
+            appliedCoupon.discountValue,
+            couponEligibleSubtotal
+          );
+
+    return Math.round(Math.max(value, 0) * 100) / 100;
+  }, [appliedCoupon, couponEligibleSubtotal]);
 
   const finalTotal =
     Math.round(Math.max(subtotal - couponDiscount, 0) * 100) / 100;
@@ -496,7 +721,7 @@ export default function CartPage() {
                   <div className="mb-2 flex items-center justify-between">
                     <span className="text-gray-500">كود الخصم</span>
 
-                    {appliedCoupon === "ZETA10" && (
+                    {appliedCoupon && (
                       <button
                         type="button"
                         onClick={removeCoupon}
@@ -512,12 +737,20 @@ export default function CartPage() {
                       type="text"
                       value={couponCode}
                       onChange={(event) => {
-                        setCouponCode(
-                          event.target.value
-                            .replace(/[^a-zA-Z0-9]/g, "")
-                            .toUpperCase()
-                        );
+                        const nextCode = event.target.value
+                          .replace(/[^a-zA-Z0-9]/g, "")
+                          .toUpperCase();
+
+                        setCouponCode(nextCode);
                         setCouponMessage("");
+
+                        if (
+                          appliedCoupon &&
+                          nextCode !== appliedCoupon.code
+                        ) {
+                          clearAppliedCoupon();
+                          setCouponCode(nextCode);
+                        }
                       }}
                       onKeyDown={(event) => {
                         if (event.key === "Enter") {
@@ -533,16 +766,17 @@ export default function CartPage() {
                     <button
                       type="button"
                       onClick={applyCoupon}
-                      className="shrink-0 rounded-xl bg-violet-600 px-4 py-3 text-xs font-black transition hover:bg-violet-500 active:scale-95"
+                      disabled={couponLoading}
+                      className="shrink-0 rounded-xl bg-violet-600 px-4 py-3 text-xs font-black transition hover:bg-violet-500 active:scale-95 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      تطبيق
+                      {couponLoading ? "جاري..." : "تطبيق"}
                     </button>
                   </div>
 
                   {couponMessage && (
                     <p
                       className={`mt-2 text-[10px] font-bold ${
-                        appliedCoupon === "ZETA10"
+                        appliedCoupon
                           ? "text-emerald-400"
                           : "text-red-300"
                       }`}
@@ -555,7 +789,7 @@ export default function CartPage() {
                 {couponDiscount > 0 && (
                   <div className="flex items-center justify-between rounded-xl border border-emerald-400/10 bg-emerald-500/[0.06] px-3 py-2.5">
                     <span className="text-xs text-emerald-300">
-                      خصم كود ZETA10
+                      خصم كود {appliedCoupon?.code}
                     </span>
 
                     <span className="font-black text-emerald-400">
