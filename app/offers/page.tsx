@@ -27,6 +27,7 @@ type ProductData = {
   platform: string | null;
   price: number;
   old_price: number | null;
+  discount_percent: number | null;
   cover_url: string | null;
   is_shared: boolean;
   is_best_seller_manual: boolean;
@@ -63,6 +64,7 @@ type DisplayOffer = {
   platform: string;
   price: number;
   oldPrice: number;
+  discountPercent: number;
   image: string;
   bestSeller: boolean;
   soldCount: number;
@@ -89,21 +91,6 @@ const fallbackCategories: OfferCategory[] = [
 function toNumber(value: unknown) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
-}
-
-function calculatePrice(
-  originalPrice: number,
-  type: "percentage" | "fixed",
-  value: number
-) {
-  if (type === "percentage") {
-    return Math.max(
-      0,
-      originalPrice - originalPrice * (value / 100)
-    );
-  }
-
-  return Math.max(0, originalPrice - value);
 }
 
 export default function OffersPage() {
@@ -168,6 +155,7 @@ export default function OffersPage() {
                   platform,
                   price,
                   old_price,
+                  discount_percent,
                   cover_url,
                   is_shared,
                   is_best_seller_manual,
@@ -224,14 +212,23 @@ export default function OffersPage() {
 
           if (!product && !pkg) return null;
 
-          const originalPrice = toNumber(
+          const realPrice = toNumber(
             product?.price ?? pkg?.price
           );
-          const price = calculatePrice(
-            originalPrice,
-            offer.discount_type,
-            toNumber(offer.discount_value)
+          const oldPrice = toNumber(
+            product?.old_price ?? pkg?.old_price
           );
+          const discountPercent = product
+            ? Math.max(
+                0,
+                Math.min(
+                  100,
+                  Math.floor(
+                    toNumber(product.discount_percent)
+                  )
+                )
+              )
+            : 0;
 
           return {
             id: offer.id,
@@ -249,8 +246,10 @@ export default function OffersPage() {
             platform:
               product?.platform ??
               (pkg ? "بكج ألعاب PC" : "PC"),
-            price: Math.round(price * 100) / 100,
-            oldPrice: originalPrice,
+            price: Math.round(realPrice * 100) / 100,
+            oldPrice:
+              oldPrice > realPrice ? oldPrice : 0,
+            discountPercent,
             image:
               product?.cover_url ??
               pkg?.image_url ??
@@ -514,15 +513,7 @@ export default function OffersPage() {
         ) : (
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {displayedGames.map((game) => {
-              const discount =
-                game.oldPrice > 0
-                  ? Math.round(
-                      ((game.oldPrice -
-                        game.price) /
-                        game.oldPrice) *
-                        100
-                    )
-                  : 0;
+              const discount = game.discountPercent;
 
               const detailsLink =
                 game.isPackage
@@ -621,9 +612,11 @@ export default function OffersPage() {
                           </span>
                         </p>
 
-                        <p className="text-[9px] text-gray-600 line-through">
-                          {game.oldPrice} ر.س
-                        </p>
+                        {game.oldPrice > game.price && (
+                          <p className="text-[9px] text-gray-600 line-through">
+                            {game.oldPrice} ر.س
+                          </p>
+                        )}
                       </div>
 
                       <button
