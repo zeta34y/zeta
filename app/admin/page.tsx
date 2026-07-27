@@ -149,6 +149,7 @@ type DiscountCodeRow = {
   code: string;
   discount_percent: number;
   applies_to_all: boolean;
+  target_user_id: string | null;
   is_active: boolean;
   created_at: string;
 };
@@ -453,6 +454,12 @@ export default function AdminPage() {
   const [discountCodeAppliesToAll, setDiscountCodeAppliesToAll] =
     useState(false);
   const [discountCodeActive, setDiscountCodeActive] = useState(true);
+  const [discountCodeAudience, setDiscountCodeAudience] =
+    useState<"all" | "specific">("all");
+  const [discountCodeTargetUserId, setDiscountCodeTargetUserId] =
+    useState("");
+  const [discountCodeUserSearch, setDiscountCodeUserSearch] =
+    useState("");
   const [discountCodeProductIds, setDiscountCodeProductIds] =
     useState<string[]>([]);
   const [savingDiscountCode, setSavingDiscountCode] = useState(false);
@@ -542,6 +549,32 @@ export default function AdminPage() {
         )
     );
   }, [profiles, search]);
+
+  const filteredDiscountCodeUsers = useMemo(() => {
+    const query = discountCodeUserSearch
+      .trim()
+      .toLocaleLowerCase("ar");
+
+    const availableProfiles = profiles.filter(
+      (profile) => !profile.is_blocked
+    );
+
+    if (!query) return availableProfiles;
+
+    return availableProfiles.filter((profile) =>
+      [
+        profile.display_name,
+        profile.email,
+        profile.phone,
+      ]
+        .filter(Boolean)
+        .some((value) =>
+          String(value)
+            .toLocaleLowerCase("ar")
+            .includes(query)
+        )
+    );
+  }, [profiles, discountCodeUserSearch]);
 
   const selectedProfileOrders = useMemo(() => {
     if (!selectedProfile) return [];
@@ -933,7 +966,7 @@ export default function AdminPage() {
         supabase
           .from("discount_codes")
           .select(
-            "id, code, discount_percent, applies_to_all, is_active, created_at"
+            "id, code, discount_percent, applies_to_all, target_user_id, is_active, created_at"
           )
           .order("created_at", { ascending: false }),
 
@@ -1126,6 +1159,7 @@ export default function AdminPage() {
           code: item.code,
           discount_percent: toNumber(item.discount_percent),
           applies_to_all: Boolean(item.applies_to_all),
+          target_user_id: item.target_user_id ?? null,
           is_active: Boolean(item.is_active),
           created_at: item.created_at,
         }))
@@ -1659,6 +1693,9 @@ export default function AdminPage() {
     setDiscountCodePercent("");
     setDiscountCodeAppliesToAll(false);
     setDiscountCodeActive(true);
+    setDiscountCodeAudience("all");
+    setDiscountCodeTargetUserId("");
+    setDiscountCodeUserSearch("");
     setDiscountCodeProductIds([]);
   }
 
@@ -1668,6 +1705,11 @@ export default function AdminPage() {
     setDiscountCodePercent(String(code.discount_percent));
     setDiscountCodeAppliesToAll(code.applies_to_all);
     setDiscountCodeActive(code.is_active);
+    setDiscountCodeAudience(
+      code.target_user_id ? "specific" : "all"
+    );
+    setDiscountCodeTargetUserId(code.target_user_id ?? "");
+    setDiscountCodeUserSearch("");
     setDiscountCodeProductIds(
       discountCodeProducts
         .filter((item) => item.discount_code_id === code.id)
@@ -1705,6 +1747,14 @@ export default function AdminPage() {
       return;
     }
 
+    if (
+      discountCodeAudience === "specific" &&
+      !discountCodeTargetUserId
+    ) {
+      setErrorMessage("اختر الشخص المخصص له كود الخصم");
+      return;
+    }
+
     setSavingDiscountCode(true);
 
     try {
@@ -1719,6 +1769,10 @@ export default function AdminPage() {
         ends_at: null,
         discount_percent: percent,
         applies_to_all: discountCodeAppliesToAll,
+        target_user_id:
+          discountCodeAudience === "specific"
+            ? discountCodeTargetUserId
+            : null,
         is_active: discountCodeActive,
       };
 
@@ -1784,9 +1838,11 @@ export default function AdminPage() {
           : normalizedMessage.includes("row-level security") ||
               normalizedMessage.includes("permission denied")
             ? "صلاحيات حفظ أكواد الخصم غير مفعلة. شغّل ملف SQL المرفق كاملًا."
-            : normalizedMessage.includes("applies_to_all")
-              ? "عمود خيار جميع الألعاب غير موجود. شغّل ملف SQL المرفق كاملًا."
-              : message
+            : normalizedMessage.includes("target_user_id")
+              ? "عمود المستخدم المخصص غير موجود. شغّل ملف SQL الجديد كاملًا."
+              : normalizedMessage.includes("applies_to_all")
+                ? "عمود خيار جميع الألعاب غير موجود. شغّل ملف SQL المرفق كاملًا."
+                : message
       );
     } finally {
       setSavingDiscountCode(false);
@@ -5020,7 +5076,7 @@ export default function AdminPage() {
                     </p>
                     <h2 className="mt-1 text-xl font-black">أكواد الخصم</h2>
                     <p className="mt-2 text-xs leading-6 text-gray-500">
-                      أنشئ كودًا وحدد نسبته والألعاب التي يظهر لها تحت مؤقت التخفيض.
+                      أنشئ كودًا وحدد نسبته وألعابه، واجعله عامًا أو مخصصًا لحساب شخص واحد فقط.
                     </p>
                   </div>
 
@@ -5107,6 +5163,137 @@ export default function AdminPage() {
                         className="h-5 w-5 accent-violet-500"
                       />
                     </label>
+
+                    <div className="rounded-[20px] border border-white/10 bg-black/20 p-4">
+                      <div>
+                        <p className="text-xs font-black">
+                          الأشخاص المسموح لهم باستخدام الكود
+                        </p>
+                        <p className="mt-1 text-[9px] leading-5 text-gray-500">
+                          الكود المخصص لا يظهر للمستخدمين، ولا يعمل إلا داخل الحساب الذي تختاره.
+                        </p>
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDiscountCodeAudience("all");
+                            setDiscountCodeTargetUserId("");
+                            setDiscountCodeUserSearch("");
+                          }}
+                          className={`rounded-[16px] border px-3 py-3 text-[10px] font-black transition ${
+                            discountCodeAudience === "all"
+                              ? "border-violet-400/40 bg-violet-500/15 text-violet-100"
+                              : "border-white/10 bg-white/[0.03] text-gray-400"
+                          }`}
+                        >
+                          جميع المستخدمين
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDiscountCodeAudience("specific")
+                          }
+                          className={`rounded-[16px] border px-3 py-3 text-[10px] font-black transition ${
+                            discountCodeAudience === "specific"
+                              ? "border-amber-400/40 bg-amber-500/10 text-amber-200"
+                              : "border-white/10 bg-white/[0.03] text-gray-400"
+                          }`}
+                        >
+                          شخص محدد فقط
+                        </button>
+                      </div>
+
+                      {discountCodeAudience === "specific" && (
+                        <div className="mt-3">
+                          <input
+                            value={discountCodeUserSearch}
+                            onChange={(event) =>
+                              setDiscountCodeUserSearch(
+                                event.target.value
+                              )
+                            }
+                            placeholder="ابحث بالاسم أو البريد أو رقم الجوال"
+                            className={adminInputClass}
+                          />
+
+                          <div className="mt-3 max-h-[230px] space-y-2 overflow-y-auto pl-1">
+                            {filteredDiscountCodeUsers.map(
+                              (profile) => {
+                                const selected =
+                                  discountCodeTargetUserId ===
+                                  profile.id;
+
+                                return (
+                                  <button
+                                    key={profile.id}
+                                    type="button"
+                                    onClick={() =>
+                                      setDiscountCodeTargetUserId(
+                                        profile.id
+                                      )
+                                    }
+                                    className={`flex w-full items-center gap-3 rounded-[16px] border p-3 text-right transition ${
+                                      selected
+                                        ? "border-amber-400/40 bg-amber-500/10"
+                                        : "border-white/10 bg-white/[0.025] hover:bg-white/5"
+                                    }`}
+                                  >
+                                    <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-violet-500/10 text-lg">
+                                      {profile.avatar_url ? (
+                                        <img
+                                          src={profile.avatar_url}
+                                          alt={
+                                            profile.display_name ||
+                                            "المستخدم"
+                                          }
+                                          className="h-full w-full object-cover"
+                                        />
+                                      ) : (
+                                        "👤"
+                                      )}
+                                    </div>
+
+                                    <div className="min-w-0 flex-1">
+                                      <p className="truncate text-[11px] font-black">
+                                        {profile.display_name ||
+                                          "بدون اسم"}
+                                      </p>
+                                      <p
+                                        dir="ltr"
+                                        className="mt-1 truncate text-left text-[9px] text-gray-500"
+                                      >
+                                        {profile.email ||
+                                          profile.phone ||
+                                          profile.id}
+                                      </p>
+                                    </div>
+
+                                    <span
+                                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] ${
+                                        selected
+                                          ? "border-amber-400 bg-amber-400 text-black"
+                                          : "border-white/20 text-transparent"
+                                      }`}
+                                    >
+                                      ✓
+                                    </span>
+                                  </button>
+                                );
+                              }
+                            )}
+
+                            {!filteredDiscountCodeUsers.length && (
+                              <div className="rounded-[16px] border border-dashed border-white/10 px-4 py-8 text-center text-[10px] text-gray-500">
+                                لم يتم العثور على مستخدم.
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
                     <button
                       type="button"
@@ -5256,6 +5443,12 @@ export default function AdminPage() {
                     const assignedNames = products
                       .filter((product) => assignedIds.includes(product.id))
                       .map((product) => product.name);
+                    const targetProfile = code.target_user_id
+                      ? profiles.find(
+                          (profile) =>
+                            profile.id === code.target_user_id
+                        ) ?? null
+                      : null;
 
                     return (
                       <article
@@ -5294,6 +5487,34 @@ export default function AdminPage() {
                                 ? assignedNames.join("، ")
                                 : "لا توجد ألعاب مرتبطة"}
                           </p>
+                        </div>
+
+                        <div
+                          className={`mt-2 rounded-[16px] border p-3 ${
+                            code.target_user_id
+                              ? "border-amber-400/15 bg-amber-500/[0.06]"
+                              : "border-white/[0.06] bg-black/20"
+                          }`}
+                        >
+                          <p className="text-[9px] text-gray-500">
+                            المستخدم المسموح
+                          </p>
+                          <p className="mt-1 truncate text-[10px] font-black text-gray-200">
+                            {code.target_user_id
+                              ? targetProfile?.display_name ||
+                                targetProfile?.email ||
+                                "حساب محدد"
+                              : "جميع المستخدمين"}
+                          </p>
+                          {code.target_user_id &&
+                            targetProfile?.email && (
+                              <p
+                                dir="ltr"
+                                className="mt-1 truncate text-left text-[8px] text-gray-500"
+                              >
+                                {targetProfile.email}
+                              </p>
+                            )}
                         </div>
 
                         <div className="mt-3 grid grid-cols-3 gap-2">

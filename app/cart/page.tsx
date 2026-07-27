@@ -255,7 +255,7 @@ export default function CartPage() {
         clearAppliedCoupon();
         setCouponCode(normalizedCode);
         setCouponMessage(
-          "كود الخصم غير صحيح أو غير مخصص للألعاب الموجودة في السلة"
+          "كود الخصم غير صحيح أو غير مخصص لحسابك أو للألعاب الموجودة في السلة"
         );
         return;
       }
