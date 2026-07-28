@@ -149,6 +149,7 @@ export default function HomePage() {
         platform: game.platform || "PC",
         price: game.price,
         href: game.detailsHref,
+        image: game.image,
       })),
       ...sharedGames.map((game) => ({
         id: `shared-${game.id}`,
@@ -157,6 +158,7 @@ export default function HomePage() {
         platform: game.platform,
         price: game.price,
         href: game.detailsHref,
+        image: game.image,
       })),
       ...privateGames.map((game) => ({
         id: `private-${game.id}`,
@@ -165,6 +167,7 @@ export default function HomePage() {
         platform: game.platform,
         price: game.price,
         href: game.detailsHref,
+        image: game.image,
       })),
       ...packageGames.map((game) => ({
         id: `package-${game.id}`,
@@ -173,6 +176,7 @@ export default function HomePage() {
         platform: game.platform,
         price: game.price,
         href: game.detailsHref,
+        image: game.image,
       })),
     ],
     [games, sharedGames, privateGames, packageGames]
@@ -1285,8 +1289,18 @@ export default function HomePage() {
                         onClick={clearSearch}
                         className="group flex items-center gap-3 rounded-[18px] px-3 py-3 transition hover:bg-violet-500/10 active:scale-[0.99]"
                       >
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-700/25 to-fuchsia-700/20 text-2xl">
-                          🎮
+                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-violet-700/25 to-fuchsia-700/20">
+                          {game.image ? (
+                            <img
+                              src={game.image}
+                              alt={game.name}
+                              className="h-full w-full object-cover transition duration-200 group-hover:scale-105"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-2xl">
+                              🎮
+                            </div>
+                          )}
                         </div>
 
                         <div className="min-w-0 flex-1">
