@@ -1359,9 +1359,11 @@ export default function HomePage() {
                 عروض محدودة 🔥
               </span>
 
-              <h2 className="max-w-[290px] text-3xl font-black leading-tight sm:text-5xl">
-                عالم الـ PC بمتناول يدك
-                <span className="block bg-gradient-to-l from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">
+              <h2 className="max-w-none font-black leading-tight">
+                <span className="block whitespace-nowrap text-[clamp(1.55rem,7vw,3rem)]">
+                  عالم الـ PC بمتناول يدك
+                </span>
+                <span className="block bg-gradient-to-l from-violet-400 to-fuchsia-400 bg-clip-text text-[clamp(1.9rem,8vw,3rem)] text-transparent">
                   بأقوى الأسعار
                 </span>
               </h2>
