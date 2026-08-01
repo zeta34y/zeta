@@ -4187,14 +4187,25 @@ export default function AdminPage() {
                           )}
                         </div>
 
-                        <p
-                          dir="ltr"
-                          className="mt-1 truncate text-left text-[10px] text-gray-500"
-                        >
-                          {profile.email ||
-                            profile.phone ||
-                            "لا توجد بيانات اتصال"}
-                        </p>
+                        <div className="mt-1 space-y-1">
+                          <p
+                            dir="ltr"
+                            className="truncate text-left text-[10px] text-gray-500"
+                          >
+                            {profile.email || "لا يوجد بريد إلكتروني"}
+                          </p>
+
+                          <p
+                            dir="ltr"
+                            className={`truncate text-left text-[10px] ${
+                              profile.phone
+                                ? "font-bold text-violet-200"
+                                : "text-gray-600"
+                            }`}
+                          >
+                            {profile.phone || "لا يوجد رقم جوال"}
+                          </p>
+                        </div>
 
                         <div className="mt-2 flex flex-wrap gap-2 text-[8px] text-gray-500">
                           <span>
