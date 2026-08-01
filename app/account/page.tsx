@@ -52,6 +52,16 @@ function getAuthErrorMessage(error: unknown, fallback: string) {
   return message || fallback;
 }
 
+function getContactPhone(user: User | null) {
+  const metadataPhone = user?.user_metadata?.contact_phone;
+
+  if (typeof metadataPhone === "string" && metadataPhone.trim()) {
+    return metadataPhone.trim();
+  }
+
+  return user?.phone || "";
+}
+
 export default function AccountPage() {
   const router = useRouter();
 
@@ -134,7 +144,7 @@ export default function AccountPage() {
             ""
         );
         setEmail(currentUser.email || "");
-        setPhone(currentUser.phone || "");
+        setPhone(getContactPhone(currentUser));
       } catch (error) {
         console.error("تعذر تحميل الحساب:", error);
 
@@ -160,6 +170,7 @@ export default function AccountPage() {
         }
 
         setUser(session.user);
+        setPhone((current) => current || getContactPhone(session.user));
       }
     );
 
@@ -252,25 +263,14 @@ export default function AccountPage() {
     setSavingProfile(true);
 
     try {
-      const profileUpdates: {
+      const profileUpdates = {
         data: {
-          full_name: string;
-          name: string;
-        };
-        phone?: string;
-      } = {
-        data: {
+          ...user.user_metadata,
           full_name: cleanedName,
           name: cleanedName,
+          contact_phone: cleanedPhone || null,
         },
       };
-
-      if (
-        cleanedPhone &&
-        cleanedPhone !== user.phone
-      ) {
-        profileUpdates.phone = cleanedPhone;
-      }
 
       const { data: profileData, error: profileError } =
         await supabase.auth.updateUser(profileUpdates);
@@ -278,6 +278,7 @@ export default function AccountPage() {
       if (profileError) throw profileError;
 
       setUser(profileData.user);
+      setPhone(getContactPhone(profileData.user));
 
       if (shouldChangeEmail) {
         const { error: emailChangeError } =
