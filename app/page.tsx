@@ -1360,14 +1360,14 @@ export default function HomePage() {
               </span>
 
               <h2 className="max-w-[290px] text-3xl font-black leading-tight sm:text-5xl">
-                ألعابك المفضلة
+                عالم الـ PC بمتناول يدك
                 <span className="block bg-gradient-to-l from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">
-                  بأسعار رمزية
+                  بأقوى الأسعار
                 </span>
               </h2>
 
               <p className="mt-3 max-w-[310px] text-sm leading-6 text-gray-400">
-                اشترِ ألعابك الرقمية بسرعة، واستلمها مباشرة بعد الدفع.
+                من الكلاسيكيات لأحدث الإصدارات، كل ألعاب البيسي بانتظارك.. ادفع واستلم حسابك مباشرة.
               </p>
 
               <div className="mt-6 flex items-center gap-3">
