@@ -310,7 +310,7 @@ export default function LoginSheet({
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/account`,
+          redirectTo: `${window.location.origin}/auth/callback?next=/account`,
           skipBrowserRedirect: true,
           queryParams: {
             prompt: "select_account",
