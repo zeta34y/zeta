@@ -599,6 +599,23 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
+    // نخفي طبقة أول تحميل فقط بعد أن تصبح شاشة الأنميشن الأصلية جاهزة.
+    const firstPaintSplash = document.getElementById(
+      "zeta-first-paint-splash"
+    );
+
+    if (!firstPaintSplash) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      firstPaintSplash.classList.add("zeta-first-paint-ready");
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  useEffect(() => {
     // نعيد تشغيل أنميشن الدخول عند فتح الصفحة أو عند تحديثها محليًا.
     setShowSplash(true);
     setSplashClosing(false);
