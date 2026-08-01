@@ -7,6 +7,50 @@ import type { User } from "@supabase/supabase-js";
 import BottomNav from "@/components/BottomNav";
 import { supabase } from "@/lib/supabase";
 
+function getAuthErrorMessage(error: unknown, fallback: string) {
+  const message =
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof (error as { message?: unknown }).message === "string"
+      ? (error as { message: string }).message
+      : error instanceof Error
+        ? error.message
+        : "";
+
+  const normalized = message.toLowerCase();
+
+  if (
+    normalized.includes("expired") ||
+    normalized.includes("otp_expired")
+  ) {
+    return "انتهت صلاحية الرمز. أرسل طلب تغيير البريد مرة أخرى.";
+  }
+
+  if (
+    normalized.includes("invalid") ||
+    normalized.includes("token") ||
+    normalized.includes("otp")
+  ) {
+    return "رمز التحقق غير صحيح أو انتهت صلاحيته.";
+  }
+
+  if (
+    normalized.includes("rate limit") ||
+    normalized.includes("too many")
+  ) {
+    return "تم إرسال محاولات كثيرة. انتظر قليلًا ثم حاول مرة أخرى.";
+  }
+
+  if (
+    normalized.includes("already") &&
+    normalized.includes("registered")
+  ) {
+    return "هذا البريد مستخدم في حساب آخر.";
+  }
+
+  return message || fallback;
+}
 
 export default function AccountPage() {
   const router = useRouter();
@@ -20,6 +64,16 @@ export default function AccountPage() {
 
   const [savingProfile, setSavingProfile] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+
+  const [emailVerificationOpen, setEmailVerificationOpen] =
+    useState(false);
+  const [pendingEmail, setPendingEmail] = useState("");
+  const [currentEmailCode, setCurrentEmailCode] = useState("");
+  const [newEmailCode, setNewEmailCode] = useState("");
+  const [currentEmailVerified, setCurrentEmailVerified] =
+    useState(false);
+  const [verifyingEmailChange, setVerifyingEmailChange] =
+    useState(false);
 
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
@@ -45,6 +99,14 @@ export default function AccountPage() {
     user?.email?.split("@")[0] ||
     user?.phone ||
     "مستخدم ZETA";
+
+  const normalizedCurrentEmail = (user?.email || "")
+    .trim()
+    .toLowerCase();
+  const normalizedEnteredEmail = email.trim().toLowerCase();
+  const emailHasChanged =
+    Boolean(normalizedEnteredEmail) &&
+    normalizedEnteredEmail !== normalizedCurrentEmail;
 
   useEffect(() => {
     let mounted = true;
@@ -136,6 +198,10 @@ export default function AccountPage() {
     );
   }
 
+  function cleanOtp(value: string) {
+    return value.replace(/\D/g, "").slice(0, 8);
+  }
+
   function validateEmail(value: string) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(
       value.trim()
@@ -148,13 +214,23 @@ export default function AccountPage() {
   }
 
   async function saveProfile() {
-    if (!user || savingProfile) return;
+    if (
+      !user ||
+      savingProfile ||
+      verifyingEmailChange ||
+      emailVerificationOpen
+    ) {
+      return;
+    }
 
     clearMessages();
 
     const cleanedName = name.trim();
     const cleanedEmail = email.trim().toLowerCase();
     const cleanedPhone = phone.trim();
+    const shouldChangeEmail =
+      Boolean(cleanedEmail) &&
+      cleanedEmail !== (user.email || "").trim().toLowerCase();
 
     if (!cleanedName) {
       setErrorMessage("اكتب اسم المستخدم");
@@ -176,12 +252,11 @@ export default function AccountPage() {
     setSavingProfile(true);
 
     try {
-      const updates: {
+      const profileUpdates: {
         data: {
           full_name: string;
           name: string;
         };
-        email?: string;
         phone?: string;
       } = {
         data: {
@@ -191,46 +266,151 @@ export default function AccountPage() {
       };
 
       if (
-        cleanedEmail &&
-        cleanedEmail !== user.email
-      ) {
-        updates.email = cleanedEmail;
-      }
-
-      if (
         cleanedPhone &&
         cleanedPhone !== user.phone
       ) {
-        updates.phone = cleanedPhone;
+        profileUpdates.phone = cleanedPhone;
       }
 
-      const { data, error } =
-        await supabase.auth.updateUser(updates);
+      const { data: profileData, error: profileError } =
+        await supabase.auth.updateUser(profileUpdates);
 
-      if (error) throw error;
+      if (profileError) throw profileError;
 
-      setUser(data.user);
+      setUser(profileData.user);
 
-      setMessage(
-        updates.email || updates.phone
-          ? "تم حفظ البيانات. قد تحتاج إلى تأكيد البريد أو الجوال الجديد."
-          : "تم تحديث اسمك وبيانات حسابك بنجاح."
-      );
+      if (shouldChangeEmail) {
+        const { error: emailChangeError } =
+          await supabase.auth.updateUser({
+            email: cleanedEmail,
+          });
+
+        if (emailChangeError) throw emailChangeError;
+
+        setPendingEmail(cleanedEmail);
+        setCurrentEmailCode("");
+        setNewEmailCode("");
+        setCurrentEmailVerified(false);
+        setEmailVerificationOpen(true);
+        setMessage(
+          user.email
+            ? "أرسلنا رمزًا إلى بريدك الحالي ورمزًا إلى البريد الجديد. أدخل الرمزين لإكمال التغيير."
+            : "أرسلنا رمز تحقق إلى البريد الجديد. أدخل الرمز لإكمال إضافته."
+        );
+      } else {
+        setMessage("تم تحديث بيانات حسابك بنجاح.");
+      }
 
       window.dispatchEvent(
         new CustomEvent("zeta-auth-updated", {
-          detail: data.user,
+          detail: profileData.user,
         })
       );
     } catch (error) {
       setErrorMessage(
-        error instanceof Error
-          ? error.message
-          : "تعذر حفظ بيانات الحساب"
+        getAuthErrorMessage(
+          error,
+          "تعذر حفظ بيانات الحساب"
+        )
       );
     } finally {
       setSavingProfile(false);
     }
+  }
+
+  async function verifyEmailChange() {
+    if (!user || !pendingEmail || verifyingEmailChange) return;
+
+    clearMessages();
+
+    const oldEmail = (user.email || "").trim().toLowerCase();
+    const oldCode = currentEmailCode.trim();
+    const nextCode = newEmailCode.trim();
+
+    if (
+      oldEmail &&
+      !currentEmailVerified &&
+      oldCode.length < 6
+    ) {
+      setErrorMessage("اكتب الرمز المرسل إلى بريدك الحالي.");
+      return;
+    }
+
+    if (nextCode.length < 6) {
+      setErrorMessage("اكتب الرمز المرسل إلى البريد الجديد.");
+      return;
+    }
+
+    setVerifyingEmailChange(true);
+
+    try {
+      if (oldEmail && !currentEmailVerified) {
+        const { error: currentEmailError } =
+          await supabase.auth.verifyOtp({
+            email: oldEmail,
+            token: oldCode,
+            type: "email_change",
+          });
+
+        if (currentEmailError) throw currentEmailError;
+
+        setCurrentEmailVerified(true);
+      }
+
+      const { error: newEmailError } =
+        await supabase.auth.verifyOtp({
+          email: pendingEmail,
+          token: nextCode,
+          type: "email_change",
+        });
+
+      if (newEmailError) throw newEmailError;
+
+      const {
+        data: { user: refreshedUser },
+        error: refreshError,
+      } = await supabase.auth.getUser();
+
+      if (refreshError) throw refreshError;
+
+      const updatedUser = refreshedUser || user;
+
+      setUser(updatedUser);
+      setEmail(updatedUser.email || pendingEmail);
+      setPendingEmail("");
+      setCurrentEmailCode("");
+      setNewEmailCode("");
+      setCurrentEmailVerified(false);
+      setEmailVerificationOpen(false);
+      setMessage("تم تغيير البريد الإلكتروني وتأكيده بنجاح.");
+
+      window.dispatchEvent(
+        new CustomEvent("zeta-auth-updated", {
+          detail: updatedUser,
+        })
+      );
+
+      router.refresh();
+    } catch (error) {
+      setErrorMessage(
+        getAuthErrorMessage(
+          error,
+          "تعذر التحقق من رموز تغيير البريد"
+        )
+      );
+    } finally {
+      setVerifyingEmailChange(false);
+    }
+  }
+
+  function abandonEmailChange() {
+    setEmailVerificationOpen(false);
+    setPendingEmail("");
+    setCurrentEmailCode("");
+    setNewEmailCode("");
+    setCurrentEmailVerified(false);
+    setEmail(user?.email || "");
+    clearMessages();
   }
 
   async function handleLogout() {
@@ -428,9 +608,14 @@ export default function AccountPage() {
                   }
                   autoComplete="email"
                   placeholder="name@example.com"
-                  className="min-w-0 flex-1 bg-transparent py-4 text-left text-sm text-white outline-none placeholder:text-gray-600"
+                  readOnly={emailVerificationOpen}
+                  className="min-w-0 flex-1 bg-transparent py-4 text-left text-sm text-white outline-none placeholder:text-gray-600 read-only:cursor-not-allowed read-only:opacity-60"
                 />
               </div>
+
+              <p className="mt-2 text-[9px] leading-5 text-gray-500">
+                تغيير البريد يتطلب تأكيد البريد الحالي والجديد قبل اعتماده.
+              </p>
             </label>
 
             <label className="mt-4 block">
@@ -458,18 +643,176 @@ export default function AccountPage() {
             <button
               type="button"
               onClick={saveProfile}
-              disabled={savingProfile}
+              disabled={
+                savingProfile ||
+                verifyingEmailChange ||
+                emailVerificationOpen
+              }
               className="mt-5 flex w-full items-center justify-center gap-2 rounded-[20px] bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-4 text-sm font-black shadow-xl shadow-violet-950/30 transition hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
             >
               <span>
                 {savingProfile
                   ? "جاري الحفظ..."
-                  : "حفظ التغييرات"}
+                  : emailVerificationOpen
+                    ? "بانتظار تأكيد البريد"
+                    : emailHasChanged
+                      ? "حفظ وإرسال رموز التحقق"
+                      : "حفظ التغييرات"}
               </span>
-              {!savingProfile && <span>✓</span>}
+              {!savingProfile && !emailVerificationOpen && (
+                <span>✓</span>
+              )}
             </button>
           </div>
         </section>
+
+        {emailVerificationOpen && pendingEmail && (
+          <section className="mt-4 overflow-hidden rounded-[28px] border border-cyan-400/15 bg-[#121019] shadow-xl">
+            <div className="relative overflow-hidden border-b border-white/[0.06] p-4">
+              <div className="absolute -left-10 -top-10 h-28 w-28 rounded-full bg-cyan-500/10 blur-3xl" />
+
+              <div className="relative flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[9px] font-bold text-cyan-300">
+                    حماية البريد
+                  </p>
+                  <h2 className="mt-1 text-base font-black">
+                    تأكيد تغيير البريد
+                  </h2>
+                  <p className="mt-1 text-[10px] leading-5 text-gray-500">
+                    لن يتغير البريد حتى يتم التحقق من الرموز المطلوبة.
+                  </p>
+                </div>
+
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-cyan-500/10 text-2xl">
+                  🛡️
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-4 p-4">
+              <div className="rounded-[20px] border border-white/[0.07] bg-black/20 p-3">
+                {user.email && (
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-[9px] text-gray-500">
+                      البريد الحالي
+                    </span>
+                    <span
+                      dir="ltr"
+                      className="break-all text-left text-[10px] font-bold text-gray-300"
+                    >
+                      {user.email}
+                    </span>
+                  </div>
+                )}
+
+                <div
+                  className={`flex items-start justify-between gap-3 ${
+                    user.email
+                      ? "mt-3 border-t border-white/[0.06] pt-3"
+                      : ""
+                  }`}
+                >
+                  <span className="text-[9px] text-gray-500">
+                    البريد الجديد
+                  </span>
+                  <span
+                    dir="ltr"
+                    className="break-all text-left text-[10px] font-bold text-cyan-200"
+                  >
+                    {pendingEmail}
+                  </span>
+                </div>
+              </div>
+
+              {user.email && !currentEmailVerified && (
+                <label className="block">
+                  <span className="text-[11px] font-black text-gray-300">
+                    رمز البريد الحالي
+                  </span>
+                  <p className="mt-1 text-[9px] leading-5 text-gray-500">
+                    افتح بريدك الحالي وانسخ رمز التحقق المرسل إليه.
+                  </p>
+
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    dir="ltr"
+                    value={currentEmailCode}
+                    onChange={(event) =>
+                      setCurrentEmailCode(
+                        cleanOtp(event.target.value)
+                      )
+                    }
+                    maxLength={8}
+                    placeholder="000000"
+                    className="mt-2 w-full rounded-[20px] border border-white/10 bg-white/[0.04] px-4 py-4 text-center text-lg font-black tracking-[0.35em] text-white outline-none transition placeholder:text-gray-700 focus:border-cyan-400/50"
+                  />
+                </label>
+              )}
+
+              {user.email && currentEmailVerified && (
+                <div className="rounded-[20px] border border-emerald-400/15 bg-emerald-500/10 px-4 py-3 text-[10px] font-bold text-emerald-300">
+                  ✓ تم تأكيد البريد الحالي، أكمل رمز البريد الجديد.
+                </div>
+              )}
+
+              <label className="block">
+                <span className="text-[11px] font-black text-gray-300">
+                  رمز البريد الجديد
+                </span>
+                <p className="mt-1 text-[9px] leading-5 text-gray-500">
+                  افتح البريد الجديد وانسخ رمز التحقق المرسل إليه.
+                </p>
+
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  dir="ltr"
+                  value={newEmailCode}
+                  onChange={(event) =>
+                    setNewEmailCode(
+                      cleanOtp(event.target.value)
+                    )
+                  }
+                  maxLength={8}
+                  placeholder="000000"
+                  className="mt-2 w-full rounded-[20px] border border-white/10 bg-white/[0.04] px-4 py-4 text-center text-lg font-black tracking-[0.35em] text-white outline-none transition placeholder:text-gray-700 focus:border-cyan-400/50"
+                />
+              </label>
+
+              <button
+                type="button"
+                onClick={verifyEmailChange}
+                disabled={verifyingEmailChange}
+                className="flex w-full items-center justify-center gap-2 rounded-[20px] bg-gradient-to-l from-cyan-600 to-violet-600 px-5 py-4 text-sm font-black shadow-xl shadow-cyan-950/20 transition hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {verifyingEmailChange ? (
+                  <>
+                    <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                    <span>جاري التحقق...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>تأكيد وتغيير البريد</span>
+                    <span>✓</span>
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={abandonEmailChange}
+                disabled={verifyingEmailChange}
+                className="w-full rounded-[18px] border border-white/10 bg-white/[0.04] px-4 py-3 text-[10px] font-black text-gray-400 transition hover:bg-white/[0.07] active:scale-[0.98] disabled:opacity-50"
+              >
+                إغلاق التحقق واستخدام البريد الحالي
+              </button>
+            </div>
+          </section>
+        )}
 
         {message && (
           <div className="mt-4 rounded-[22px] border border-emerald-400/15 bg-emerald-500/10 px-4 py-3.5 text-center text-[11px] font-bold leading-5 text-emerald-300">
