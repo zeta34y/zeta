@@ -62,8 +62,14 @@ type ProductImageRow = {
 type PackageOption = {
   id: string;
   name: string;
+  slug: string;
+  description: string | null;
   price: number;
+  old_price: number | null;
+  stock: number;
   image_url: string | null;
+  is_featured: boolean;
+  is_active: boolean;
 };
 
 type HomeSourceOption = {
@@ -77,6 +83,14 @@ type HomeSectionKey =
   | "shared"
   | "private"
   | "packages";
+
+type ProductDisplayKind =
+  | "featured"
+  | "shared"
+  | "private"
+  | "package";
+
+type ProductHomeSection = "" | HomeSectionKey;
 
 type HomeCategory = {
   id: string;
@@ -405,6 +419,8 @@ export default function AdminPage() {
 
   const [productFormOpen, setProductFormOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductOption | null>(null);
+  const [editingPackage, setEditingPackage] = useState<PackageOption | null>(null);
+  const [packageProductIds, setPackageProductIds] = useState<string[]>([]);
   const [productName, setProductName] = useState("");
   const [productPlatform, setProductPlatform] = useState("PC");
   const [productDetailCategory, setProductDetailCategory] = useState("");
@@ -418,9 +434,9 @@ export default function AdminPage() {
   const [productSoldCount, setProductSoldCount] = useState("0");
   const [productStock, setProductStock] = useState("0");
   const [productDisplayKind, setProductDisplayKind] =
-    useState<"featured" | "shared" | "private">("featured");
+    useState<ProductDisplayKind>("featured");
   const [productHomeSection, setProductHomeSection] =
-    useState<"" | "featured" | "shared" | "private">("");
+    useState<ProductHomeSection>("");
   const [productCategoryIds, setProductCategoryIds] = useState<string[]>([]);
   const [productActive, setProductActive] = useState(true);
   const [productNewImages, setProductNewImages] = useState<File[]>([]);
@@ -918,7 +934,9 @@ export default function AdminPage() {
 
         supabase
           .from("packages")
-          .select("id, name, price, image_url")
+          .select(
+            "id, name, slug, description, price, old_price, stock, image_url, is_featured, is_active"
+          )
           .order("name", { ascending: true }),
 
         supabase
@@ -1075,8 +1093,17 @@ export default function AdminPage() {
         (packagesResult.data ?? []).map((pkg) => ({
           id: pkg.id,
           name: pkg.name,
+          slug: pkg.slug ?? pkg.id,
+          description: pkg.description ?? null,
           price: toNumber(pkg.price),
+          old_price:
+            pkg.old_price === null || pkg.old_price === undefined
+              ? null
+              : toNumber(pkg.old_price),
+          stock: Math.max(0, Math.floor(toNumber(pkg.stock))),
           image_url: pkg.image_url ?? null,
+          is_featured: Boolean(pkg.is_featured),
+          is_active: Boolean(pkg.is_active),
         }))
       );
 
@@ -1297,6 +1324,30 @@ export default function AdminPage() {
     return data.publicUrl;
   }
 
+  async function uploadPackageImage(file: File) {
+    if (!file.type.startsWith("image/")) {
+      throw new Error("اختر ملف صورة فقط");
+    }
+
+    if (file.size > 8 * 1024 * 1024) {
+      throw new Error("حجم الصورة يجب ألا يتجاوز 8 ميجابايت");
+    }
+
+    const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
+    const path = `packages/${crypto.randomUUID()}.${extension}`;
+    const { error } = await supabase.storage
+      .from("product-images")
+      .upload(path, file, { cacheControl: "3600", upsert: false });
+
+    if (error) throw error;
+
+    const { data } = supabase.storage
+      .from("product-images")
+      .getPublicUrl(path);
+
+    return data.publicUrl;
+  }
+
   function addProductImageFiles(fileList: FileList | null) {
     const selectedFiles = Array.from(fileList ?? []).filter((file) =>
       file.type.startsWith("image/")
@@ -1330,6 +1381,8 @@ export default function AdminPage() {
 
   function resetProductForm() {
     setEditingProduct(null);
+    setEditingPackage(null);
+    setPackageProductIds([]);
     setProductName("");
     setProductPlatform("PC");
     setProductDetailCategory("");
@@ -1400,6 +1453,112 @@ export default function AdminPage() {
     setProductFormOpen(true);
   }
 
+  async function openPackageForm(pkg?: PackageOption) {
+    resetProductForm();
+    setProductDisplayKind("package");
+    setProductHomeSection("packages");
+
+    if (pkg) {
+      setEditingPackage(pkg);
+      setProductName(pkg.name);
+      setProductPrice(String(pkg.price));
+      setProductOldPrice(
+        pkg.old_price === null ? "" : String(pkg.old_price)
+      );
+      setProductDescription(pkg.description || "");
+      setProductStock(String(pkg.stock));
+      setProductActive(pkg.is_active);
+
+      const homeItem = homePageItems.find(
+        (item) => item.package_id === pkg.id
+      );
+      setProductHomeSection(
+        homeItem?.section_key === "packages" ? "packages" : ""
+      );
+
+      setProductCategoryIds(
+        homeCategoryItems
+          .filter((item) => item.package_id === pkg.id)
+          .map((item) => item.category_id)
+      );
+
+      const { data, error } = await supabase
+        .from("package_items")
+        .select("product_id")
+        .eq("package_id", pkg.id);
+
+      if (error) {
+        setErrorMessage(error.message);
+      } else {
+        setPackageProductIds(
+          (data ?? [])
+            .map((item) => item.product_id)
+            .filter((id): id is string => Boolean(id))
+        );
+      }
+    }
+
+    setProductFormOpen(true);
+  }
+
+  function changeProductDisplayKind(nextKind: ProductDisplayKind) {
+    setErrorMessage("");
+
+    if (editingProduct && nextKind === "package") {
+      setErrorMessage(
+        "لا يمكن تحويل لعبة محفوظة إلى بكج. أضف بكجًا جديدًا من زر «إضافة بكج»."
+      );
+      return;
+    }
+
+    if (editingPackage && nextKind !== "package") {
+      setErrorMessage(
+        "لا يمكن تحويل البكج المحفوظ إلى لعبة. أضف لعبة جديدة بدلًا من ذلك."
+      );
+      return;
+    }
+
+    setProductDisplayKind(nextKind);
+
+    if (nextKind === "package") {
+      setProductHomeSection("packages");
+      setProductNewImages((current) => current.slice(0, 1));
+      return;
+    }
+
+    if (productHomeSection === "packages") {
+      setProductHomeSection("");
+    }
+  }
+
+  function changeProductHomeSection(nextSection: ProductHomeSection) {
+    setErrorMessage("");
+
+    if (nextSection === "packages") {
+      if (editingProduct) {
+        setErrorMessage(
+          "قسم بكجات الألعاب مخصص للبكجات. أضف بكجًا جديدًا بدل تحويل اللعبة."
+        );
+        return;
+      }
+
+      setProductDisplayKind("package");
+      setProductHomeSection("packages");
+      setProductNewImages((current) => current.slice(0, 1));
+      return;
+    }
+
+    if (
+      productDisplayKind === "package" &&
+      nextSection !== ""
+    ) {
+      setErrorMessage("البكج يظهر في قسم بكجات الألعاب فقط.");
+      return;
+    }
+
+    setProductHomeSection(nextSection);
+  }
+
   async function syncProductPlacements(productId: string) {
     const { error: deleteHomeError } = await supabase
       .from("home_page_items")
@@ -1456,6 +1615,180 @@ export default function AdminPage() {
         .from("home_category_items")
         .insert(rows);
       if (error) throw error;
+    }
+  }
+
+  async function syncPackagePlacements(packageId: string) {
+    const { error: deleteHomeError } = await supabase
+      .from("home_page_items")
+      .delete()
+      .eq("package_id", packageId);
+
+    if (deleteHomeError) throw deleteHomeError;
+
+    if (productHomeSection === "packages") {
+      const sectionItems = homePageItems.filter(
+        (item) =>
+          item.section_key === "packages" &&
+          item.package_id !== packageId
+      );
+      const nextOrder = sectionItems.length
+        ? Math.max(...sectionItems.map((item) => item.sort_order)) + 1
+        : 0;
+
+      const { error } = await supabase.from("home_page_items").insert({
+        section_key: "packages",
+        product_id: null,
+        package_id: packageId,
+        sort_order: nextOrder,
+        is_active: true,
+      });
+
+      if (error) throw error;
+    }
+
+    const { error: deleteCategoriesError } = await supabase
+      .from("home_category_items")
+      .delete()
+      .eq("package_id", packageId);
+
+    if (deleteCategoriesError) throw deleteCategoriesError;
+
+    if (productCategoryIds.length) {
+      const rows = productCategoryIds.map((categoryId) => {
+        const existingItems = homeCategoryItems.filter(
+          (item) =>
+            item.category_id === categoryId &&
+            item.package_id !== packageId
+        );
+        const nextOrder = existingItems.length
+          ? Math.max(...existingItems.map((item) => item.sort_order)) + 1
+          : 0;
+
+        return {
+          category_id: categoryId,
+          product_id: null,
+          package_id: packageId,
+          sort_order: nextOrder,
+          is_active: true,
+        };
+      });
+
+      const { error } = await supabase
+        .from("home_category_items")
+        .insert(rows);
+
+      if (error) throw error;
+    }
+  }
+
+  async function savePackage() {
+    setErrorMessage("");
+
+    if (!productName.trim()) {
+      setErrorMessage("اكتب اسم البكج");
+      return;
+    }
+
+    if (!productPrice || toNumber(productPrice) < 0) {
+      setErrorMessage("اكتب سعر البكج");
+      return;
+    }
+
+    if (!packageProductIds.length) {
+      setErrorMessage("اختر لعبة واحدة على الأقل داخل البكج");
+      return;
+    }
+
+    setSavingProduct(true);
+
+    try {
+      let imageUrl = editingPackage?.image_url ?? null;
+
+      if (productNewImages[0]) {
+        imageUrl = await uploadPackageImage(productNewImages[0]);
+      }
+
+      const payload = {
+        name: productName.trim(),
+        slug:
+          editingPackage?.slug ||
+          `${makeProductSlug(productName) || "package"}-${Date.now()}`,
+        description: productDescription.trim() || null,
+        image_url: imageUrl,
+        price: toNumber(productPrice),
+        old_price: productOldPrice ? toNumber(productOldPrice) : null,
+        stock: Math.max(0, Math.floor(toNumber(productStock))),
+        is_featured: editingPackage?.is_featured ?? false,
+        is_active: productActive,
+        created_by: user?.id ?? null,
+      };
+
+      let packageId = editingPackage?.id;
+
+      if (editingPackage) {
+        const { error } = await supabase
+          .from("packages")
+          .update({
+            name: payload.name,
+            slug: payload.slug,
+            description: payload.description,
+            image_url: payload.image_url,
+            price: payload.price,
+            old_price: payload.old_price,
+            stock: payload.stock,
+            is_featured: payload.is_featured,
+            is_active: payload.is_active,
+          })
+          .eq("id", editingPackage.id);
+
+        if (error) throw error;
+      } else {
+        const { data, error } = await supabase
+          .from("packages")
+          .insert(payload)
+          .select("id")
+          .single();
+
+        if (error) throw error;
+        packageId = data.id;
+      }
+
+      if (!packageId) throw new Error("تعذر حفظ البكج");
+
+      const { error: deleteItemsError } = await supabase
+        .from("package_items")
+        .delete()
+        .eq("package_id", packageId);
+
+      if (deleteItemsError) throw deleteItemsError;
+
+      const { error: itemsError } = await supabase
+        .from("package_items")
+        .insert(
+          packageProductIds.map((productId) => ({
+            package_id: packageId,
+            product_id: productId,
+            quantity: 1,
+          }))
+        );
+
+      if (itemsError) throw itemsError;
+
+      await syncPackagePlacements(packageId);
+
+      showMessage(
+        editingPackage ? "تم تعديل البكج" : "تمت إضافة البكج"
+      );
+      setProductFormOpen(false);
+      resetProductForm();
+      await loadData();
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "تعذر حفظ البكج"
+      );
+    } finally {
+      setSavingProduct(false);
     }
   }
 
@@ -1607,6 +1940,37 @@ export default function AdminPage() {
       .from("products")
       .update({ is_active: !product.is_active })
       .eq("id", product.id);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
+    await loadData();
+  }
+
+  async function deletePackage(pkg: PackageOption) {
+    if (!window.confirm(`حذف بكج ${pkg.name} نهائيًا؟`)) return;
+
+    const { error } = await supabase
+      .from("packages")
+      .delete()
+      .eq("id", pkg.id);
+
+    if (error) {
+      setErrorMessage(error.message);
+      return;
+    }
+
+    showMessage("تم حذف البكج");
+    await loadData();
+  }
+
+  async function togglePackageActive(pkg: PackageOption) {
+    const { error } = await supabase
+      .from("packages")
+      .update({ is_active: !pkg.is_active })
+      .eq("id", pkg.id);
 
     if (error) {
       setErrorMessage(error.message);
@@ -4020,19 +4384,29 @@ export default function AdminPage() {
                   <p className="text-[10px] font-bold text-violet-300">
                     إدارة محتوى المتجر
                   </p>
-                  <h2 className="mt-1 text-xl font-black">إدارة الألعاب</h2>
+                  <h2 className="mt-1 text-xl font-black">إدارة الألعاب والبكجات</h2>
                   <p className="mt-2 text-xs leading-6 text-gray-500">
-                    أضف اللعبة وعدّل بطاقتها وصفحة تفاصيلها وصورها ومكان ظهورها، بدون تغيير التصميم.
+                    أضف الألعاب والبكجات وعدّل الأسعار والصور ومكان ظهور كل عنصر، بدون تغيير التصميم.
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => openProductForm()}
-                  className="shrink-0 rounded-[18px] bg-gradient-to-l from-violet-600 to-fuchsia-600 px-4 py-3 text-xs font-black shadow-lg shadow-violet-950/30"
-                >
-                  + إضافة لعبة
-                </button>
+                <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openProductForm()}
+                    className="rounded-[18px] bg-gradient-to-l from-violet-600 to-fuchsia-600 px-4 py-3 text-xs font-black shadow-lg shadow-violet-950/30"
+                  >
+                    + إضافة لعبة
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => void openPackageForm()}
+                    className="rounded-[18px] border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-xs font-black text-amber-200"
+                  >
+                    + إضافة بكج
+                  </button>
+                </div>
               </div>
 
               <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -4123,9 +4497,88 @@ export default function AdminPage() {
                   );
                 })}
 
-                {!products.length && (
+                {packages.map((pkg) => (
+                  <article
+                    key={`package-${pkg.id}`}
+                    className="overflow-hidden rounded-[22px] border border-amber-400/15 bg-black/20"
+                  >
+                    <div className="relative aspect-[16/10] overflow-hidden bg-gradient-to-br from-amber-700/20 to-orange-700/15">
+                      {pkg.image_url ? (
+                        <img
+                          src={pkg.image_url}
+                          alt={pkg.name}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-full items-center justify-center text-5xl">🎁</div>
+                      )}
+
+                      <span className="absolute right-2 top-2 rounded-lg border border-amber-300/20 bg-amber-500/85 px-2 py-1 text-[9px] font-black text-black">
+                        بكج ألعاب
+                      </span>
+                    </div>
+
+                    <div className="p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-black">{pkg.name}</p>
+                          <p className="mt-1 text-[9px] text-gray-500">
+                            المخزون: {pkg.stock.toLocaleString("ar-SA")}
+                          </p>
+                        </div>
+
+                        <span
+                          className={`rounded-full px-2 py-1 text-[8px] font-black ${
+                            pkg.is_active
+                              ? "bg-emerald-500/10 text-emerald-300"
+                              : "bg-red-500/10 text-red-300"
+                          }`}
+                        >
+                          {pkg.is_active ? "ظاهر" : "مخفي"}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 flex items-end justify-between">
+                        <p className="text-base font-black">{formatMoney(pkg.price)}</p>
+                        {pkg.old_price !== null && pkg.old_price > pkg.price && (
+                          <p className="text-[9px] text-gray-500 line-through">
+                            {formatMoney(pkg.old_price)}
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-3 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void openPackageForm(pkg)}
+                          className="rounded-xl border border-amber-400/20 bg-amber-500/10 px-2 py-2.5 text-[9px] font-black text-amber-200"
+                        >
+                          تعديل
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => void togglePackageActive(pkg)}
+                          className="rounded-xl border border-white/10 bg-white/5 px-2 py-2.5 text-[9px] font-black"
+                        >
+                          {pkg.is_active ? "إخفاء" : "إظهار"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => void deletePackage(pkg)}
+                          className="rounded-xl border border-red-400/20 bg-red-500/10 px-2 py-2.5 text-[9px] font-black text-red-300"
+                        >
+                          حذف
+                        </button>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+
+                {!products.length && !packages.length && (
                   <div className="sm:col-span-2 xl:col-span-3 rounded-[22px] border border-dashed border-white/10 px-4 py-12 text-center text-xs text-gray-500">
-                    لا توجد ألعاب حتى الآن. اضغط «إضافة لعبة».
+                    لا توجد ألعاب أو بكجات حتى الآن.
                   </div>
                 )}
               </div>
@@ -5922,119 +6375,366 @@ export default function AdminPage() {
 
       {productFormOpen && (
         <Modal
-          title={editingProduct ? `تعديل ${editingProduct.name}` : "إضافة لعبة جديدة"}
+          title={
+            editingProduct
+              ? `تعديل ${editingProduct.name}`
+              : editingPackage
+                ? `تعديل ${editingPackage.name}`
+                : productDisplayKind === "package"
+                  ? "إضافة بكج ألعاب جديد"
+                  : "إضافة لعبة جديدة"
+          }
           onClose={() => {
             setProductFormOpen(false);
             resetProductForm();
           }}
         >
           <div className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <AdminField label="اسم اللعبة">
+            <div
+              className={`grid gap-4 ${
+                productDisplayKind === "package"
+                  ? "sm:grid-cols-1"
+                  : "sm:grid-cols-2"
+              }`}
+            >
+              <AdminField
+                label={
+                  productDisplayKind === "package"
+                    ? "اسم البكج"
+                    : "اسم اللعبة"
+                }
+              >
                 <input
                   value={productName}
                   onChange={(event) => setProductName(event.target.value)}
-                  placeholder="مثال: GTA V"
+                  placeholder={
+                    productDisplayKind === "package"
+                      ? "مثال: بكج الأكشن"
+                      : "مثال: GTA V"
+                  }
                   className={adminInputClass}
                 />
               </AdminField>
 
-              <AdminField label="المنصة أو الوسم العلوي">
-                <input
-                  value={productPlatform}
-                  onChange={(event) => setProductPlatform(event.target.value)}
-                  placeholder="Rockstar PC"
-                  className={adminInputClass}
-                />
-              </AdminField>
+              {productDisplayKind !== "package" && (
+                <AdminField label="المنصة أو الوسم العلوي">
+                  <input
+                    value={productPlatform}
+                    onChange={(event) =>
+                      setProductPlatform(event.target.value)
+                    }
+                    placeholder="Rockstar PC"
+                    className={adminInputClass}
+                  />
+                </AdminField>
+              )}
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <AdminField label="تصنيف اللعبة أعلى الصفحة">
-                <input
-                  value={productDetailCategory}
-                  onChange={(event) => setProductDetailCategory(event.target.value)}
-                  placeholder="عالم مفتوح"
-                  className={adminInputClass}
-                />
-              </AdminField>
+            {productDisplayKind !== "package" && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <AdminField label="تصنيف اللعبة أعلى الصفحة">
+                  <input
+                    value={productDetailCategory}
+                    onChange={(event) =>
+                      setProductDetailCategory(event.target.value)
+                    }
+                    placeholder="عالم مفتوح"
+                    className={adminInputClass}
+                  />
+                </AdminField>
 
-              <AdminField label="العبارة الصغيرة على البطاقة">
-                <input
-                  value={productCardBadge}
-                  onChange={(event) => setProductCardBadge(event.target.value)}
-                  placeholder="مثال: بدون دينفو"
-                  className={adminInputClass}
-                />
-                <p className="mt-1 text-[8px] leading-4 text-gray-600">
-                  اكتب العبارة التي تريدها، أو اتركها فارغة لإخفائها.
-                </p>
-              </AdminField>
-            </div>
+                <AdminField label="العبارة الصغيرة على البطاقة">
+                  <input
+                    value={productCardBadge}
+                    onChange={(event) =>
+                      setProductCardBadge(event.target.value)
+                    }
+                    placeholder="مثال: بدون دينفو"
+                    className={adminInputClass}
+                  />
+                  <p className="mt-1 text-[8px] leading-4 text-gray-600">
+                    اكتب العبارة التي تريدها، أو اتركها فارغة لإخفائها.
+                  </p>
+                </AdminField>
+              </div>
+            )}
 
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div
+              className={`grid grid-cols-2 gap-3 ${
+                productDisplayKind === "package"
+                  ? "sm:grid-cols-3"
+                  : "sm:grid-cols-4"
+              }`}
+            >
               <AdminField label="السعر">
-                <input type="number" min="0" step="0.01" value={productPrice} onChange={(event) => setProductPrice(event.target.value)} className={adminInputClass} />
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={productPrice}
+                  onChange={(event) => setProductPrice(event.target.value)}
+                  className={adminInputClass}
+                />
               </AdminField>
+
               <AdminField label="السعر القديم">
-                <input type="number" min="0" step="0.01" value={productOldPrice} onChange={(event) => setProductOldPrice(event.target.value)} className={adminInputClass} />
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={productOldPrice}
+                  onChange={(event) => setProductOldPrice(event.target.value)}
+                  className={adminInputClass}
+                />
               </AdminField>
-              <AdminField label="الخصم الأحمر الوهمي %">
-                <input type="number" min="0" max="100" value={productDiscountPercent} onChange={(event) => setProductDiscountPercent(event.target.value)} placeholder="20" className={adminInputClass} />
-                <p className="mt-1 text-[8px] leading-4 text-gray-600">
-                  للعرض على البطاقة فقط، ولا يخصم من السعر الحقيقي.
-                </p>
-              </AdminField>
-              <AdminField label="عدد مرات الشراء">
-                <input type="number" min="0" step="1" value={productSoldCount} onChange={(event) => setProductSoldCount(event.target.value)} className={adminInputClass} />
-              </AdminField>
+
+              {productDisplayKind !== "package" && (
+                <>
+                  <AdminField label="الخصم الأحمر الوهمي %">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={productDiscountPercent}
+                      onChange={(event) =>
+                        setProductDiscountPercent(event.target.value)
+                      }
+                      placeholder="20"
+                      className={adminInputClass}
+                    />
+                    <p className="mt-1 text-[8px] leading-4 text-gray-600">
+                      للعرض على البطاقة فقط، ولا يخصم من السعر الحقيقي.
+                    </p>
+                  </AdminField>
+
+                  <AdminField label="عدد مرات الشراء">
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={productSoldCount}
+                      onChange={(event) =>
+                        setProductSoldCount(event.target.value)
+                      }
+                      className={adminInputClass}
+                    />
+                  </AdminField>
+                </>
+              )}
+
+              {productDisplayKind === "package" && (
+                <AdminField label="المخزون">
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={productStock}
+                    onChange={(event) =>
+                      setProductStock(event.target.value)
+                    }
+                    className={adminInputClass}
+                  />
+                </AdminField>
+              )}
             </div>
 
-            <AdminField label="الوصف تحت اسم اللعبة">
+            <AdminField
+              label={
+                productDisplayKind === "package"
+                  ? "وصف البكج"
+                  : "الوصف تحت اسم اللعبة"
+              }
+            >
               <textarea
                 value={productDescription}
-                onChange={(event) => setProductDescription(event.target.value)}
+                onChange={(event) =>
+                  setProductDescription(event.target.value)
+                }
                 rows={4}
-                placeholder="اكتب وصف اللعبة..."
+                placeholder={
+                  productDisplayKind === "package"
+                    ? "اكتب وصف البكج والألعاب الموجودة داخله..."
+                    : "اكتب وصف اللعبة..."
+                }
                 className={`${adminInputClass} resize-none leading-7`}
               />
             </AdminField>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <AdminField label="نوع الملكية">
-                <textarea value={productOwnership} onChange={(event) => setProductOwnership(event.target.value)} rows={3} className={`${adminInputClass} resize-none`} />
-              </AdminField>
-              <AdminField label="تعليمات الاستخدام">
-                <textarea value={productUsage} onChange={(event) => setProductUsage(event.target.value)} rows={3} className={`${adminInputClass} resize-none`} />
-              </AdminField>
-            </div>
+            {productDisplayKind !== "package" && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                <AdminField label="نوع الملكية">
+                  <textarea
+                    value={productOwnership}
+                    onChange={(event) =>
+                      setProductOwnership(event.target.value)
+                    }
+                    rows={3}
+                    className={`${adminInputClass} resize-none`}
+                  />
+                </AdminField>
+
+                <AdminField label="تعليمات الاستخدام">
+                  <textarea
+                    value={productUsage}
+                    onChange={(event) =>
+                      setProductUsage(event.target.value)
+                    }
+                    rows={3}
+                    className={`${adminInputClass} resize-none`}
+                  />
+                </AdminField>
+              </div>
+            )}
 
             <div className="grid gap-4 sm:grid-cols-3">
               <AdminField label="نوع اللعبة">
-                <select value={productDisplayKind} onChange={(event) => setProductDisplayKind(event.target.value as "featured" | "shared" | "private")} className={adminInputClass}>
+                <select
+                  value={productDisplayKind}
+                  onChange={(event) =>
+                    changeProductDisplayKind(
+                      event.target.value as ProductDisplayKind
+                    )
+                  }
+                  className={adminInputClass}
+                >
                   <option value="featured">نسخة رقمية / مميزة</option>
                   <option value="shared">حساب PC مشترك</option>
                   <option value="private">حساب PC خاص</option>
+                  <option value="package">بكجات الألعاب</option>
                 </select>
               </AdminField>
 
               <AdminField label="مكانها في الصفحة الرئيسية">
-                <select value={productHomeSection} onChange={(event) => setProductHomeSection(event.target.value as "" | "featured" | "shared" | "private")} className={adminInputClass}>
+                <select
+                  value={productHomeSection}
+                  onChange={(event) =>
+                    changeProductHomeSection(
+                      event.target.value as ProductHomeSection
+                    )
+                  }
+                  className={adminInputClass}
+                >
                   <option value="">لا تظهر في الرئيسية</option>
-                  <option value="featured">ألعاب مميزة</option>
-                  <option value="shared">ألعاب PC مشتركة</option>
-                  <option value="private">ألعاب PC خاصة</option>
+                  <option
+                    value="featured"
+                    disabled={productDisplayKind === "package"}
+                  >
+                    ألعاب مميزة
+                  </option>
+                  <option
+                    value="shared"
+                    disabled={productDisplayKind === "package"}
+                  >
+                    ألعاب PC مشتركة
+                  </option>
+                  <option
+                    value="private"
+                    disabled={productDisplayKind === "package"}
+                  >
+                    ألعاب PC خاصة
+                  </option>
+                  <option value="packages">بكجات الألعاب</option>
                 </select>
               </AdminField>
 
-              <AdminField label="المخزون">
-                <input type="number" min="0" step="1" value={productStock} onChange={(event) => setProductStock(event.target.value)} className={adminInputClass} />
-              </AdminField>
+              {productDisplayKind !== "package" && (
+                <AdminField label="المخزون">
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={productStock}
+                    onChange={(event) =>
+                      setProductStock(event.target.value)
+                    }
+                    className={adminInputClass}
+                  />
+                </AdminField>
+              )}
             </div>
 
+            {productDisplayKind === "package" && (
+              <div className="rounded-[22px] border border-amber-400/15 bg-amber-500/[0.05] p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-black text-amber-100">
+                      الألعاب داخل البكج
+                    </h3>
+                    <p className="mt-1 text-[10px] leading-5 text-gray-500">
+                      اختر لعبة واحدة أو أكثر. كل لعبة تنضاف مرة واحدة داخل
+                      البكج.
+                    </p>
+                  </div>
+
+                  <span className="shrink-0 rounded-xl bg-amber-500/10 px-3 py-2 text-[10px] font-black text-amber-200">
+                    {packageProductIds.length} لعبة
+                  </span>
+                </div>
+
+                <div className="mt-4 grid max-h-72 gap-2 overflow-y-auto sm:grid-cols-2">
+                  {products.map((product) => (
+                    <label
+                      key={product.id}
+                      className={`flex items-center gap-3 rounded-[16px] border p-3 text-xs font-black transition ${
+                        packageProductIds.includes(product.id)
+                          ? "border-amber-400/30 bg-amber-500/10 text-amber-100"
+                          : "border-white/10 bg-black/20"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={packageProductIds.includes(product.id)}
+                        onChange={(event) =>
+                          setPackageProductIds((current) =>
+                            event.target.checked
+                              ? Array.from(
+                                  new Set([...current, product.id])
+                                )
+                              : current.filter((id) => id !== product.id)
+                          )
+                        }
+                      />
+
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/5 text-lg">
+                        {product.cover_url ? (
+                          <img
+                            src={product.cover_url}
+                            alt={product.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          "🎮"
+                        )}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate">{product.name}</p>
+                        <p className="mt-1 text-[8px] text-gray-500">
+                          {formatMoney(product.price)}
+                        </p>
+                      </div>
+                    </label>
+                  ))}
+
+                  {!products.length && (
+                    <div className="sm:col-span-2 rounded-[16px] border border-dashed border-white/10 px-4 py-8 text-center text-xs text-gray-500">
+                      أضف الألعاب أولًا، ثم أنشئ البكج.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
-              <h3 className="text-sm font-black">التصنيفات التي تظهر فيها اللعبة</h3>
-              <p className="mt-1 text-[10px] text-gray-500">تقدر تختار أكثر من تصنيف.</p>
+              <h3 className="text-sm font-black">
+                {productDisplayKind === "package"
+                  ? "التصنيفات التي يظهر فيها البكج"
+                  : "التصنيفات التي تظهر فيها اللعبة"}
+              </h3>
+              <p className="mt-1 text-[10px] text-gray-500">
+                تقدر تختار أكثر من تصنيف.
+              </p>
+
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 {homeCategories
                   .filter(
@@ -6042,15 +6742,22 @@ export default function AdminPage() {
                       category.name.trim() !== "الكل"
                   )
                   .map((category) => (
-                    <label key={category.id} className="flex items-center gap-3 rounded-[16px] border border-white/10 bg-black/20 p-3 text-xs font-black">
+                    <label
+                      key={category.id}
+                      className="flex items-center gap-3 rounded-[16px] border border-white/10 bg-black/20 p-3 text-xs font-black"
+                    >
                       <input
                         type="checkbox"
                         checked={productCategoryIds.includes(category.id)}
                         onChange={(event) =>
                           setProductCategoryIds((current) =>
                             event.target.checked
-                              ? Array.from(new Set([...current, category.id]))
-                              : current.filter((id) => id !== category.id)
+                              ? Array.from(
+                                  new Set([...current, category.id])
+                                )
+                              : current.filter(
+                                  (id) => id !== category.id
+                                )
                           )
                         }
                       />
@@ -6063,7 +6770,8 @@ export default function AdminPage() {
                   (category) => category.name.trim() !== "الكل"
                 ).length === 0 && (
                   <div className="sm:col-span-2 rounded-[16px] border border-dashed border-amber-400/20 bg-amber-500/[0.06] p-4 text-center text-[10px] font-bold leading-6 text-amber-200">
-                    لا توجد تصنيفات حاليًا. أضف التصنيفات من قسم الصفحة الرئيسية وستظهر هنا مباشرة.
+                    لا توجد تصنيفات حاليًا. أضف التصنيفات من قسم الصفحة
+                    الرئيسية وستظهر هنا مباشرة.
                   </div>
                 )}
               </div>
@@ -6072,35 +6780,55 @@ export default function AdminPage() {
             <div className="rounded-[22px] border border-white/10 bg-white/[0.03] p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="text-sm font-black">صور اللعبة</h3>
+                  <h3 className="text-sm font-black">
+                    {productDisplayKind === "package"
+                      ? "صورة البكج"
+                      : "صور اللعبة"}
+                  </h3>
                   <p className="mt-1 text-[10px] leading-5 text-gray-500">
-                    أول صورة تكون الغلاف. اضغط زر إضافة الصور أكثر من مرة، وكل صورة جديدة تنضاف مع الصور السابقة.
+                    {productDisplayKind === "package"
+                      ? "اختر صورة واحدة تكون غلاف البكج."
+                      : "أول صورة تكون الغلاف. اضغط زر إضافة الصور أكثر من مرة، وكل صورة جديدة تنضاف مع الصور السابقة."}
                   </p>
                 </div>
 
                 <span className="shrink-0 rounded-xl bg-violet-500/10 px-3 py-2 text-[10px] font-black text-violet-200">
-                  {editingProductImages.length + productNewImages.length} صورة
+                  {productDisplayKind === "package"
+                    ? productNewImages.length
+                      ? 1
+                      : editingPackage?.image_url
+                        ? 1
+                        : 0
+                    : editingProductImages.length +
+                      productNewImages.length}{" "}
+                  صورة
                 </span>
               </div>
 
               <label className="mt-4 flex cursor-pointer items-center justify-center gap-2 rounded-[18px] border border-dashed border-violet-400/30 bg-violet-500/[0.08] px-4 py-4 text-xs font-black text-violet-100 transition hover:bg-violet-500/[0.13]">
                 <span className="text-lg">＋</span>
-                <span>إضافة صورة أو أكثر</span>
+                <span>
+                  {productDisplayKind === "package"
+                    ? "اختيار صورة البكج"
+                    : "إضافة صورة أو أكثر"}
+                </span>
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/webp,image/gif"
-                  multiple
+                  multiple={productDisplayKind !== "package"}
                   onChange={(event) => {
-                    addProductImageFiles(event.target.files);
+                    if (productDisplayKind === "package") {
+                      const firstFile = event.target.files?.[0];
+                      setProductNewImages(firstFile ? [firstFile] : []);
+                    } else {
+                      addProductImageFiles(event.target.files);
+                    }
+
                     event.currentTarget.value = "";
                   }}
                   className="hidden"
                 />
               </label>
-
-              <p className="mt-2 text-center text-[9px] leading-5 text-gray-500">
-                تقدر تختار عدة صور معًا، أو تختار صورة واحدة ثم تضغط الزر مرة ثانية لإضافة صورة أخرى.
-              </p>
 
               {productNewImages.length > 0 && (
                 <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
@@ -6121,9 +6849,12 @@ export default function AdminPage() {
 
                       <div className="p-2.5">
                         <p className="truncate text-[9px] font-black text-violet-100">
-                          {editingProductImages.length === 0 && index === 0
-                            ? "الغلاف الرئيسي"
-                            : `صورة جديدة ${index + 1}`}
+                          {productDisplayKind === "package"
+                            ? "غلاف البكج الجديد"
+                            : editingProductImages.length === 0 &&
+                                index === 0
+                              ? "الغلاف الرئيسي"
+                              : `صورة جديدة ${index + 1}`}
                         </p>
                         <button
                           type="button"
@@ -6138,42 +6869,118 @@ export default function AdminPage() {
                 </div>
               )}
 
-              {editingProductImages.length > 0 && (
-                <div className="mt-4 space-y-2">
-                  <p className="text-[10px] font-black text-gray-300">
-                    الصور المحفوظة
-                  </p>
-                  {editingProductImages.map((image, index) => (
-                    <div key={image.id} className="flex items-center gap-3 rounded-[16px] border border-white/10 bg-black/20 p-2">
-                      <img src={image.image_url} alt={image.title} className="h-14 w-20 rounded-xl object-cover" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-black">{image.title}</p>
-                        <p className="mt-1 text-[8px] text-gray-500">{index === 0 ? "الغلاف الرئيسي" : `الصورة ${index + 1}`}</p>
+              {productDisplayKind === "package" &&
+                editingPackage?.image_url &&
+                productNewImages.length === 0 && (
+                  <div className="mt-4 overflow-hidden rounded-[16px] border border-amber-400/15 bg-amber-500/[0.05]">
+                    <img
+                      src={editingPackage.image_url}
+                      alt={editingPackage.name}
+                      className="aspect-[16/9] w-full object-cover"
+                    />
+                    <p className="p-3 text-[9px] font-black text-amber-100">
+                      صورة البكج الحالية
+                    </p>
+                  </div>
+                )}
+
+              {productDisplayKind !== "package" &&
+                editingProductImages.length > 0 && (
+                  <div className="mt-4 space-y-2">
+                    <p className="text-[10px] font-black text-gray-300">
+                      الصور المحفوظة
+                    </p>
+                    {editingProductImages.map((image, index) => (
+                      <div
+                        key={image.id}
+                        className="flex items-center gap-3 rounded-[16px] border border-white/10 bg-black/20 p-2"
+                      >
+                        <img
+                          src={image.image_url}
+                          alt={image.title}
+                          className="h-14 w-20 rounded-xl object-cover"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-black">
+                            {image.title}
+                          </p>
+                          <p className="mt-1 text-[8px] text-gray-500">
+                            {index === 0
+                              ? "الغلاف الرئيسي"
+                              : `الصورة ${index + 1}`}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={index === 0}
+                          onClick={() => moveProductImage(image, "up")}
+                          className="rounded-lg bg-white/5 px-2 py-2 text-xs disabled:opacity-30"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          disabled={
+                            index === editingProductImages.length - 1
+                          }
+                          onClick={() =>
+                            moveProductImage(image, "down")
+                          }
+                          className="rounded-lg bg-white/5 px-2 py-2 text-xs disabled:opacity-30"
+                        >
+                          ↓
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteProductImage(image)}
+                          className="rounded-lg bg-red-500/10 px-2 py-2 text-[9px] font-black text-red-300"
+                        >
+                          حذف
+                        </button>
                       </div>
-                      <button type="button" disabled={index === 0} onClick={() => moveProductImage(image, "up")} className="rounded-lg bg-white/5 px-2 py-2 text-xs disabled:opacity-30">↑</button>
-                      <button type="button" disabled={index === editingProductImages.length - 1} onClick={() => moveProductImage(image, "down")} className="rounded-lg bg-white/5 px-2 py-2 text-xs disabled:opacity-30">↓</button>
-                      <button type="button" onClick={() => deleteProductImage(image)} className="rounded-lg bg-red-500/10 px-2 py-2 text-[9px] font-black text-red-300">حذف</button>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
             </div>
 
             <label className="flex items-center justify-between gap-4 rounded-[20px] border border-white/10 bg-white/[0.03] p-4">
               <div>
-                <p className="text-xs font-black">اللعبة ظاهرة في المتجر</p>
-                <p className="mt-1 text-[9px] text-gray-500">عطّلها لإخفائها بدون حذفها.</p>
+                <p className="text-xs font-black">
+                  {productDisplayKind === "package"
+                    ? "البكج ظاهر في المتجر"
+                    : "اللعبة ظاهرة في المتجر"}
+                </p>
+                <p className="mt-1 text-[9px] text-gray-500">
+                  عطّله لإخفاء العنصر بدون حذفه.
+                </p>
               </div>
-              <input type="checkbox" checked={productActive} onChange={(event) => setProductActive(event.target.checked)} className="h-5 w-5" />
+              <input
+                type="checkbox"
+                checked={productActive}
+                onChange={(event) =>
+                  setProductActive(event.target.checked)
+                }
+                className="h-5 w-5"
+              />
             </label>
 
             <button
               type="button"
-              onClick={saveProduct}
+              onClick={
+                productDisplayKind === "package"
+                  ? savePackage
+                  : saveProduct
+              }
               disabled={savingProduct}
               className="w-full rounded-[20px] bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-4 text-sm font-black disabled:opacity-50"
             >
-              {savingProduct ? "جاري حفظ اللعبة والصور..." : "حفظ اللعبة"}
+              {savingProduct
+                ? productDisplayKind === "package"
+                  ? "جاري حفظ البكج..."
+                  : "جاري حفظ اللعبة والصور..."
+                : productDisplayKind === "package"
+                  ? "حفظ البكج"
+                  : "حفظ اللعبة"}
             </button>
           </div>
         </Modal>
