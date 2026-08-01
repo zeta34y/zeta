@@ -8,7 +8,6 @@ type LoginSheetProps = {
   onClose: () => void;
 };
 
-type LoginMethod = "email" | "phone";
 type LoginStep = "identifier" | "otp";
 
 const countries = [
@@ -31,7 +30,6 @@ export default function LoginSheet({
   open,
   onClose,
 }: LoginSheetProps) {
-  const [method, setMethod] = useState<LoginMethod>("email");
   const [step, setStep] = useState<LoginStep>("identifier");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -50,7 +48,7 @@ export default function LoginSheet({
     [countryCode]
   );
 
-  const otpLength = method === "email" ? 8 : 6;
+  const otpLength = 8;
 
   useEffect(() => {
     document.body.style.overflow = open ? "hidden" : "";
@@ -170,19 +168,12 @@ export default function LoginSheet({
     setErrorMessage("");
     setMessage("");
 
-    if (String(method) === "phone") {
-      setErrorMessage(
-        "تسجيل الدخول برقم الجوال متوقف مؤقتًا. الرجاء التسجيل عبر البريد الإلكتروني."
-      );
-      return;
-    }
-
-    if (method === "email" && !validateEmail(email)) {
+    if (!validateEmail(email)) {
       setErrorMessage("اكتب بريدًا إلكترونيًا صحيحًا");
       return;
     }
 
-    if (method === "phone" && !validatePhone()) {
+    if (phone && !validatePhone()) {
       setErrorMessage(
         countryCode === "+966"
           ? "اكتب رقمًا سعوديًا صحيحًا يبدأ بـ 5 ويتكوّن من 9 أرقام"
@@ -194,35 +185,25 @@ export default function LoginSheet({
     setLoading(true);
 
     try {
-      if (method === "email") {
-        const { error } = await supabase.auth.signInWithOtp({
-          email: email.trim().toLowerCase(),
-          options: {
-            shouldCreateUser: true,
-          },
-        });
+      const contactPhone = phone ? `${countryCode}${phone}` : "";
 
-        if (error) throw error;
-      } else {
-        const fullPhone = `${countryCode}${phone}`;
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.trim().toLowerCase(),
+        options: {
+          shouldCreateUser: true,
+          data: contactPhone
+            ? {
+                contact_phone: contactPhone,
+              }
+            : undefined,
+        },
+      });
 
-        const { error } = await supabase.auth.signInWithOtp({
-          phone: fullPhone,
-          options: {
-            shouldCreateUser: true,
-          },
-        });
-
-        if (error) throw error;
-      }
+      if (error) throw error;
 
       setStep("otp");
       setResendSeconds(60);
-      setMessage(
-        method === "email"
-          ? "أرسلنا رمز التحقق إلى بريدك"
-          : `أرسلنا رمز التحقق إلى ${countryCode}${phone}`
-      );
+      setMessage("أرسلنا رمز التحقق إلى بريدك الإلكتروني");
     } catch (error) {
       setErrorMessage(
         error instanceof Error
@@ -248,22 +229,26 @@ export default function LoginSheet({
     setLoading(true);
 
     try {
-      if (method === "email") {
-        const { error } = await supabase.auth.verifyOtp({
-          email: email.trim().toLowerCase(),
-          token: otp,
-          type: "email",
+      const { data, error } = await supabase.auth.verifyOtp({
+        email: email.trim().toLowerCase(),
+        token: otp,
+        type: "email",
+      });
+
+      if (error) throw error;
+
+      if (phone && data.user) {
+        const contactPhone = `${countryCode}${phone}`;
+        const { error: updateError } = await supabase.auth.updateUser({
+          data: {
+            ...data.user.user_metadata,
+            contact_phone: contactPhone,
+          },
         });
 
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.auth.verifyOtp({
-          phone: `${countryCode}${phone}`,
-          token: otp,
-          type: "sms",
-        });
-
-        if (error) throw error;
+        if (updateError) {
+          console.error("تعذر حفظ رقم التواصل:", updateError);
+        }
       }
 
       setMessage("تم تسجيل الدخول بنجاح");
@@ -347,13 +332,6 @@ export default function LoginSheet({
     }
   }
 
-  function changeMethod(nextMethod: LoginMethod) {
-    setMethod(nextMethod);
-    setStep("identifier");
-    setOtp("");
-    setMessage("");
-    setErrorMessage("");
-  }
 
   return (
     <div
@@ -410,159 +388,114 @@ export default function LoginSheet({
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-2 rounded-[20px] border border-white/[0.07] bg-white/[0.03] p-1.5">
-          <button
-            type="button"
-            onClick={() => changeMethod("email")}
-            className={`rounded-2xl px-4 py-3 text-xs font-black transition sm:rounded-2xl sm:px-4 sm:py-3 sm:text-xs ${
-              method === "email"
-                ? "bg-violet-600 text-white shadow-lg shadow-violet-950/30"
-                : "text-gray-500"
-            }`}
-          >
-            البريد الإلكتروني
-          </button>
-
-          <button
-            type="button"
-            onClick={() => changeMethod("phone")}
-            className={`rounded-2xl px-4 py-3 text-xs font-black transition sm:rounded-2xl sm:px-4 sm:py-3 sm:text-xs ${
-              method === "phone"
-                ? "bg-violet-600 text-white shadow-lg shadow-violet-950/30"
-                : "text-gray-500"
-            }`}
-          >
-            رقم الجوال
-          </button>
-        </div>
-
-        {method === "phone" && (
-          <div className="mt-4 rounded-[20px] border border-amber-400/20 bg-amber-500/10 px-4 py-3 text-center">
-            <p className="text-sm font-black text-amber-300">
-              ⚠️ تسجيل الدخول برقم الجوال متوقف مؤقتًا
-            </p>
-
-            <p className="mt-1 text-xs leading-5 text-gray-400">
-              الرجاء التسجيل أو تسجيل الدخول عبر البريد الإلكتروني.
-            </p>
-
-            <button
-              type="button"
-              onClick={() => changeMethod("email")}
-              className="mt-3 rounded-xl border border-violet-400/20 bg-violet-500/10 px-4 py-2.5 text-xs font-black text-violet-200 transition hover:bg-violet-500/15 active:scale-95"
-            >
-              الانتقال إلى البريد الإلكتروني
-            </button>
-          </div>
-        )}
 
         {step === "identifier" ? (
-          <div className="mt-5">
-            {method === "email" ? (
-              <label className="block">
-                <span className="text-xs font-black text-gray-300">
-                  البريد الإلكتروني
-                </span>
+          <div className="mt-6 space-y-4">
+            <label className="block">
+              <span className="text-xs font-black text-gray-300">
+                البريد الإلكتروني
+              </span>
 
-                <div className="mt-2 flex items-center gap-3 rounded-[20px] border border-white/10 bg-white/[0.04] px-4 py-4 transition focus-within:border-violet-400/50">
-                  <span className="text-lg">✉️</span>
+              <div className="mt-2 flex items-center gap-3 rounded-[20px] border border-white/10 bg-white/[0.04] px-4 py-4 transition focus-within:border-violet-400/50">
+                <span className="text-lg">✉️</span>
 
-                  <input
-                    type="email"
-                    inputMode="email"
-                    value={email}
-                    onChange={(event) => cleanEmail(event.target.value)}
-                    placeholder="name@example.com"
-                    autoComplete="email"
-                    maxLength={120}
-                    className="min-w-0 flex-1 bg-transparent text-left text-sm text-white outline-none placeholder:text-gray-600"
-                    dir="ltr"
-                  />
-                </div>
-              </label>
-            ) : (
-              <div>
+                <input
+                  type="email"
+                  inputMode="email"
+                  value={email}
+                  onChange={(event) => cleanEmail(event.target.value)}
+                  placeholder="name@example.com"
+                  autoComplete="email"
+                  maxLength={120}
+                  className="min-w-0 flex-1 bg-transparent text-left text-sm text-white outline-none placeholder:text-gray-600"
+                  dir="ltr"
+                />
+              </div>
+            </label>
+
+            <div>
+              <div className="flex items-center justify-between gap-3">
                 <span className="text-xs font-black text-gray-300">
                   رقم الجوال
                 </span>
+                <span className="text-[9px] font-bold text-gray-600">
+                  للتواصل فقط — بدون رمز
+                </span>
+              </div>
 
-                <div className="relative mt-2 flex items-stretch rounded-[20px] border border-white/10 bg-white/[0.04] transition focus-within:border-violet-400/50">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (method === "phone") return;
-                      setCountryMenuOpen((current) => !current);
-                    }}
-                    disabled={method === "phone"}
-                    className="flex shrink-0 items-center gap-2 border-l border-white/10 px-3 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-45"
-                  >
-                    <span>{selectedCountry.flag}</span>
-                    <span dir="ltr">{selectedCountry.code}</span>
-                    <span className="text-[9px] text-gray-500">▼</span>
-                  </button>
+              <div className="relative mt-2 flex items-stretch rounded-[20px] border border-white/10 bg-white/[0.04] transition focus-within:border-violet-400/50">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCountryMenuOpen((current) => !current)
+                  }
+                  className="flex shrink-0 items-center gap-2 border-l border-white/10 px-3 text-xs font-black text-white"
+                >
+                  <span>{selectedCountry.flag}</span>
+                  <span dir="ltr">{selectedCountry.code}</span>
+                  <span className="text-[9px] text-gray-500">▼</span>
+                </button>
 
-                  <input
-                    type="tel"
-                    inputMode="numeric"
-                    value={phone}
-                    onChange={(event) => cleanPhone(event.target.value)}
-                    placeholder={
-                      countryCode === "+966"
-                        ? "5XXXXXXXX"
-                        : "رقم الجوال"
-                    }
-                    autoComplete="tel-national"
-                    disabled={method === "phone"}
-                    className="min-w-0 flex-1 bg-transparent px-4 py-4 text-left text-sm tracking-wider text-white outline-none placeholder:text-gray-600 disabled:cursor-not-allowed disabled:opacity-45"
-                    dir="ltr"
-                  />
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  value={phone}
+                  onChange={(event) => cleanPhone(event.target.value)}
+                  placeholder={
+                    countryCode === "+966"
+                      ? "5XXXXXXXX"
+                      : "رقم الجوال"
+                  }
+                  autoComplete="tel-national"
+                  className="min-w-0 flex-1 bg-transparent px-4 py-4 text-left text-sm tracking-wider text-white outline-none placeholder:text-gray-600"
+                  dir="ltr"
+                />
 
-                  {countryMenuOpen && (
-                    <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 max-h-64 overflow-y-auto rounded-[20px] border border-violet-400/15 bg-[#171322] p-2 shadow-2xl">
-                      {countries.map((country) => (
-                        <button
-                          key={country.code}
-                          type="button"
-                          onClick={() => {
-                            setCountryCode(country.code);
-                            setPhone("");
-                            setCountryMenuOpen(false);
-                          }}
-                          className="flex w-full items-center justify-between rounded-2xl px-3 py-3 text-xs transition hover:bg-violet-500/10"
-                        >
-                          <span className="font-bold text-gray-300">
-                            {country.name}
-                          </span>
+                {countryMenuOpen && (
+                  <div className="absolute left-0 right-0 top-[calc(100%+8px)] z-50 max-h-64 overflow-y-auto rounded-[20px] border border-violet-400/15 bg-[#171322] p-2 shadow-2xl">
+                    {countries.map((country) => (
+                      <button
+                        key={country.code}
+                        type="button"
+                        onClick={() => {
+                          setCountryCode(country.code);
+                          setPhone("");
+                          setCountryMenuOpen(false);
+                        }}
+                        className="flex w-full items-center justify-between rounded-2xl px-3 py-3 text-xs transition hover:bg-violet-500/10"
+                      >
+                        <span className="font-bold text-gray-300">
+                          {country.name}
+                        </span>
 
-                          <span className="flex items-center gap-2">
-                            <span dir="ltr">{country.code}</span>
-                            <span>{country.flag}</span>
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {countryCode === "+966" && (
-                  <p className="mt-2 text-[10px] leading-5 text-gray-600">
-                    اكتب الرقم بدون الصفر، مثال: 5XXXXXXXX
-                  </p>
+                        <span className="flex items-center gap-2">
+                          <span dir="ltr">{country.code}</span>
+                          <span>{country.flag}</span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
-            )}
+
+              {countryCode === "+966" && (
+                <p className="mt-2 text-[10px] leading-5 text-gray-600">
+                  اكتب الرقم بدون الصفر، مثال: 5XXXXXXXX
+                </p>
+              )}
+            </div>
+
+            <div className="rounded-[18px] border border-violet-400/15 bg-violet-500/[0.07] px-4 py-3 text-center text-[10px] font-bold leading-5 text-violet-200">
+              رمز تسجيل الدخول يُرسل إلى البريد الإلكتروني فقط.
+            </div>
 
             <button
               type="button"
               onClick={sendOtp}
-              disabled={loading || method === "phone"}
-              className="mt-5 flex w-full items-center justify-center rounded-[20px] bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-4 text-sm font-black text-white shadow-xl shadow-violet-950/35 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45"
+              disabled={loading}
+              className="flex w-full items-center justify-center rounded-[20px] bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 py-4 text-sm font-black text-white shadow-xl shadow-violet-950/35 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-45"
             >
-              {loading
-                ? "جاري إرسال الرمز..."
-                : method === "email"
-                ? "إرسال الرمز إلى البريد"
-                : "رقم الجوال متوقف مؤقتًا"}
+              {loading ? "جاري إرسال الرمز..." : "إرسال الرمز إلى البريد"}
             </button>
           </div>
         ) : (
@@ -577,7 +510,7 @@ export default function LoginSheet({
               }}
               className="text-xs font-black text-violet-300"
             >
-              تعديل {method === "email" ? "البريد" : "رقم الجوال"}
+              تعديل البريد الإلكتروني
             </button>
 
             <label className="mt-4 block">
@@ -603,7 +536,7 @@ export default function LoginSheet({
                       .slice(0, otpLength)
                   )
                 }
-                placeholder={method === "email" ? "00000000" : "000000"}
+                placeholder="00000000"
                 autoComplete="one-time-code"
                 className="mt-2 w-full rounded-[20px] border border-white/10 bg-white/[0.04] px-4 py-4 text-center text-2xl font-black tracking-[7px] sm:tracking-[10px] text-white outline-none transition placeholder:text-gray-700 focus:border-violet-400/50"
                 dir="ltr"
