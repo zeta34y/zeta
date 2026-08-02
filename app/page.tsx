@@ -126,8 +126,6 @@ export default function HomePage() {
   const [reviews, setReviews] = useState<StoreReview[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(true);
 
-  const [showSplash, setShowSplash] = useState(true);
-  const [splashClosing, setSplashClosing] = useState(false);
   const [activeCategory, setActiveCategory] = useState("الكل");
   const [menuOpen, setMenuOpen] = useState(false);
   const [cartMessage, setCartMessage] = useState("");
@@ -600,25 +598,6 @@ export default function HomePage() {
 
 
   useEffect(() => {
-    // نعيد تشغيل أنميشن الدخول عند فتح الصفحة أو عند تحديثها محليًا.
-    setShowSplash(true);
-    setSplashClosing(false);
-
-    const closeTimer = window.setTimeout(() => {
-      setSplashClosing(true);
-    }, 1600);
-
-    const hideTimer = window.setTimeout(() => {
-      setShowSplash(false);
-    }, 2200);
-
-    return () => {
-      window.clearTimeout(closeTimer);
-      window.clearTimeout(hideTimer);
-    };
-  }, []);
-
-  useEffect(() => {
     function updateCartCount() {
       try {
         const savedCart = localStorage.getItem("zeta_cart");
@@ -1024,101 +1003,306 @@ export default function HomePage() {
     menuTouchStartX.current = null;
   }
 
-  if (showSplash) {
-    return (
-      <main
-        dir="rtl"
-        className={`fixed inset-0 z-[999] flex items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_50%_30%,#2a1745_0%,#140c20_45%,#08070d_100%)] transition-all duration-500 ${
-          splashClosing
-            ? "pointer-events-none scale-105 opacity-0 blur-sm"
-            : "scale-100 opacity-100"
-        }`}
-      >
-        <div className="absolute h-[310px] w-[310px] animate-pulse rounded-full bg-violet-700/35 blur-[95px]" />
-        <div className="absolute ml-28 mb-28 h-44 w-44 animate-pulse rounded-full bg-fuchsia-600/20 blur-[75px]" />
-
-        <div className="relative z-10 flex animate-[splashEnter_700ms_cubic-bezier(0.22,1,0.36,1)_both] flex-col items-center">
-          <div className="relative">
-            <div className="absolute -inset-3 animate-pulse rounded-[42px] border border-violet-300/30 shadow-[0_0_45px_rgba(139,92,246,0.45)]" />
-
-            <div className="relative flex h-28 w-28 items-center justify-center overflow-hidden rounded-[34px] border border-white/15 bg-gradient-to-br from-violet-600 to-fuchsia-600 shadow-[0_25px_70px_rgba(88,28,135,0.55)]">
-              <span className="-skew-x-6 text-7xl font-black leading-none text-white drop-shadow-2xl">
-                Z
-              </span>
-
-              <div className="absolute -inset-[70%] animate-[shine_1200ms_ease_500ms_both] bg-[linear-gradient(110deg,transparent_42%,rgba(255,255,255,0.55)_50%,transparent_58%)]" />
-            </div>
-          </div>
-
-          <h1 className="mt-6 animate-[fadeUp_500ms_ease_450ms_both] text-3xl font-black tracking-[8px] text-white">
-            ZETA
-          </h1>
-
-          <p className="mt-2 animate-[fadeUp_500ms_ease_650ms_both] text-sm text-violet-300">
-            عالمك يبدأ من هنا
-          </p>
-
-          <div className="mt-7 h-1 w-32 overflow-hidden rounded-full bg-white/10">
-            <div className="h-full w-[45%] animate-[loadingBar_900ms_ease-in-out_700ms_infinite] rounded-full bg-gradient-to-r from-violet-500 to-fuchsia-400 shadow-[0_0_16px_rgba(168,85,247,0.75)]" />
-          </div>
-        </div>
-
-        <style jsx global>{`
-          @keyframes splashEnter {
-            0% {
-              opacity: 0;
-              transform: translateY(18px) scale(0.78) rotate(-8deg);
-            }
-            70% {
-              opacity: 1;
-              transform: translateY(0) scale(1.06) rotate(2deg);
-            }
-            100% {
-              transform: translateY(0) scale(1) rotate(0);
-            }
-          }
-
-          @keyframes fadeUp {
-            from {
-              opacity: 0;
-              transform: translateY(12px);
-            }
-            to {
-              opacity: 1;
-              transform: translateY(0);
-            }
-          }
-
-          @keyframes shine {
-            from {
-              transform: translateX(-55%) rotate(12deg);
-            }
-            to {
-              transform: translateX(55%) rotate(12deg);
-            }
-          }
-
-          @keyframes loadingBar {
-            0% {
-              transform: translateX(170%);
-            }
-            50% {
-              transform: translateX(0);
-            }
-            100% {
-              transform: translateX(-170%);
-            }
-          }
-        `}</style>
-      </main>
-    );
-  }
-
   return (
     <main
       dir="rtl"
       className="min-h-screen overflow-x-hidden bg-[#08070d] pb-28 text-white"
     >
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            .zeta-home-first-paint {
+              position: fixed;
+              inset: 0;
+              z-index: 10000;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              overflow: hidden;
+              pointer-events: none;
+              background:
+                radial-gradient(
+                  circle at 50% 30%,
+                  #2a1745 0%,
+                  #140c20 45%,
+                  #08070d 100%
+                );
+              animation:
+                zetaHomeSplashHide 600ms ease 1600ms forwards;
+            }
+
+            .zeta-home-first-paint-glow {
+              position: absolute;
+              width: 310px;
+              height: 310px;
+              border-radius: 9999px;
+              background: rgba(109, 40, 217, 0.35);
+              filter: blur(95px);
+              animation:
+                zetaHomeSplashPulse 1200ms ease-in-out infinite;
+            }
+
+            .zeta-home-first-paint-glow-secondary {
+              position: absolute;
+              width: 176px;
+              height: 176px;
+              margin-left: 112px;
+              margin-bottom: 112px;
+              border-radius: 9999px;
+              background: rgba(192, 38, 211, 0.2);
+              filter: blur(75px);
+              animation:
+                zetaHomeSplashPulse 1200ms ease-in-out infinite;
+            }
+
+            .zeta-home-first-paint-content {
+              position: relative;
+              z-index: 1;
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              animation:
+                zetaHomeSplashEnter 700ms
+                cubic-bezier(0.22, 1, 0.36, 1) both;
+            }
+
+            .zeta-home-first-paint-logo-wrap {
+              position: relative;
+            }
+
+            .zeta-home-first-paint-ring {
+              position: absolute;
+              inset: -12px;
+              border-radius: 42px;
+              border: 1px solid rgba(196, 181, 253, 0.3);
+              box-shadow: 0 0 45px rgba(139, 92, 246, 0.45);
+              animation:
+                zetaHomeSplashPulse 1200ms ease-in-out infinite;
+            }
+
+            .zeta-home-first-paint-logo {
+              position: relative;
+              display: flex;
+              width: 112px;
+              height: 112px;
+              align-items: center;
+              justify-content: center;
+              overflow: hidden;
+              border-radius: 34px;
+              border: 1px solid rgba(255, 255, 255, 0.15);
+              background:
+                linear-gradient(135deg, #7c3aed 0%, #c026d3 100%);
+              box-shadow: 0 25px 70px rgba(88, 28, 135, 0.55);
+            }
+
+            .zeta-home-first-paint-logo-letter {
+              position: relative;
+              z-index: 1;
+              transform: skewX(-6deg);
+              color: #ffffff;
+              font-size: 72px;
+              line-height: 1;
+              font-weight: 900;
+              text-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+            }
+
+            .zeta-home-first-paint-shine {
+              position: absolute;
+              inset: -70%;
+              background:
+                linear-gradient(
+                  110deg,
+                  transparent 42%,
+                  rgba(255, 255, 255, 0.55) 50%,
+                  transparent 58%
+                );
+              animation:
+                zetaHomeSplashShine 1200ms ease 500ms both;
+            }
+
+            .zeta-home-first-paint-title {
+              margin-top: 24px;
+              color: #ffffff;
+              font-size: 30px;
+              line-height: 1;
+              font-weight: 900;
+              letter-spacing: 8px;
+              animation:
+                zetaHomeSplashFadeUp 500ms ease 450ms both;
+            }
+
+            .zeta-home-first-paint-subtitle {
+              margin-top: 8px;
+              color: #c4b5fd;
+              font-size: 14px;
+              line-height: 1.5;
+              animation:
+                zetaHomeSplashFadeUp 500ms ease 650ms both;
+            }
+
+            .zeta-home-first-paint-loader {
+              width: 128px;
+              height: 4px;
+              margin-top: 28px;
+              overflow: hidden;
+              border-radius: 9999px;
+              background: rgba(255, 255, 255, 0.1);
+            }
+
+            .zeta-home-first-paint-loader-bar {
+              width: 45%;
+              height: 100%;
+              border-radius: 9999px;
+              background:
+                linear-gradient(90deg, #8b5cf6 0%, #e879f9 100%);
+              box-shadow: 0 0 16px rgba(168, 85, 247, 0.75);
+              animation:
+                zetaHomeSplashLoading 900ms ease-in-out 700ms infinite;
+            }
+
+            @keyframes zetaHomeSplashHide {
+              from {
+                opacity: 1;
+                transform: scale(1);
+                visibility: visible;
+              }
+
+              to {
+                opacity: 0;
+                transform: scale(1.05);
+                visibility: hidden;
+              }
+            }
+
+            @keyframes zetaHomeSplashEnter {
+              0% {
+                opacity: 0;
+                transform:
+                  translateY(18px)
+                  scale(0.78)
+                  rotate(-8deg);
+              }
+
+              70% {
+                opacity: 1;
+                transform:
+                  translateY(0)
+                  scale(1.06)
+                  rotate(2deg);
+              }
+
+              100% {
+                opacity: 1;
+                transform:
+                  translateY(0)
+                  scale(1)
+                  rotate(0);
+              }
+            }
+
+            @keyframes zetaHomeSplashFadeUp {
+              from {
+                opacity: 0;
+                transform: translateY(12px);
+              }
+
+              to {
+                opacity: 1;
+                transform: translateY(0);
+              }
+            }
+
+            @keyframes zetaHomeSplashPulse {
+              0%,
+              100% {
+                opacity: 0.72;
+                transform: scale(0.96);
+              }
+
+              50% {
+                opacity: 1;
+                transform: scale(1.05);
+              }
+            }
+
+            @keyframes zetaHomeSplashShine {
+              from {
+                transform: translateX(-55%) rotate(12deg);
+              }
+
+              to {
+                transform: translateX(55%) rotate(12deg);
+              }
+            }
+
+            @keyframes zetaHomeSplashLoading {
+              0% {
+                transform: translateX(170%);
+              }
+
+              50% {
+                transform: translateX(0);
+              }
+
+              100% {
+                transform: translateX(-170%);
+              }
+            }
+
+            @media (prefers-reduced-motion: reduce) {
+              .zeta-home-first-paint,
+              .zeta-home-first-paint-glow,
+              .zeta-home-first-paint-glow-secondary,
+              .zeta-home-first-paint-content,
+              .zeta-home-first-paint-ring,
+              .zeta-home-first-paint-shine,
+              .zeta-home-first-paint-title,
+              .zeta-home-first-paint-subtitle,
+              .zeta-home-first-paint-loader-bar {
+                animation-duration: 1ms;
+              }
+
+              .zeta-home-first-paint {
+                animation-delay: 100ms;
+              }
+            }
+          `,
+        }}
+      />
+
+      <div
+        aria-hidden="true"
+        className="zeta-home-first-paint"
+      >
+        <div className="zeta-home-first-paint-glow" />
+        <div className="zeta-home-first-paint-glow-secondary" />
+
+        <div className="zeta-home-first-paint-content">
+          <div className="zeta-home-first-paint-logo-wrap">
+            <div className="zeta-home-first-paint-ring" />
+
+            <div className="zeta-home-first-paint-logo">
+              <span className="zeta-home-first-paint-logo-letter">
+                Z
+              </span>
+
+              <div className="zeta-home-first-paint-shine" />
+            </div>
+          </div>
+
+          <h1 className="zeta-home-first-paint-title">
+            ZETA
+          </h1>
+
+          <p className="zeta-home-first-paint-subtitle">
+            عالمك يبدأ من هنا
+          </p>
+
+          <div className="zeta-home-first-paint-loader">
+            <div className="zeta-home-first-paint-loader-bar" />
+          </div>
+        </div>
+      </div>
 
       {/* الشريط العلوي المتحكم به من لوحة الإدارة */}
       {announcement.is_visible && announcement.text.trim() && (
