@@ -7,76 +7,41 @@ import type { User } from "@supabase/supabase-js";
 import BottomNav from "@/components/BottomNav";
 import { supabase } from "@/lib/supabase";
 
-type OrderStatus = "pending" | "processing" | "completed" | "cancelled";
+type OrderStatus =
+  | "pending"
+  | "paid"
+  | "processing"
+  | "delivered"
+  | "completed"
+  | "cancelled"
+  | "refunded"
+  | "rejected";
+
+type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
 
 type OrderItem = {
   id: string;
-  name: string;
-  platform: string;
-  price: number;
+  item_name: string;
+  item_type: "product" | "package";
+  platform: string | null;
+  image_url: string | null;
   quantity: number;
-  image?: string;
+  unit_price: number;
+  total_price: number;
 };
 
 type Order = {
   id: string;
-  createdAt: string;
+  order_number: string;
   status: OrderStatus;
+  payment_status: PaymentStatus;
+  payment_method: string | null;
   total: number;
-  paymentMethod: string;
-  items: OrderItem[];
+  created_at: string;
+  order_items?: OrderItem[];
 };
 
-const sampleOrders: Order[] = [
-  {
-    id: "ZT-1024",
-    createdAt: "22 يوليو 2026",
-    status: "processing",
-    total: 119,
-    paymentMethod: "Apple Pay",
-    items: [
-      {
-        id: "package-2",
-        name: "بكج العالم المفتوح",
-        platform: "3 ألعاب PC",
-        price: 119,
-        quantity: 1,
-      },
-    ],
-  },
-  {
-    id: "ZT-0987",
-    createdAt: "18 يوليو 2026",
-    status: "completed",
-    total: 29,
-    paymentMethod: "VISA",
-    items: [
-      {
-        id: "shared-1",
-        name: "EA SPORTS FC",
-        platform: "Steam PC",
-        price: 29,
-        quantity: 1,
-      },
-    ],
-  },
-  {
-    id: "ZT-0954",
-    createdAt: "12 يوليو 2026",
-    status: "cancelled",
-    total: 35,
-    paymentMethod: "مدى",
-    items: [
-      {
-        id: "shared-3",
-        name: "Forza Horizon",
-        platform: "Xbox PC",
-        price: 35,
-        quantity: 1,
-      },
-    ],
-  },
-];
+type OrderFilter = "الكل" | "الحالية" | "المكتملة" | "الملغاة";
 
 const statusInfo: Record<
   OrderStatus,
@@ -95,12 +60,26 @@ const statusInfo: Record<
     borderClass: "border-amber-400/15",
     icon: "⏳",
   },
+  paid: {
+    label: "تم الدفع",
+    textClass: "text-cyan-300",
+    bgClass: "bg-cyan-500/10",
+    borderClass: "border-cyan-400/15",
+    icon: "✓",
+  },
   processing: {
     label: "قيد التجهيز",
     textClass: "text-sky-300",
     bgClass: "bg-sky-500/10",
     borderClass: "border-sky-400/15",
     icon: "⚙️",
+  },
+  delivered: {
+    label: "جاهز للاستلام",
+    textClass: "text-violet-300",
+    bgClass: "bg-violet-500/10",
+    borderClass: "border-violet-400/15",
+    icon: "🔑",
   },
   completed: {
     label: "مكتمل",
@@ -116,117 +95,150 @@ const statusInfo: Record<
     borderClass: "border-red-400/15",
     icon: "✕",
   },
+  refunded: {
+    label: "مسترجع",
+    textClass: "text-orange-300",
+    bgClass: "bg-orange-500/10",
+    borderClass: "border-orange-400/15",
+    icon: "↩",
+  },
+  rejected: {
+    label: "مرفوض",
+    textClass: "text-rose-300",
+    bgClass: "bg-rose-500/10",
+    borderClass: "border-rose-400/15",
+    icon: "!",
+  },
 };
 
-type OrderFilter = "الكل" | "الحالية" | "المكتملة" | "الملغاة";
+function formatMoney(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number)
+    ? number.toLocaleString("ar-SA", { maximumFractionDigits: 2 })
+    : "0";
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("ar-SA", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  }).format(new Date(value));
+}
+
+function paymentMethodLabel(value: string | null) {
+  if (!value) return "—";
+  const normalized = value.toLowerCase();
+  if (normalized.includes("apple")) return "Apple Pay";
+  if (normalized.includes("mada")) return "مدى";
+  if (normalized.includes("visa")) return "Visa";
+  if (normalized.includes("master")) return "MasterCard";
+  return value;
+}
 
 export default function OrdersPage() {
   const router = useRouter();
-
   const [user, setUser] = useState<User | null>(null);
-  const [loadingUser, setLoadingUser] = useState(true);
-  const [orders, setOrders] = useState<Order[]>(sampleOrders);
+  const [loading, setLoading] = useState(true);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [filter, setFilter] = useState<OrderFilter>("الكل");
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     let mounted = true;
+    let currentUserId = "";
 
-    async function loadUser() {
+    async function loadOrders() {
       try {
         const {
           data: { user: currentUser },
-          error,
+          error: userError,
         } = await supabase.auth.getUser();
 
-        if (error) throw error;
+        if (userError) throw userError;
 
         if (!currentUser) {
           router.replace("/");
           return;
         }
 
-        if (mounted) {
-          setUser(currentUser);
-        }
-      } catch (error) {
-        console.error("تعذر التحقق من المستخدم:", error);
+        currentUserId = currentUser.id;
 
+        const { data, error } = await supabase
+          .from("orders")
+          .select(
+            "id, order_number, status, payment_status, payment_method, total, created_at, order_items(id, item_name, item_type, platform, image_url, quantity, unit_price, total_price)"
+          )
+          .eq("user_id", currentUser.id)
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+        if (!mounted) return;
+
+        setUser(currentUser);
+        setOrders((data ?? []) as unknown as Order[]);
+        setErrorMessage("");
+      } catch (error) {
+        console.error("تعذر تحميل الطلبات:", error);
         if (mounted) {
-          router.replace("/");
+          setOrders([]);
+          setErrorMessage("تعذر تحميل طلباتك. حدّث الصفحة وحاول مرة أخرى.");
         }
       } finally {
-        if (mounted) {
-          setLoadingUser(false);
-        }
+        if (mounted) setLoading(false);
       }
     }
 
-    loadUser();
+    void loadOrders();
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session?.user) {
-        router.replace("/");
-        return;
-      }
-
-      setUser(session.user);
-    });
+    const ordersChannel = supabase
+      .channel("zeta-user-orders")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "orders" },
+        () => void loadOrders()
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "order_deliveries" },
+        () => void loadOrders()
+      )
+      .subscribe();
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      void currentUserId;
+      supabase.removeChannel(ordersChannel);
     };
   }, [router]);
 
   const filteredOrders = useMemo(() => {
-    if (filter === "الكل") {
-      return orders;
-    }
+    if (filter === "الكل") return orders;
 
     if (filter === "الحالية") {
-      return orders.filter(
-        (order) =>
-          order.status === "pending" ||
-          order.status === "processing"
+      return orders.filter((order) =>
+        ["pending", "paid", "processing", "delivered"].includes(order.status)
       );
     }
 
     if (filter === "المكتملة") {
-      return orders.filter(
-        (order) => order.status === "completed"
-      );
+      return orders.filter((order) => order.status === "completed");
     }
 
-    return orders.filter(
-      (order) => order.status === "cancelled"
+    return orders.filter((order) =>
+      ["cancelled", "refunded", "rejected"].includes(order.status)
     );
   }, [filter, orders]);
 
   const totalOrders = orders.length;
-  const activeOrders = orders.filter(
-    (order) =>
-      order.status === "pending" ||
-      order.status === "processing"
+  const activeOrders = orders.filter((order) =>
+    ["pending", "paid", "processing", "delivered"].includes(order.status)
   ).length;
   const completedOrders = orders.filter(
     (order) => order.status === "completed"
   ).length;
 
-  function removeCancelledOrder(id: string) {
-    const confirmed = window.confirm(
-      "هل تريد حذف هذا الطلب الملغي من القائمة؟"
-    );
-
-    if (!confirmed) return;
-
-    setOrders((current) =>
-      current.filter((order) => order.id !== id)
-    );
-  }
-
-  if (loadingUser) {
+  if (loading) {
     return (
       <main
         dir="rtl"
@@ -234,17 +246,13 @@ export default function OrdersPage() {
       >
         <div className="text-center">
           <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-white/10 border-t-violet-500" />
-          <p className="mt-4 text-sm text-gray-400">
-            جاري تحميل الطلبات...
-          </p>
+          <p className="mt-4 text-sm text-gray-400">جاري تحميل الطلبات...</p>
         </div>
       </main>
     );
   }
 
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
   return (
     <main
@@ -259,13 +267,8 @@ export default function OrdersPage() {
       <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-[#08070d]/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-4">
           <div>
-            <p className="text-[10px] font-bold text-violet-400">
-              مشترياتك
-            </p>
-
-            <h1 className="mt-1 text-xl font-black">
-              الطلبات
-            </h1>
+            <p className="text-[10px] font-bold text-violet-400">مشترياتك</p>
+            <h1 className="mt-1 text-xl font-black">الطلبات</h1>
           </div>
 
           <Link
@@ -280,32 +283,19 @@ export default function OrdersPage() {
 
       <section className="relative z-10 mx-auto max-w-4xl px-4 py-6">
         <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-[22px] border border-white/[0.07] bg-white/[0.035] p-4 text-center">
-            <p className="text-2xl font-black">
-              {totalOrders}
-            </p>
-            <p className="mt-1 text-[10px] text-gray-500">
-              كل الطلبات
-            </p>
-          </div>
-
-          <div className="rounded-[22px] border border-sky-400/10 bg-sky-500/[0.05] p-4 text-center">
-            <p className="text-2xl font-black text-sky-300">
-              {activeOrders}
-            </p>
-            <p className="mt-1 text-[10px] text-gray-500">
-              طلبات حالية
-            </p>
-          </div>
-
-          <div className="rounded-[22px] border border-emerald-400/10 bg-emerald-500/[0.05] p-4 text-center">
-            <p className="text-2xl font-black text-emerald-300">
-              {completedOrders}
-            </p>
-            <p className="mt-1 text-[10px] text-gray-500">
-              مكتملة
-            </p>
-          </div>
+          {[
+            [totalOrders, "كل الطلبات", "text-white"],
+            [activeOrders, "طلبات حالية", "text-sky-300"],
+            [completedOrders, "مكتملة", "text-emerald-300"],
+          ].map(([value, label, className]) => (
+            <div
+              key={String(label)}
+              className="rounded-[22px] border border-white/[0.07] bg-white/[0.035] p-4 text-center"
+            >
+              <p className={`text-2xl font-black ${className}`}>{value}</p>
+              <p className="mt-1 text-[10px] text-gray-500">{label}</p>
+            </div>
+          ))}
         </div>
 
         <div className="mt-6 flex gap-2 overflow-x-auto pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -327,20 +317,21 @@ export default function OrdersPage() {
           )}
         </div>
 
+        {errorMessage && (
+          <div className="mt-5 rounded-2xl border border-red-400/15 bg-red-500/10 px-4 py-3 text-xs text-red-200">
+            {errorMessage}
+          </div>
+        )}
+
         {filteredOrders.length === 0 ? (
           <div className="mt-6 rounded-[30px] border border-white/[0.07] bg-[#121019] px-5 py-12 text-center shadow-2xl">
             <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-[26px] bg-violet-500/10 text-4xl">
               📦
             </div>
-
-            <h2 className="mt-5 text-xl font-black">
-              لا توجد طلبات
-            </h2>
-
+            <h2 className="mt-5 text-xl font-black">لا توجد طلبات</h2>
             <p className="mx-auto mt-2 max-w-sm text-sm leading-7 text-gray-500">
               عندما تشتري لعبة أو بكجًا سيظهر طلبك هنا.
             </p>
-
             <Link
               href="/offers"
               className="mt-6 inline-flex items-center justify-center rounded-2xl bg-gradient-to-l from-violet-600 to-fuchsia-600 px-6 py-3.5 text-sm font-black shadow-xl shadow-violet-950/30 transition active:scale-95"
@@ -360,17 +351,11 @@ export default function OrdersPage() {
                 >
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] px-4 py-4">
                     <div>
-                      <p className="text-[10px] text-gray-500">
-                        رقم الطلب
-                      </p>
-                      <p
-                        dir="ltr"
-                        className="mt-1 text-sm font-black text-white"
-                      >
-                        {order.id}
+                      <p className="text-[10px] text-gray-500">رقم الطلب</p>
+                      <p dir="ltr" className="mt-1 text-left text-sm font-black">
+                        {order.order_number}
                       </p>
                     </div>
-
                     <div
                       className={`flex items-center gap-2 rounded-full border px-3 py-2 text-[10px] font-black ${status.borderClass} ${status.bgClass} ${status.textClass}`}
                     >
@@ -381,42 +366,34 @@ export default function OrdersPage() {
 
                   <div className="p-4">
                     <div className="space-y-3">
-                      {order.items.map((item) => (
+                      {(order.order_items ?? []).map((item) => (
                         <div
                           key={item.id}
                           className="flex gap-3 rounded-[20px] border border-white/[0.06] bg-black/20 p-3"
                         >
                           <div className="flex h-16 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-violet-700/20 to-fuchsia-700/20 text-2xl">
-                            {item.image ? (
+                            {item.image_url ? (
                               <img
-                                src={item.image}
-                                alt={item.name}
+                                src={item.image_url}
+                                alt={item.item_name}
                                 className="h-full w-full object-cover"
                               />
                             ) : (
                               "🎮"
                             )}
                           </div>
-
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-black">
-                              {item.name}
-                            </p>
-
+                            <p className="truncate text-sm font-black">{item.item_name}</p>
                             <p className="mt-1 truncate text-[10px] text-gray-500">
-                              {item.platform}
+                              {item.platform || (item.item_type === "package" ? "بكج ألعاب" : "PC")}
                             </p>
-
                             <div className="mt-2 flex items-center justify-between gap-3">
                               <span className="text-[10px] text-gray-500">
                                 الكمية: {item.quantity}
                               </span>
-
                               <span className="text-sm font-black">
-                                {item.price * item.quantity}
-                                <span className="mr-1 text-[9px] text-gray-500">
-                                  ر.س
-                                </span>
+                                {formatMoney(item.total_price)}
+                                <span className="mr-1 text-[9px] text-gray-500">ر.س</span>
                               </span>
                             </div>
                           </div>
@@ -426,75 +403,47 @@ export default function OrdersPage() {
 
                     <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
                       <div className="rounded-[18px] border border-white/[0.06] bg-white/[0.03] p-3">
-                        <p className="text-[9px] text-gray-500">
-                          تاريخ الطلب
-                        </p>
-                        <p className="mt-1 font-black">
-                          {order.createdAt}
-                        </p>
+                        <p className="text-[9px] text-gray-500">تاريخ الطلب</p>
+                        <p className="mt-1 font-black">{formatDate(order.created_at)}</p>
                       </div>
-
                       <div className="rounded-[18px] border border-white/[0.06] bg-white/[0.03] p-3">
-                        <p className="text-[9px] text-gray-500">
-                          طريقة الدفع
-                        </p>
+                        <p className="text-[9px] text-gray-500">طريقة الدفع</p>
                         <p className="mt-1 font-black">
-                          {order.paymentMethod}
+                          {paymentMethodLabel(order.payment_method)}
                         </p>
                       </div>
                     </div>
 
                     <div className="mt-4 flex items-end justify-between gap-3 border-t border-white/[0.06] pt-4">
                       <div>
-                        <p className="text-[10px] text-gray-500">
-                          إجمالي الطلب
-                        </p>
+                        <p className="text-[10px] text-gray-500">إجمالي الطلب</p>
                         <p className="mt-1 text-xl font-black">
-                          {order.total}
-                          <span className="mr-1 text-[10px] text-gray-500">
-                            ر.س
-                          </span>
+                          {formatMoney(order.total)}
+                          <span className="mr-1 text-[10px] text-gray-500">ر.س</span>
                         </p>
                       </div>
 
                       <div className="flex flex-wrap justify-end gap-2">
-                        {order.status === "pending" && (
+                        {order.status === "pending" && order.payment_status !== "paid" ? (
                           <Link
-                            href={`/checkout?order=${order.id}`}
-                            className="rounded-xl bg-gradient-to-l from-violet-600 to-fuchsia-600 px-4 py-3 text-[10px] font-black text-white transition active:scale-95"
+                            href="/checkout"
+                            className="rounded-xl bg-gradient-to-l from-violet-600 to-fuchsia-600 px-4 py-3 text-[10px] font-black"
                           >
                             إكمال الدفع
                           </Link>
-                        )}
-
-                        {order.status === "processing" && (
+                        ) : (
                           <Link
                             href={`/orders/${order.id}`}
-                            className="rounded-xl border border-sky-400/15 bg-sky-500/10 px-4 py-3 text-[10px] font-black text-sky-300 transition active:scale-95"
+                            className={`rounded-xl border px-4 py-3 text-[10px] font-black ${
+                              order.status === "delivered" || order.status === "completed"
+                                ? "border-emerald-400/15 bg-emerald-500/10 text-emerald-300"
+                                : "border-sky-400/15 bg-sky-500/10 text-sky-300"
+                            }`}
                           >
-                            متابعة الطلب
+                            {order.status === "delivered" || order.status === "completed"
+                              ? "بيانات الاستلام"
+                              : "متابعة الطلب"}
                           </Link>
-                        )}
-
-                        {order.status === "completed" && (
-                          <Link
-                            href={`/orders/${order.id}`}
-                            className="rounded-xl border border-emerald-400/15 bg-emerald-500/10 px-4 py-3 text-[10px] font-black text-emerald-300 transition active:scale-95"
-                          >
-                            تفاصيل الاستلام
-                          </Link>
-                        )}
-
-                        {order.status === "cancelled" && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              removeCancelledOrder(order.id)
-                            }
-                            className="rounded-xl border border-red-400/15 bg-red-500/10 px-4 py-3 text-[10px] font-black text-red-300 transition active:scale-95"
-                          >
-                            حذف
-                          </button>
                         )}
                       </div>
                     </div>

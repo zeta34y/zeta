@@ -33,6 +33,13 @@ type MoyasarPayment = {
   currency?: string;
 };
 
+type PreparedOrder = {
+  id: string;
+  orderNumber: string;
+  total: number;
+  totalHalalas: number;
+};
+
 type MoyasarOptions = {
   element: string;
   amount: number;
@@ -64,6 +71,7 @@ declare global {
 const CART_KEY = "zeta_cart";
 const COUPON_DETAILS_KEY = "zeta_coupon_details";
 const PENDING_PAYMENT_KEY = "zeta_pending_payment";
+const PENDING_ORDER_KEY = "zeta_pending_order";
 
 function toNumber(value: unknown) {
   const parsed = Number(value);
@@ -90,6 +98,8 @@ export default function CheckoutPage() {
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [moyasarLoaded, setMoyasarLoaded] = useState(false);
   const [paymentError, setPaymentError] = useState("");
+  const [preparedOrder, setPreparedOrder] = useState<PreparedOrder | null>(null);
+  const [preparingOrder, setPreparingOrder] = useState(false);
 
   const publishableKey =
     process.env.NEXT_PUBLIC_MOYASAR_PUBLISHABLE_KEY?.trim() ?? "";
@@ -249,7 +259,8 @@ export default function CheckoutPage() {
       !moyasarLoaded ||
       !window.Moyasar ||
       !publishableKey ||
-      finalTotal <= 0
+      !preparedOrder ||
+      preparedOrder.totalHalalas <= 0
     ) {
       return;
     }
@@ -263,16 +274,20 @@ export default function CheckoutPage() {
 
     const options: MoyasarOptions = {
       element: ".mysr-form",
-      amount: Math.round(finalTotal * 100),
+      amount: preparedOrder.totalHalalas,
       currency: "SAR",
-      description: `طلب ZETA - ${totalItems} عنصر`,
+      description: `طلب ZETA ${preparedOrder.orderNumber} - ${totalItems} عنصر`,
       publishable_api_key: publishableKey,
-      callback_url: `${window.location.origin}/payment/callback`,
+      callback_url: `${window.location.origin}/payment/callback?order_id=${encodeURIComponent(
+        preparedOrder.id
+      )}`,
       supported_networks: ["mada", "visa", "mastercard"],
       methods: [selectedMethod],
       fixed_width: false,
       metadata: {
         store: "ZETA",
+        order_id: preparedOrder.id,
+        order_number: preparedOrder.orderNumber,
         items_count: String(totalItems),
         coupon_code: coupon?.code ?? "",
       },
@@ -282,8 +297,10 @@ export default function CheckoutPage() {
           JSON.stringify({
             id: payment.id ?? "",
             status: payment.status ?? "",
-            amount: payment.amount ?? Math.round(finalTotal * 100),
+            amount: payment.amount ?? preparedOrder.totalHalalas,
             currency: payment.currency ?? "SAR",
+            orderId: preparedOrder.id,
+            orderNumber: preparedOrder.orderNumber,
             createdAt: new Date().toISOString(),
           })
         );
@@ -310,8 +327,8 @@ export default function CheckoutPage() {
     window.Moyasar.init(options);
   }, [
     coupon?.code,
-    finalTotal,
     moyasarLoaded,
+    preparedOrder,
     publishableKey,
     selectedMethod,
     showPaymentForm,
@@ -323,7 +340,9 @@ export default function CheckoutPage() {
     window.location.href = "/cart";
   }
 
-  function continueToPayment() {
+  async function continueToPayment() {
+    if (preparingOrder) return;
+
     setPaymentError("");
 
     if (!isLoggedIn) {
@@ -343,14 +362,72 @@ export default function CheckoutPage() {
       return;
     }
 
-    setShowPaymentForm(true);
+    setPreparingOrder(true);
 
-    window.setTimeout(() => {
-      formSectionRef.current?.scrollIntoView({
-        behavior: "smooth",
-        block: "start",
+    try {
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError || !session) {
+        throw new Error("انتهت جلسة تسجيل الدخول. سجّل الدخول مرة أخرى.");
+      }
+
+      let checkoutToken = localStorage.getItem(PENDING_ORDER_KEY) || "";
+
+      if (!checkoutToken) {
+        checkoutToken = crypto.randomUUID();
+        localStorage.setItem(PENDING_ORDER_KEY, checkoutToken);
+      }
+
+      const response = await fetch("/api/orders/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          items: cart.map((item) => ({ id: item.id, quantity: item.quantity })),
+          couponCode: coupon?.code ?? "",
+          paymentMethod: selectedMethod,
+          checkoutToken,
+        }),
       });
-    }, 100);
+
+      const result = (await response.json()) as {
+        orderId?: string;
+        orderNumber?: string;
+        total?: number;
+        totalHalalas?: number;
+        error?: string;
+      };
+
+      if (!response.ok || !result.orderId || !result.orderNumber) {
+        throw new Error(result.error || "تعذر تجهيز الطلب للدفع.");
+      }
+
+      setPreparedOrder({
+        id: result.orderId,
+        orderNumber: result.orderNumber,
+        total: Number(result.total || 0),
+        totalHalalas: Number(result.totalHalalas || 0),
+      });
+      setShowPaymentForm(true);
+
+      window.setTimeout(() => {
+        formSectionRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }, 100);
+    } catch (error) {
+      setPaymentError(
+        error instanceof Error ? error.message : "تعذر تجهيز الطلب للدفع."
+      );
+    } finally {
+      setPreparingOrder(false);
+    }
   }
 
   function changeMethod(method: PaymentMethod) {
@@ -511,11 +588,12 @@ export default function CheckoutPage() {
               {!showPaymentForm ? (
                 <button
                   type="button"
-                  onClick={continueToPayment}
-                  className="mt-5 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 text-sm font-black shadow-xl shadow-violet-900/30 transition active:scale-[0.98]"
+                  onClick={() => void continueToPayment()}
+                  disabled={preparingOrder}
+                  className="mt-5 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-l from-violet-600 to-fuchsia-600 px-5 text-sm font-black shadow-xl shadow-violet-900/30 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   <span>
-                    المتابعة بالدفع عبر{" "}
+                    {preparingOrder ? "جاري إنشاء طلبك..." : "المتابعة بالدفع عبر"}{" "}
                     {selectedMethod === "applepay"
                       ? "Apple Pay"
                       : "البطاقة البنكية"}
@@ -642,7 +720,7 @@ export default function CheckoutPage() {
                 <div>
                   <p className="text-[10px] text-gray-500">الإجمالي النهائي</p>
                   <p className="mt-1 text-2xl font-black">
-                    {money(finalTotal)}
+                    {money(preparedOrder?.total ?? finalTotal)}
                     <span className="mr-1 text-xs text-gray-400">ر.س</span>
                   </p>
                 </div>
