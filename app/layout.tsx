@@ -32,10 +32,6 @@ export const metadata: Metadata = {
   publisher: "ZETA",
   category: "ألعاب رقمية",
 
-  alternates: {
-    canonical: "/",
-  },
-
   openGraph: {
     type: "website",
     locale: "ar_SA",
