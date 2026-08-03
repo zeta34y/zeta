@@ -28,7 +28,24 @@ type ProductRow = {
   short_description: string | null;
   card_badge: string | null;
   discount_percent: number | string | null;
+  is_active: boolean;
 };
+
+type HomePageItemRow = {
+  id: string;
+  section_key: string;
+  sort_order: number;
+  product_id: string | null;
+  products: ProductRow | ProductRow[] | null;
+};
+
+function relationOne<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
+  return value ?? null;
+}
 
 function toNumber(value: unknown) {
   const number = Number(value);
@@ -58,42 +75,83 @@ export default function FeaturedGamesPage() {
       setLoadingGames(true);
 
       try {
+        /*
+          نحمّل نفس العناصر الموجودة فعلًا داخل قسم "ألعاب مميزة"
+          في الصفحة الرئيسية، بدل الاعتماد على display_kind فقط.
+          بهذا تظهر اللعبة في "عرض المزيد" بمجرد إضافتها إلى
+          قسم featured من لوحة الإدارة.
+        */
         const { data, error } = await supabase
-          .from("products")
+          .from("home_page_items")
           .select(
-            "id, name, platform, price, old_price, cover_url, detail_category_label, short_description, card_badge, discount_percent"
+            `
+              id,
+              section_key,
+              sort_order,
+              product_id,
+              products (
+                id,
+                name,
+                platform,
+                price,
+                old_price,
+                cover_url,
+                detail_category_label,
+                short_description,
+                card_badge,
+                discount_percent,
+                is_active
+              )
+            `
           )
+          .eq("section_key", "featured")
           .eq("is_active", true)
-          .or("display_kind.eq.featured,is_featured.eq.true")
-          .order("created_at", { ascending: false });
+          .order("sort_order", { ascending: true });
 
         if (error) throw error;
         if (!mounted) return;
 
-        const loadedGames = ((data ?? []) as ProductRow[]).map((product) => {
-          const price = toNumber(product.price);
-          const oldPrice = product.old_price
-            ? toNumber(product.old_price)
-            : price;
+        const rows = (data ?? []) as unknown as HomePageItemRow[];
+        const seenProductIds = new Set<string>();
 
-          return {
-            id: product.id,
-            name: product.name,
-            platform: product.platform || "PC",
-            category:
-              product.detail_category_label ||
-              product.short_description ||
-              "لعبة مميزة",
-            price,
-            oldPrice: oldPrice > 0 ? oldPrice : price,
-            image: product.cover_url || "",
-            badge: product.card_badge || "",
-            discountPercent: Math.min(
-              100,
-              Math.max(0, toNumber(product.discount_percent))
-            ),
-          };
-        });
+        const loadedGames = rows
+          .map((row): Game | null => {
+            const product = relationOne(row.products);
+
+            if (!product || !product.is_active) {
+              return null;
+            }
+
+            if (seenProductIds.has(product.id)) {
+              return null;
+            }
+
+            seenProductIds.add(product.id);
+
+            const price = toNumber(product.price);
+            const oldPrice = product.old_price
+              ? toNumber(product.old_price)
+              : price;
+
+            return {
+              id: product.id,
+              name: product.name,
+              platform: product.platform || "PC",
+              category:
+                product.detail_category_label ||
+                product.short_description ||
+                "لعبة مميزة",
+              price,
+              oldPrice: oldPrice > 0 ? oldPrice : price,
+              image: product.cover_url || "",
+              badge: product.card_badge || "",
+              discountPercent: Math.min(
+                100,
+                Math.max(0, toNumber(product.discount_percent))
+              ),
+            };
+          })
+          .filter((game): game is Game => game !== null);
 
         setGames(loadedGames);
       } catch (error) {
@@ -119,6 +177,15 @@ export default function FeaturedGamesPage() {
 
     const channel = supabase
       .channel("zeta-featured-games")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "home_page_items",
+        },
+        refreshGames
+      )
       .on(
         "postgres_changes",
         {

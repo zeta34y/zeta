@@ -22,6 +22,7 @@ type PackageRow = {
   price: number | string;
   old_price: number | string | null;
   image_url: string | null;
+  is_active: boolean;
 };
 
 function toNumber(value: unknown) {
@@ -62,7 +63,10 @@ export default function PackagesPage() {
       try {
         const { data, error } = await supabase
           .from("packages")
-          .select("id, name, description, price, old_price, image_url")
+          .select(
+            "id, name, description, price, old_price, image_url, is_active"
+          )
+          .eq("is_active", true)
           .order("name", { ascending: true });
 
         if (error) throw error;
@@ -113,6 +117,15 @@ export default function PackagesPage() {
           event: "*",
           schema: "public",
           table: "packages",
+        },
+        refreshPackages
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "package_items",
         },
         refreshPackages
       )

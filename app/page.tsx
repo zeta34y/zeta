@@ -126,6 +126,10 @@ export default function HomePage() {
   const [reviews, setReviews] = useState<StoreReview[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(true);
 
+  const [entrySplashVisible, setEntrySplashVisible] = useState(true);
+  const [entrySplashStarted, setEntrySplashStarted] = useState(false);
+  const [entrySplashClosing, setEntrySplashClosing] = useState(false);
+
   const [activeCategory, setActiveCategory] = useState("الكل");
   const [menuOpen, setMenuOpen] = useState(false);
   const [cartMessage, setCartMessage] = useState("");
@@ -205,6 +209,35 @@ export default function HomePage() {
   const isAdmin =
     user?.app_metadata?.role === "admin" ||
     user?.app_metadata?.user_role === "admin";
+
+  useEffect(() => {
+    let closeTimer: number | undefined;
+    let hideTimer: number | undefined;
+
+    const startFrame = window.requestAnimationFrame(() => {
+      setEntrySplashStarted(true);
+
+      closeTimer = window.setTimeout(() => {
+        setEntrySplashClosing(true);
+      }, 1600);
+
+      hideTimer = window.setTimeout(() => {
+        setEntrySplashVisible(false);
+      }, 2200);
+    });
+
+    return () => {
+      window.cancelAnimationFrame(startFrame);
+
+      if (closeTimer !== undefined) {
+        window.clearTimeout(closeTimer);
+      }
+
+      if (hideTimer !== undefined) {
+        window.clearTimeout(hideTimer);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -1019,7 +1052,9 @@ export default function HomePage() {
               align-items: center;
               justify-content: center;
               overflow: hidden;
-              pointer-events: none;
+              opacity: 1;
+              visibility: visible;
+              pointer-events: auto;
               background:
                 radial-gradient(
                   circle at 50% 30%,
@@ -1027,8 +1062,16 @@ export default function HomePage() {
                   #140c20 45%,
                   #08070d 100%
                 );
-              animation:
-                zetaHomeSplashHide 600ms ease 1600ms forwards;
+              transition:
+                opacity 520ms ease,
+                transform 520ms ease,
+                visibility 0s linear 520ms;
+            }
+
+            .zeta-home-first-paint.is-closing {
+              opacity: 0;
+              visibility: hidden;
+              transform: scale(1.05);
             }
 
             .zeta-home-first-paint-glow {
@@ -1036,10 +1079,9 @@ export default function HomePage() {
               width: 310px;
               height: 310px;
               border-radius: 9999px;
+              opacity: 0.72;
               background: rgba(109, 40, 217, 0.35);
               filter: blur(95px);
-              animation:
-                zetaHomeSplashPulse 1200ms ease-in-out infinite;
             }
 
             .zeta-home-first-paint-glow-secondary {
@@ -1049,10 +1091,9 @@ export default function HomePage() {
               margin-left: 112px;
               margin-bottom: 112px;
               border-radius: 9999px;
+              opacity: 0.72;
               background: rgba(192, 38, 211, 0.2);
               filter: blur(75px);
-              animation:
-                zetaHomeSplashPulse 1200ms ease-in-out infinite;
             }
 
             .zeta-home-first-paint-content {
@@ -1061,9 +1102,25 @@ export default function HomePage() {
               display: flex;
               flex-direction: column;
               align-items: center;
+              opacity: 0;
+              transform: translateY(18px) scale(0.78) rotate(-8deg);
+            }
+
+            .zeta-home-first-paint.is-started
+              .zeta-home-first-paint-content {
               animation:
                 zetaHomeSplashEnter 700ms
                 cubic-bezier(0.22, 1, 0.36, 1) both;
+            }
+
+            .zeta-home-first-paint.is-started
+              .zeta-home-first-paint-glow,
+            .zeta-home-first-paint.is-started
+              .zeta-home-first-paint-glow-secondary,
+            .zeta-home-first-paint.is-started
+              .zeta-home-first-paint-ring {
+              animation:
+                zetaHomeSplashPulse 1200ms ease-in-out infinite;
             }
 
             .zeta-home-first-paint-logo-wrap {
@@ -1076,8 +1133,6 @@ export default function HomePage() {
               border-radius: 42px;
               border: 1px solid rgba(196, 181, 253, 0.3);
               box-shadow: 0 0 45px rgba(139, 92, 246, 0.45);
-              animation:
-                zetaHomeSplashPulse 1200ms ease-in-out infinite;
             }
 
             .zeta-home-first-paint-logo {
@@ -1116,6 +1171,10 @@ export default function HomePage() {
                   rgba(255, 255, 255, 0.55) 50%,
                   transparent 58%
                 );
+            }
+
+            .zeta-home-first-paint.is-started
+              .zeta-home-first-paint-shine {
               animation:
                 zetaHomeSplashShine 1200ms ease 500ms both;
             }
@@ -1127,8 +1186,6 @@ export default function HomePage() {
               line-height: 1;
               font-weight: 900;
               letter-spacing: 8px;
-              animation:
-                zetaHomeSplashFadeUp 500ms ease 450ms both;
             }
 
             .zeta-home-first-paint-subtitle {
@@ -1136,8 +1193,6 @@ export default function HomePage() {
               color: #c4b5fd;
               font-size: 14px;
               line-height: 1.5;
-              animation:
-                zetaHomeSplashFadeUp 500ms ease 650ms both;
             }
 
             .zeta-home-first-paint-loader {
@@ -1156,22 +1211,12 @@ export default function HomePage() {
               background:
                 linear-gradient(90deg, #8b5cf6 0%, #e879f9 100%);
               box-shadow: 0 0 16px rgba(168, 85, 247, 0.75);
-              animation:
-                zetaHomeSplashLoading 900ms ease-in-out 700ms infinite;
             }
 
-            @keyframes zetaHomeSplashHide {
-              from {
-                opacity: 1;
-                transform: scale(1);
-                visibility: visible;
-              }
-
-              to {
-                opacity: 0;
-                transform: scale(1.05);
-                visibility: hidden;
-              }
+            .zeta-home-first-paint.is-started
+              .zeta-home-first-paint-loader-bar {
+              animation:
+                zetaHomeSplashLoading 900ms ease-in-out 700ms infinite;
             }
 
             @keyframes zetaHomeSplashEnter {
@@ -1197,18 +1242,6 @@ export default function HomePage() {
                   translateY(0)
                   scale(1)
                   rotate(0);
-              }
-            }
-
-            @keyframes zetaHomeSplashFadeUp {
-              from {
-                opacity: 0;
-                transform: translateY(12px);
-              }
-
-              to {
-                opacity: 1;
-                transform: translateY(0);
               }
             }
 
@@ -1251,58 +1284,57 @@ export default function HomePage() {
 
             @media (prefers-reduced-motion: reduce) {
               .zeta-home-first-paint,
+              .zeta-home-first-paint-content,
               .zeta-home-first-paint-glow,
               .zeta-home-first-paint-glow-secondary,
-              .zeta-home-first-paint-content,
               .zeta-home-first-paint-ring,
               .zeta-home-first-paint-shine,
-              .zeta-home-first-paint-title,
-              .zeta-home-first-paint-subtitle,
               .zeta-home-first-paint-loader-bar {
-                animation-duration: 1ms;
-              }
-
-              .zeta-home-first-paint {
-                animation-delay: 100ms;
+                animation-duration: 1ms !important;
+                animation-iteration-count: 1 !important;
               }
             }
           `,
         }}
       />
 
-      <div
-        aria-hidden="true"
-        className="zeta-home-first-paint"
-      >
-        <div className="zeta-home-first-paint-glow" />
-        <div className="zeta-home-first-paint-glow-secondary" />
+      {entrySplashVisible && (
+        <div
+          aria-hidden="true"
+          className={`zeta-home-first-paint ${
+            entrySplashStarted ? "is-started" : ""
+          } ${entrySplashClosing ? "is-closing" : ""}`}
+        >
+          <div className="zeta-home-first-paint-glow" />
+          <div className="zeta-home-first-paint-glow-secondary" />
 
-        <div className="zeta-home-first-paint-content">
-          <div className="zeta-home-first-paint-logo-wrap">
-            <div className="zeta-home-first-paint-ring" />
+          <div className="zeta-home-first-paint-content">
+            <div className="zeta-home-first-paint-logo-wrap">
+              <div className="zeta-home-first-paint-ring" />
 
-            <div className="zeta-home-first-paint-logo">
-              <span className="zeta-home-first-paint-logo-letter">
-                Z
-              </span>
+              <div className="zeta-home-first-paint-logo">
+                <span className="zeta-home-first-paint-logo-letter">
+                  Z
+                </span>
 
-              <div className="zeta-home-first-paint-shine" />
+                <div className="zeta-home-first-paint-shine" />
+              </div>
+            </div>
+
+            <h1 className="zeta-home-first-paint-title">
+              ZETA
+            </h1>
+
+            <p className="zeta-home-first-paint-subtitle">
+              عالمك يبدأ من هنا
+            </p>
+
+            <div className="zeta-home-first-paint-loader">
+              <div className="zeta-home-first-paint-loader-bar" />
             </div>
           </div>
-
-          <h1 className="zeta-home-first-paint-title">
-            ZETA
-          </h1>
-
-          <p className="zeta-home-first-paint-subtitle">
-            عالمك يبدأ من هنا
-          </p>
-
-          <div className="zeta-home-first-paint-loader">
-            <div className="zeta-home-first-paint-loader-bar" />
-          </div>
         </div>
-      </div>
+      )}
 
       {/* الشريط العلوي المتحكم به من لوحة الإدارة */}
       {announcement.is_visible && announcement.text.trim() && (
