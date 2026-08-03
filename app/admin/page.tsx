@@ -207,6 +207,31 @@ type OrderStatus =
 
 type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
 
+type OrderDelivery = {
+  id: string;
+  order_id: string;
+  order_item_id: string;
+  user_id: string;
+  delivery_type: "account" | "steam_code";
+  delivery_index: number;
+  username: string | null;
+  password: string | null;
+  steam_code: string | null;
+  verification_note: string | null;
+  delivered_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type DeliveryDraft = {
+  delivery_type: "account" | "steam_code";
+  username: string;
+  password: string;
+  steam_code: string;
+  verification_note: string;
+};
+
 type OrderItem = {
   id: string;
   item_name: string;
@@ -215,6 +240,12 @@ type OrderItem = {
   quantity: number;
   unit_price: number;
   total_price: number;
+  source_id: string | null;
+  source_kind: "product" | "package" | null;
+  product_display_kind: "featured" | "shared" | "private" | "package" | null;
+  delivery_kind: "account" | "steam_code" | null;
+  platform: string | null;
+  order_deliveries?: OrderDelivery[];
 };
 
 type Payment = {
@@ -534,6 +565,33 @@ export default function AdminPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [deliveryDrafts, setDeliveryDrafts] =
+    useState<Record<string, DeliveryDraft>>({});
+  const [savingDeliveryId, setSavingDeliveryId] =
+    useState<string | null>(null);
+
+  useEffect(() => {
+    if (!selectedOrder) {
+      setDeliveryDrafts({});
+      return;
+    }
+
+    const nextDrafts: Record<string, DeliveryDraft> = {};
+
+    for (const item of selectedOrder.order_items ?? []) {
+      for (const delivery of item.order_deliveries ?? []) {
+        nextDrafts[delivery.id] = {
+          delivery_type: delivery.delivery_type,
+          username: delivery.username ?? "",
+          password: delivery.password ?? "",
+          steam_code: delivery.steam_code ?? "",
+          verification_note: delivery.verification_note ?? "",
+        };
+      }
+    }
+
+    setDeliveryDrafts(nextDrafts);
+  }, [selectedOrder]);
 
   const adminName = useMemo(() => {
     if (!user) return "الإدارة";
@@ -903,7 +961,7 @@ export default function AdminPage() {
 
         supabase
           .from("orders")
-          .select("*, order_items(*), payments(*)")
+          .select("*, order_items(*, order_deliveries(*)), payments(*)")
           .order("created_at", { ascending: false }),
 
         supabase
@@ -2249,6 +2307,136 @@ export default function AdminPage() {
     await loadData();
   }
 
+  function updateDeliveryDraft(
+    deliveryId: string,
+    field: keyof DeliveryDraft,
+    value: string
+  ) {
+    setDeliveryDrafts((current) => ({
+      ...current,
+      [deliveryId]: {
+        ...(current[deliveryId] ?? {
+          delivery_type: "account",
+          username: "",
+          password: "",
+          steam_code: "",
+          verification_note: "",
+        }),
+        [field]: value,
+      },
+    }));
+  }
+
+  function deliveryIsComplete(delivery: OrderDelivery) {
+    return delivery.delivery_type === "steam_code"
+      ? Boolean(delivery.steam_code?.trim())
+      : Boolean(delivery.username?.trim() && delivery.password?.trim());
+  }
+
+  async function saveOrderDelivery(delivery: OrderDelivery) {
+    if (!selectedOrder || !user) return;
+
+    const draft = deliveryDrafts[delivery.id] ?? {
+      delivery_type: delivery.delivery_type,
+      username: delivery.username ?? "",
+      password: delivery.password ?? "",
+      steam_code: delivery.steam_code ?? "",
+      verification_note: delivery.verification_note ?? "",
+    };
+
+    const username = draft.username.trim();
+    const password = draft.password.trim();
+    const steamCode = draft.steam_code.trim();
+    const verificationNote = draft.verification_note.trim();
+
+    if (draft.delivery_type === "steam_code" && !steamCode) {
+      setErrorMessage("اكتب كود Steam قبل الإرسال للعميل");
+      return;
+    }
+
+    if (draft.delivery_type === "account" && (!username || !password)) {
+      setErrorMessage("اكتب اسم المستخدم وكلمة المرور قبل الإرسال للعميل");
+      return;
+    }
+
+    setSavingDeliveryId(delivery.id);
+    setErrorMessage("");
+
+    try {
+      const { error: deliveryError } = await supabase
+        .from("order_deliveries")
+        .update({
+          delivery_type: draft.delivery_type,
+          username: draft.delivery_type === "account" ? username : null,
+          password: draft.delivery_type === "account" ? password : null,
+          steam_code: draft.delivery_type === "steam_code" ? steamCode : null,
+          verification_note: verificationNote || null,
+          delivered_at: new Date().toISOString(),
+          created_by: user.id,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", delivery.id);
+
+      if (deliveryError) throw deliveryError;
+
+      const { data: refreshedOrder, error: refreshError } = await supabase
+        .from("orders")
+        .select("*, order_items(*, order_deliveries(*)), payments(*)")
+        .eq("id", selectedOrder.id)
+        .single();
+
+      if (refreshError) throw refreshError;
+
+      let updatedOrder = refreshedOrder as UserOrder;
+      const deliveries = (updatedOrder.order_items ?? []).flatMap(
+        (item) => item.order_deliveries ?? []
+      );
+      const everyDeliveryReady =
+        deliveries.length > 0 && deliveries.every(deliveryIsComplete);
+
+      if (
+        everyDeliveryReady &&
+        !["completed", "cancelled", "refunded", "rejected"].includes(
+          updatedOrder.status
+        )
+      ) {
+        const { data: deliveredOrder, error: deliveredOrderError } =
+          await supabase
+            .from("orders")
+            .update({
+              status: "delivered",
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", updatedOrder.id)
+            .select("*, order_items(*, order_deliveries(*)), payments(*)")
+            .single();
+
+        if (deliveredOrderError) throw deliveredOrderError;
+        updatedOrder = deliveredOrder as UserOrder;
+      }
+
+      setOrders((current) =>
+        current.map((order) =>
+          order.id === updatedOrder.id ? updatedOrder : order
+        )
+      );
+      setSelectedOrder(updatedOrder);
+      showMessage(
+        draft.delivery_type === "steam_code"
+          ? "تم حفظ كود اللعبة وإرساله لهذا العميل"
+          : "تم حفظ بيانات الحساب وإرسالها لهذا العميل"
+      );
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "تعذر حفظ بيانات الاستلام"
+      );
+    } finally {
+      setSavingDeliveryId(null);
+    }
+  }
+
   async function updateOrderStatus(
     order: UserOrder,
     status: "processing" | "completed" | "cancelled"
@@ -2281,7 +2469,7 @@ export default function AdminPage() {
         .from("orders")
         .update(updates)
         .eq("id", order.id)
-        .select("*, order_items(*), payments(*)")
+        .select("*, order_items(*, order_deliveries(*)), payments(*)")
         .single();
 
       if (error) throw error;
@@ -3265,6 +3453,8 @@ export default function AdminPage() {
           .from("offers")
           .update({
             offer_category_id: category.id,
+            starts_at: new Date().toISOString(),
+            ends_at: null,
             is_active: true,
           })
           .eq("id", existingOffer.id);
@@ -7267,35 +7457,199 @@ export default function AdminPage() {
           </div>
 
           <div className="mt-6">
-            <h3 className="mb-3 text-sm font-black">
-              محتويات الطلب
-            </h3>
+            <div className="mb-3 flex items-end justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-black">محتويات الطلب والتسليم</h3>
+                <p className="mt-1 text-[9px] leading-5 text-gray-500">
+                  كل خانة مرتبطة بهذا الطلب وهذا العميل فقط، ولا تُشارك تلقائيًا مع أي مشترٍ آخر.
+                </p>
+              </div>
+            </div>
 
-            <div className="space-y-3">
-              {(selectedOrder.order_items ?? []).map(
-                (item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center justify-between gap-3 rounded-[20px] border border-white/10 bg-white/[0.03] p-3"
-                  >
+            <div className="space-y-4">
+              {(selectedOrder.order_items ?? []).map((item) => (
+                <div
+                  key={item.id}
+                  className="overflow-hidden rounded-[22px] border border-white/10 bg-white/[0.03]"
+                >
+                  <div className="flex items-center justify-between gap-3 border-b border-white/[0.07] p-4">
                     <div className="min-w-0">
-                      <p className="truncate text-xs font-black">
-                        {item.item_name}
-                      </p>
-
+                      <p className="truncate text-xs font-black">{item.item_name}</p>
                       <p className="mt-1 text-[9px] text-gray-500">
-                        الكمية: {item.quantity} • سعر الوحدة: {formatMoney(item.unit_price)}
+                        الكمية: {item.quantity} • سعر الوحدة: {formatMoney(item.unit_price)} • {item.platform || "PC"}
                       </p>
                     </div>
-
                     <p className="shrink-0 text-xs font-black">
-                      {formatMoney(
-                        item.total_price
-                      )}
+                      {formatMoney(item.total_price)}
                     </p>
                   </div>
-                )
-              )}
+
+                  <div className="space-y-4 p-4">
+                    {(item.order_deliveries ?? [])
+                      .slice()
+                      .sort(
+                        (first, second) =>
+                          first.delivery_index - second.delivery_index
+                      )
+                      .map((delivery) => {
+                        const draft = deliveryDrafts[delivery.id] ?? {
+                          delivery_type: delivery.delivery_type,
+                          username: delivery.username ?? "",
+                          password: delivery.password ?? "",
+                          steam_code: delivery.steam_code ?? "",
+                          verification_note: delivery.verification_note ?? "",
+                        };
+
+                        return (
+                          <div
+                            key={delivery.id}
+                            className="rounded-[20px] border border-violet-400/15 bg-black/20 p-4"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <p className="text-[9px] text-gray-500">
+                                  بيانات الاستلام رقم {delivery.delivery_index}
+                                </p>
+                                <p className="mt-1 text-xs font-black">
+                                  {draft.delivery_type === "steam_code"
+                                    ? "كود لعبة خاص"
+                                    : "حساب مستقل"}
+                                </p>
+                              </div>
+                              <span
+                                className={`rounded-full px-3 py-1.5 text-[9px] font-black ${
+                                  deliveryIsComplete(delivery)
+                                    ? "bg-emerald-500/15 text-emerald-300"
+                                    : "bg-amber-500/15 text-amber-300"
+                                }`}
+                              >
+                                {deliveryIsComplete(delivery)
+                                  ? "تم الإرسال"
+                                  : "لم يُرسل"}
+                              </span>
+                            </div>
+
+                            <label className="mt-4 block">
+                              <span className="mb-2 block text-[10px] font-black text-gray-300">
+                                نوع التسليم
+                              </span>
+                              <select
+                                value={draft.delivery_type}
+                                onChange={(event) =>
+                                  updateDeliveryDraft(
+                                    delivery.id,
+                                    "delivery_type",
+                                    event.target.value
+                                  )
+                                }
+                                className={adminInputClass}
+                              >
+                                <option value="account">اسم مستخدم وكلمة مرور</option>
+                                <option value="steam_code">كود تفعيل Steam</option>
+                              </select>
+                            </label>
+
+                            {draft.delivery_type === "steam_code" ? (
+                              <label className="mt-3 block">
+                                <span className="mb-2 block text-[10px] font-black text-gray-300">
+                                  كود اللعبة
+                                </span>
+                                <input
+                                  dir="ltr"
+                                  value={draft.steam_code}
+                                  onChange={(event) =>
+                                    updateDeliveryDraft(
+                                      delivery.id,
+                                      "steam_code",
+                                      event.target.value
+                                    )
+                                  }
+                                  placeholder="XXXXX-XXXXX-XXXXX"
+                                  className={`${adminInputClass} text-left`}
+                                />
+                              </label>
+                            ) : (
+                              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                                <label className="block">
+                                  <span className="mb-2 block text-[10px] font-black text-gray-300">
+                                    اسم المستخدم
+                                  </span>
+                                  <input
+                                    dir="ltr"
+                                    value={draft.username}
+                                    onChange={(event) =>
+                                      updateDeliveryDraft(
+                                        delivery.id,
+                                        "username",
+                                        event.target.value
+                                      )
+                                    }
+                                    placeholder="username"
+                                    className={`${adminInputClass} text-left`}
+                                  />
+                                </label>
+
+                                <label className="block">
+                                  <span className="mb-2 block text-[10px] font-black text-gray-300">
+                                    كلمة المرور
+                                  </span>
+                                  <input
+                                    dir="ltr"
+                                    value={draft.password}
+                                    onChange={(event) =>
+                                      updateDeliveryDraft(
+                                        delivery.id,
+                                        "password",
+                                        event.target.value
+                                      )
+                                    }
+                                    placeholder="password"
+                                    className={`${adminInputClass} text-left`}
+                                  />
+                                </label>
+                              </div>
+                            )}
+
+                            <label className="mt-3 block">
+                              <span className="mb-2 block text-[10px] font-black text-gray-300">
+                                ملاحظة للعميل — اختيارية
+                              </span>
+                              <textarea
+                                value={draft.verification_note}
+                                onChange={(event) =>
+                                  updateDeliveryDraft(
+                                    delivery.id,
+                                    "verification_note",
+                                    event.target.value
+                                  )
+                                }
+                                placeholder="تعليمات الدخول أو ملاحظة مهمة"
+                                className={`${adminInputClass} min-h-24 resize-y`}
+                              />
+                            </label>
+
+                            <button
+                              type="button"
+                              onClick={() => void saveOrderDelivery(delivery)}
+                              disabled={savingDeliveryId === delivery.id}
+                              className="mt-4 min-h-12 w-full rounded-2xl bg-gradient-to-l from-violet-600 to-fuchsia-600 px-4 text-xs font-black shadow-lg shadow-violet-950/30 disabled:opacity-50"
+                            >
+                              {savingDeliveryId === delivery.id
+                                ? "جاري الحفظ..."
+                                : "حفظ وإرسال لهذا العميل"}
+                            </button>
+                          </div>
+                        );
+                      })}
+
+                    {!item.order_deliveries?.length && (
+                      <div className="rounded-[18px] border border-dashed border-amber-400/20 bg-amber-500/5 px-4 py-6 text-center text-[10px] leading-5 text-amber-200">
+                        لا توجد خانات تسليم لهذا العنصر. شغّل ملف SQL ثم أنشئ طلبًا جديدًا للتجربة.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
 
               {!selectedOrder.order_items?.length && (
                 <div className="rounded-[20px] border border-dashed border-white/10 px-4 py-8 text-center text-xs text-gray-500">
